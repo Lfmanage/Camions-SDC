@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <title>Camions SDC</title>
-<meta name="theme-color" content="#E6EBF1">
+<meta name="theme-color" content="#F4F1E8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=4">
-<link rel="icon" href="favicon-32.png?v=4" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=4">
+<link rel="manifest" href="manifest.webmanifest?v=6">
+<link rel="icon" href="favicon-32.png?v=6" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=6">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <main id="app">
@@ -24,7 +24,7 @@
   <!-- ============ CAMION ============ -->
   <section class="vue active" id="v-camion">
     <header class="top">
-      <h1><span class="badge-sdc">SDC</span> Camion</h1>
+      <h1><span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="14.5" fill="#7A4E27"/><circle cx="16" cy="16" r="12" fill="#E2B877"/><g fill="none" stroke="#B57E43" stroke-width="1.1"><circle cx="16" cy="16" r="9.2"/><circle cx="16" cy="16" r="6.3"/><circle cx="16" cy="16" r="3.4"/></g><circle cx="16" cy="16" r="1.1" fill="#9A6634"/><path d="M16 5.5 17.2 11" stroke="#9A6634" stroke-width="1"/><path d="M26 7c-3 0-5 2-5 5 3 0 5-2 5-5z" fill="#5FA36B"/></svg></span>Camion <span class="badge-sdc">SDC</span></h1>
       <button class="btn-lien" id="btnNouveau" type="button">+ Nouveau</button>
     </header>
 
@@ -43,8 +43,11 @@
         <div class="gros"><span class="lbl" id="lblReste">Reste</span><b id="reste">41,00</b><span class="unite">m³</span></div>
         <div class="total"><b id="total">0,00</b> / <span id="totMax">41</span> m³</div>
       </div>
-      <div id="heroCamion"></div>
-      <div class="msg" id="msgEtat">Camion vide : ajoute les colis</div>
+      <div class="scene">
+        <div id="heroCamion"></div>
+        <div class="msg" id="msgEtat">Camion vide : ajoute les colis</div>
+        <div class="pluie" id="pluie" aria-hidden="true"></div>
+      </div>
     </div>
 
     <form class="carte saisie" id="formLigne" autocomplete="off" novalidate>
@@ -122,8 +125,8 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=4"></script>
-<script src="sync.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="plan.js?v=6"></script>
+<script src="sync.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

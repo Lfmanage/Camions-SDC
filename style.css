@@ -1,16 +1,23 @@
 /* Camions SDC — thème « Route » : bleu-gris apaisant, ligne d'horizon orange */
 :root {
-  --accent: #2F5C8F;
-  --bg: #EEF2F6;
-  --bg2: #D3DDE8;
-  --card: #FFFFFF;
-  --nav: #FFFFFF;
-  --text: #1C2633;
-  --muted: #6B7787;
-  --line: rgba(28, 38, 51, .09);
-  --field: #F1F4F8;
-  --horizon: #F5A04A;
-  --accent-soft: rgba(47, 92, 143, .12);
+  --accent: #2E6B4E;
+  --bg: #F4F1E8;
+  --bg2: #E1EAD9;
+  --card: #FFFEFB;
+  --nav: #FFFEFB;
+  --text: #1F2A22;
+  --muted: #6E7A70;
+  --line: rgba(31, 42, 34, .09);
+  --field: #F2F0E8;
+  --horizon: #E3A94F;
+  --or: #C9A257;
+  --accent-soft: rgba(46, 107, 78, .12);
+  --ciel1: #E4EFE6;
+  --ciel2: #FBF6EA;
+  --colline: #D4E3CF;
+  --foret-loin: #B5CDB3;
+  --foret-pres: #7FA984;
+  --sol: #D9CFB8;
   --orange: #D46F00;
   --vert: #178A4A;
   --rouge: #D0332B;
@@ -27,14 +34,20 @@
   :root { --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent); }
 }
 :root[data-theme="sombre"] {
-  --bg: #1A2230;
-  --bg2: #102440;
-  --card: #222C3B;
-  --nav: #1C2533;
-  --text: #E8EDF4;
-  --muted: #98A5B7;
-  --line: rgba(232, 237, 244, .10);
-  --field: #2A3546;
+  --bg: #141B17;
+  --bg2: #0E2419;
+  --card: #1E2721;
+  --nav: #18201B;
+  --text: #ECF1EA;
+  --muted: #9AA89D;
+  --line: rgba(236, 241, 234, .10);
+  --field: #27322B;
+  --ciel1: #0F1D22;
+  --ciel2: #1D2E2A;
+  --colline: #1C3027;
+  --foret-loin: #223A2E;
+  --foret-pres: #2C4C39;
+  --sol: #2B2E28;
   --orange-bg: #3A2B17;
   --vert-bg: #163222;
   --rouge-bg: #3D1C1A;
@@ -327,3 +340,97 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 .cote { padding: 8px 8px 6px; }
 .cote-tete { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin: 0 2px 2px; }
 .cote-tete b { color: var(--text); font-weight: 600; }
+
+
+/* ---------- v5 : scierie moderne (bois, arbres, feuilles) ---------- */
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg opacity='.55'%3E%3Cpath d='M150 30c25-18 55-10 62 10-22 16-50 12-62-10z' fill='%2387B58D'/%3E%3Cpath d='M150 30c20 3 40 6 62 10' stroke='%23fff' stroke-opacity='.6' fill='none'/%3E%3Cpath d='M170 80c14-20 40-22 50-6-14 18-38 20-50 6z' fill='%23C9A257'/%3E%3Cpath d='M120 8c10-8 26-6 30 4-10 8-25 6-30-4z' fill='%23A9C9A4'/%3E%3C/g%3E%3C/svg%3E") top 34px right -40px / 170px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg opacity='.4'%3E%3Cpath d='M10 170c20-24 52-24 64-4-20 22-50 22-64 4z' fill='%2387B58D'/%3E%3Cpath d='M40 130c12-16 34-16 42-2-14 15-33 15-42 2z' fill='%23D9B26A'/%3E%3C/g%3E%3C/svg%3E") bottom 150px left -50px / 160px no-repeat; opacity: .55; }
+:root[data-theme="sombre"] body::before { opacity: .35; }
+h1 { gap: 8px; }
+.logo { width: 30px; height: 30px; display: inline-grid; filter: drop-shadow(0 2px 3px rgba(80, 50, 20, .25)); }
+.logo svg { width: 30px; height: 30px; }
+.badge-sdc { background: linear-gradient(135deg, #1F4D2E, #2E6B4E); color: #EBD7A2; font-size: 9.5px; align-self: center; }
+.carte { border-radius: 20px; box-shadow: 0 1px 2px rgba(40, 50, 30, .05), 0 8px 24px rgba(40, 50, 30, .07); }
+.btn { border-radius: 14px; }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .btn { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 86%, #fff), var(--accent)); box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 28%, transparent); }
+  .compteur.ok { border-color: color-mix(in srgb, var(--vert) 45%, transparent); }
+}
+.btn.sec, .btn.danger { box-shadow: none; }
+.btn.sec { background: var(--accent-soft); }
+.btn.danger { background: var(--rouge-bg); }
+
+.compteur { padding: 10px 10px 0; overflow: hidden; border-width: 2px; }
+.compteur.peu, .compteur.ok, .compteur.trop { background: var(--card); }
+.compteur.trop { border-color: var(--rouge); }
+.hero-haut { padding: 0 2px 4px; }
+.hero-haut .total { background: var(--field); border-radius: 10px; padding: 3px 8px; }
+.scene { position: relative; margin: 0 -10px; }
+#heroCamion { margin: 0; }
+.scene .msg { position: absolute; left: 10px; top: 8px; margin: 0; padding: 4px 9px; border-radius: 10px; font-size: 12px; font-weight: 700;
+  background: rgba(255, 255, 255, .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 2px 8px rgba(0, 0, 0, .08); }
+:root[data-theme="sombre"] .scene .msg { background: rgba(20, 28, 24, .7); }
+.camion-grand .colline { fill: var(--colline); }
+.camion-grand .foret-loin { fill: var(--foret-loin); }
+.camion-grand .foret-pres { fill: var(--foret-pres); }
+.camion-grand .sol { fill: var(--sol); }
+.camion-grand .feuille-deco { fill: #8DBB8F; opacity: .8; }
+.camion-grand .fantome { stroke: var(--text); stroke-opacity: .28; }
+.camion-grand .colis rect:first-child { stroke: #A07C43; stroke-width: .5; }
+.camion-grand .colis .planches { stroke: #B48E52; stroke-width: .45; opacity: .75; fill: none; }
+.camion-grand .colis .bouts { stroke: #9A7440; stroke-width: .8; opacity: .55; }
+.camion-grand .colis .cale { fill: #6E4A27; }
+.camion-grand .colis .feuillard { stroke: #2F3B47; stroke-width: .8; opacity: .85; }
+.camion-grand .colis .etiq { fill: #FFFDF7; stroke: #CDB98F; stroke-width: .4; }
+.camion-grand .colis text { font-family: var(--sans); text-anchor: middle; pointer-events: none; fill: #3A2A14; }
+.camion-grand .colis .lg { font-size: 6.4px; font-weight: 800; }
+.camion-grand .colis .lg.p { font-size: 5.4px; }
+.camion-grand .colis .sc { font-size: 5px; font-weight: 600; fill: #5E4622; }
+.camion-grand .colis.arr { filter: brightness(.86); }
+.camion-grand .colis.arr rect:first-child { filter: none; }
+.camion-grand .colis.rouge rect:first-child { fill: #F2A29C; stroke: var(--rouge); }
+.camion-grand .colis.sel rect:first-child { fill: #FFC66B; stroke: var(--text); stroke-width: 1.4; }
+.camion-grand .cab-txt { font: italic 800 7px var(--sans); fill: #FFE1DC; opacity: .75; letter-spacing: .5px; }
+.camion-grand .colis.nouveau { transform-box: fill-box; animation: pose .55s cubic-bezier(.2, .8, .3, 1.25); }
+
+/* pluie de feuilles quand le camion est OK */
+.pluie { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.pluie i { position: absolute; top: -14px; width: 12px; height: 12px; animation: tombe 2.6s ease-in forwards; }
+.pluie i::before { content: ""; position: absolute; inset: 0; border-radius: 0 70% 0 70%; background: var(--c, #6FAE74); }
+@keyframes tombe { to { transform: translate(var(--dx, 20px), 150px) rotate(var(--r, 280deg)); opacity: 0; } }
+
+.saisie { gap: 6px; }
+.apercu { display: flex; align-items: baseline; gap: 5px; }
+.apercu::before { content: "🪵"; font-size: 13px; }
+.vide-bois { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; color: var(--muted); font-size: 13px; text-align: center; line-height: 1.35; }
+.vide-bois svg { width: 92px; height: 50px; }
+
+.cote { padding: 0; overflow: hidden; position: relative; }
+.cote-tete { position: absolute; top: 7px; left: 10px; right: 10px; z-index: 1; margin: 0; pointer-events: none; }
+.cote-tete b, .cote-tete span { background: rgba(255, 255, 255, .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); padding: 2px 8px; border-radius: 8px; font-size: 12px; }
+:root[data-theme="sombre"] .cote-tete b, :root[data-theme="sombre"] .cote-tete span { background: rgba(20, 28, 24, .7); }
+.statut.n { background: var(--card); box-shadow: 0 1px 2px rgba(40, 50, 30, .05), 0 6px 16px rgba(40, 50, 30, .06); }
+.onglet.actif .ico { background: var(--accent-soft); }
+
+/* ---------- v6 : camion en photo ---------- */
+.camion-photo { display: block; width: 100%; height: auto; }
+#heroCamion .camion-photo { aspect-ratio: 1672 / 470; }
+.camion-photo .vide-rang, .camion-photo .vide-trait { transform-box: fill-box; transform-origin: 0 50%; transition: transform .8s cubic-bezier(.3, .8, .3, 1), opacity .4s; }
+.camion-photo .vide-trait { fill: none; stroke: #fff; stroke-width: 2.2; stroke-dasharray: 9 7; opacity: .9; vector-effect: non-scaling-stroke; }
+.camion-photo .trop-voile { fill: #E5483F; opacity: 0; transition: opacity .4s; pointer-events: none; }
+.camion-photo.trop .trop-voile { opacity: .38; }
+.camion-photo.plan .fantome { fill: rgba(255, 255, 255, .12); stroke: #fff; stroke-width: 3.5; stroke-dasharray: 16 12; opacity: .9; }
+.camion-photo.plan .fantome.alerte { stroke: #FF4D44; fill: rgba(255, 77, 68, .12); }
+.camion-photo.plan .zone { fill: transparent; }
+.camion-photo.plan .zone.cible { fill: rgba(46, 107, 78, .2); stroke: var(--accent); stroke-width: 4; stroke-dasharray: 14 10; }
+.camion-photo .paquet { stroke: rgba(70, 40, 15, .7); stroke-width: 2.5; }
+.camion-photo .ombre { fill: none; stroke: rgba(255, 245, 225, .35); stroke-width: 2; pointer-events: none; }
+.camion-photo .etiq { fill: #FFFDF7; stroke: #C8B48A; stroke-width: 1.5; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .25)); }
+.camion-photo text { font-family: var(--sans); text-anchor: middle; pointer-events: none; }
+.camion-photo .lg { font-size: 44px; font-weight: 800; fill: #3A2A14; }
+.camion-photo .sc { font-size: 30px; font-weight: 700; fill: #FFF8EA; stroke: rgba(60, 35, 15, .8); stroke-width: 5px; paint-order: stroke; }
+.camion-photo .colis.sel .paquet { stroke: #FFB547; stroke-width: 10; }
+.camion-photo .colis.rouge .ombre { fill: rgba(229, 72, 63, .4); }
+.cote .camion-photo { border-radius: 20px; }

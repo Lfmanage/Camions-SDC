@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '4';
+  var VERSION_APP = '6';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -128,7 +128,6 @@
     return 'Camion OK ✓';
   }
 
-  var vusHero = null; // colis déjà dessinés (pour animer seulement les nouveaux)
   function rendreCompteur(c) {
     var r = reg(), tot = c.total_m3, e = P.etat(tot, r);
     var reste = Math.round((r.m3Max - tot) * 100) / 100;
@@ -137,20 +136,29 @@
     $('#total').textContent = f2(tot);
     $('#totMax').textContent = fm(r.m3Max);
     var cpt = $('#compteur');
+    var avant = cpt.dataset.etat;
     cpt.classList.remove('peu', 'ok', 'trop'); cpt.classList.add(e.code);
+    if (avant && avant !== 'ok' && e.code === 'ok' && cpt.dataset.camion === c.id) pluieFeuilles();
+    cpt.dataset.etat = e.code; cpt.dataset.camion = c.id;
     $('#msgEtat').textContent = c.lignes.length ? messageEtat(tot) : 'Camion vide : ajoute les colis';
-    var v = P.verifier(c.lignes, c.plan || {}, r);
-    var nouveaux = {}, vus = {};
-    P.ROWS.forEach(function (k) { v.rows[k].colis.forEach(function (cc) { vus[cc.id] = 1; if (vusHero && !vusHero[cc.id]) nouveaux[cc.id] = 1; }); });
-    if (vusHero === null || c.id !== vusHero._camion) nouveaux = {};
-    vus._camion = c.id; vusHero = vus;
-    $('#heroCamion').innerHTML = svgCamion(c, v, { mode: 'persp', lecture: true, nouveaux: nouveaux, trop: e.code === 'trop' });
+    heroPhoto(c, r, e.code === 'trop');
+  }
+
+  function pluieFeuilles() {
+    var z = $('#pluie'); if (!z || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    var cols = ['#6FAE74', '#8CC08F', '#C9A257', '#E3A94F', '#4F8F5B'];
+    var html = '';
+    for (var i = 0; i < 14; i++) {
+      html += '<i style="left:' + (4 + Math.random() * 92).toFixed(1) + '%;animation-delay:' + (Math.random() * .7).toFixed(2) + 's;--dx:' + Math.round(Math.random() * 60 - 30) + 'px;--r:' + Math.round(Math.random() * 540 - 270) + 'deg;--c:' + cols[i % cols.length] + ';transform:scale(' + (.7 + Math.random() * .6).toFixed(2) + ')"></i>';
+    }
+    z.innerHTML = html;
+    setTimeout(function () { z.innerHTML = ''; }, 3600);
   }
 
   function rendreListe(c) {
     var el = $('#liste');
     if (!c.lignes.length) {
-      el.innerHTML = '<div class="vide">Aucun colis pour l\'instant.<br>Saisis épaisseur, largeur, pièces et longueur.</div>';
+      el.innerHTML = '<div class="vide-bois"><svg viewBox="0 0 92 50" aria-hidden="true"><g stroke="#7A4E27" stroke-width="1.2"><rect x="10" y="30" width="44" height="16" rx="8" fill="#C99A5C"/><rect x="38" y="30" width="44" height="16" rx="8" fill="#B88A4E"/><rect x="24" y="15" width="44" height="16" rx="8" fill="#D2A666"/></g><g fill="#E9C68B" stroke="#9A6634" stroke-width=".9"><circle cx="18" cy="38" r="7"/><circle cx="46" cy="38" r="7"/><circle cx="32" cy="23" r="7"/></g><g fill="none" stroke="#B57E43" stroke-width=".7"><circle cx="18" cy="38" r="3.6"/><circle cx="46" cy="38" r="3.6"/><circle cx="32" cy="23" r="3.6"/></g><path d="M70 12c6-6 15-5 18 1-6 6-14 5-18-1z" fill="#6FAE74"/><path d="M60 6c3-4 9-3 11 1-4 4-9 3-11-1z" fill="#C9A257"/></svg>Le camion est vide.<br>Saisis épaisseur, largeur, pièces et longueur.</div>';
       return;
     }
     var h = '';
@@ -307,72 +315,75 @@
   // ---------- Plan de chargement ----------
   var selection = null;
   var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
-  var BOIS = ['#E2CC94', '#D3B171', '#ECDCB0', '#C9A462', '#E7C686', '#D8C291'];
+  // ---------- Camion en photo ----------
   var nSvg = 0, detailsOuverts = false;
-
-  function defsSvg(u) {
-    return '<defs><linearGradient id="sol' + u + '" x1="0" x2="1"><stop offset="0" stop-color="#F5A04A" stop-opacity="0"/><stop offset=".2" stop-color="#F5A04A"/><stop offset=".85" stop-color="#F5A04A"/><stop offset="1" stop-color="#F5A04A" stop-opacity="0"/></linearGradient>' +
-      '<linearGradient id="cab' + u + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F08A83"/><stop offset=".55" stop-color="#DC4A44"/><stop offset="1" stop-color="#B8322E"/></linearGradient>' +
-      '<linearGradient id="vit' + u + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B4656"/><stop offset="1" stop-color="#8E99A8"/></linearGradient>' +
-      '<radialGradient id="ph' + u + '"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#CFE3FF" stop-opacity=".9"/><stop offset="1" stop-color="#9CC3FF" stop-opacity="0"/></radialGradient></defs>';
+  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=6', bois: 'bois.jpg?v=6' };
+  PH.k = (PH.xd - PH.x0) / 13.6;
+  var PIQUETS = [105, 238, 370, 578, 722, 960, 1082];
+  function cielDefs(u) {
+    return '<linearGradient id="ciel' + u + '" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="380">' +
+      '<stop offset="0" stop-color="#A3C1E0"/><stop offset=".35" stop-color="#BBCEDF"/><stop offset=".5" stop-color="#CBD4DD"/><stop offset="1" stop-color="#E4DDD5"/></linearGradient>' +
+      '<linearGradient id="piq' + u + '" x1="0" x2="1"><stop offset="0" stop-color="#8E979F"/><stop offset=".45" stop-color="#F1F3F4"/><stop offset="1" stop-color="#7D868E"/></linearGradient>';
   }
-  function cabine(u, x, yb, sc) {
-    return '<g transform="translate(' + x + ' ' + (yb - 41 * sc).toFixed(2) + ') scale(' + sc + ')">' +
-      '<path d="M0 41V11q0-9 9-10l25-.8q10 0 12.5 9.5L50 32q.6 9-6 9z" fill="url(#cab' + u + ')"/>' +
-      '<path d="M9 1.5l24-.6q3 0 3.2 2.6V10H8.8z" fill="#fff" opacity=".18"/>' +
-      '<path d="M36.5 4.5q6 .3 7.6 6l1.6 11h-9.2z" fill="url(#vit' + u + ')"/>' +
-      '<rect x="20" y="7" width="12" height="10" rx="2" fill="url(#vit' + u + ')"/>' +
-      '<g fill="none" stroke="#fff" stroke-opacity=".28" stroke-width=".9"><path d="M6 26l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/><path d="M14.5 21.5l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/><path d="M14.5 31l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/></g>' +
-      '<rect x="45.5" y="24" width="4.5" height="12" rx="1" fill="#2B3442"/>' +
-      '<circle cx="48.5" cy="36" r="7" fill="url(#ph' + u + ')"/><circle cx="48.5" cy="36" r="1.4" fill="#fff"/></g>';
+  // Rangées de la photo (camion d'accueil) : on dévoile le chargement de l'avant vers l'arrière
+  var RANGS_HERO = [{ x1: 48, x2: 1213, y1: 278, y2: 378 }, { x1: 85, x2: 1213, y1: 158, y2: 280 }];
+
+  function heroPhoto(c, r, trop) {
+    var f = Math.max(0, Math.min(1, c.total_m3 / r.m3Max));
+    var parts = [Math.min(1, f * 2), Math.max(0, Math.min(1, f * 2 - 1))];
+    var zone = $('#heroCamion');
+    var svg = zone.querySelector('svg[data-photo]');
+    if (!svg) {
+      var u = 'h' + (++nSvg);
+      var h = '<svg class="camion-photo" data-photo="1" viewBox="0 92 1672 470" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Camion en cours de chargement"><defs>' + cielDefs(u) + '</defs>' +
+        '<image href="' + PH.img + '" x="0" y="0" width="1672" height="570" preserveAspectRatio="none"/>';
+      RANGS_HERO.forEach(function (g, i) {
+        h += '<rect class="vide-rang" data-i="' + i + '" x="' + g.x1 + '" y="' + g.y1 + '" width="' + (g.x2 - g.x1) + '" height="' + (g.y2 - g.y1) + '" fill="url(#ciel' + u + ')"/>';
+        h += '<rect class="vide-trait" data-i="' + i + '" x="' + (g.x1 + 4) + '" y="' + (g.y1 + 4) + '" width="' + (g.x2 - g.x1 - 8) + '" height="' + (g.y2 - g.y1 - 8) + '" rx="8"/>';
+      });
+      h += '<rect class="trop-voile" x="85" y="158" width="1128" height="122"/></svg>';
+      zone.innerHTML = h;
+      svg = zone.querySelector('svg[data-photo]');
+    }
+    $$('.vide-rang', svg).forEach(function (el, i) { el.style.transform = 'scaleX(' + (1 - parts[i]).toFixed(4) + ')'; });
+    $$('.vide-trait', svg).forEach(function (el, i) { el.style.opacity = parts[i] >= 1 ? 0 : 1; el.style.transform = 'scaleX(' + (1 - parts[i]).toFixed(4) + ')'; });
+    svg.classList.toggle('trop', !!trop);
   }
 
-  // Dessin d'un camion chargé. mode 'persp' : les deux côtés (droite derrière) ; 'G' ou 'D' : un côté vu de profil
+  // Un côté du camion (photo) avec le vrai plan : 3 étages de paquets de bois
   function svgCamion(c, v, o) {
-    var u = 'c' + (++nSvg), r = reg(), persp = o.mode === 'persp';
-    var W = 356, k = 252 / 13.6, x0 = 10;
-    var laneH = persp ? 15 : 21, gap = persp ? 1 : 1.5, bedY = persp ? 80 : 86, H = bedY + 24;
-    var nouveaux = o.nouveaux || {};
+    var u = 'p' + (++nSvg), r = reg(), k = PH.k, laneH = 118, gap = 5;
     var idxLigne = {}; c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
     var selRow = selection && c.plan ? (c.plan[selection] || '') : null;
-    function yf(f) { return bedY - f * (laneH + gap); }
-    function rangee(side, f, dx, dy, arr) {
-      var key = side + f, ro = v.rows[key], out = '', yy = yf(f) + dy;
-      var avantX = x0 + 13.6 * k + dx; // on charge de l'avant (cabine) vers l'arrière
-      var xx = avantX;
-      var capM = f === 1 ? r.e1Max : v.rows[side + (f - 1)].m;
-      if (!arr) out += '<rect class="fantome' + (ro.alerte && !persp ? ' alerte' : '') + '" x="' + (avantX - Math.max(0, capM * k)).toFixed(1) + '" y="' + yy + '" width="' + Math.max(0, capM * k).toFixed(1) + '" height="' + laneH + '" rx="2.5"/>';
-      if (!persp && !o.lecture) out += '<rect class="zone' + (selection && selRow !== key ? ' cible' : '') + '" data-row="' + key + '" x="' + (x0 - 4) + '" y="' + (yy - gap / 2) + '" width="' + (13.6 * k + 8) + '" height="' + (laneH + gap) + '" rx="3"/>';
+    var side = o.mode === 'persp' ? 'G' : o.mode;
+    function yf(f) { return PH.deck - f * (laneH + gap) + gap; }
+    var h = '<svg class="camion-photo plan" viewBox="0 6 1672 560" role="img" aria-label="Plan de chargement, ' + NOMS[side] + '"><defs>' + cielDefs(u) +
+      '<pattern id="tex' + u + '" patternContentUnits="objectBoundingBox" width="1" height="1"><image href="' + PH.bois + '" width="1" height="1" preserveAspectRatio="none"/></pattern></defs>' +
+      '<image href="' + PH.img + '" x="0" y="0" width="1672" height="570" preserveAspectRatio="none"/>' +
+      '<rect x="20" y="0" width="' + (PH.xd - 18) + '" height="' + (PH.deck - 2) + '" fill="url(#ciel' + u + ')"/>';
+    var colis = '';
+    [1, 2, 3].forEach(function (f) {
+      var key = side + f, ro = v.rows[key], yy = yf(f);
+      var capM = f === 1 ? r.e1Max : v.rows[side + (f - 1)].m, capW = Math.max(0, capM * k);
+      h += '<rect class="fantome' + (ro.alerte ? ' alerte' : '') + '" x="' + (PH.xd - capW).toFixed(1) + '" y="' + yy + '" width="' + capW.toFixed(1) + '" height="' + laneH + '" rx="8"/>';
+      if (!o.lecture) h += '<rect class="zone' + (selection && selRow !== key ? ' cible' : '') + '" data-row="' + key + '" x="' + (PH.x0 - 20) + '" y="' + (yy - gap / 2) + '" width="' + (PH.xd - PH.x0 + 40) + '" height="' + (laneH + gap) + '" rx="12"/>';
+      var xx = PH.xd;
       ro.colis.forEach(function (cc) {
-        xx -= cc.cm / 100 * k;
-        var w = cc.cm / 100 * k - 1.2;
-        var cls = 'colis' + (arr ? ' arr' : '') + (selection === cc.id ? ' sel' : '') + (nouveaux[cc.id] ? ' nouveau' : '') + (o.trop && f === 3 ? ' rouge' : '');
-        out += '<g class="' + cls + '" data-c="' + esc(cc.id) + '" data-row="' + key + '">' +
-          '<rect x="' + xx.toFixed(1) + '" y="' + yy + '" width="' + Math.max(w, 3).toFixed(1) + '" height="' + laneH + '" rx="2.5" fill="' + BOIS[idxLigne[cc.ligneId] % 6] + '"/>';
-        if (!persp && w > 34) out += '<text x="' + (xx + w / 2).toFixed(1) + '" y="' + (yy + laneH / 2 + 3) + '">' + fm(cc.ep) + '×' + fm(cc.la) + '</text>';
-        else if (w > 10) out += '<path d="M' + (xx + w * .33).toFixed(1) + ' ' + (yy + 3) + 'v' + (laneH - 6) + 'M' + (xx + w * .66).toFixed(1) + ' ' + (yy + 3) + 'v' + (laneH - 6) + '"/>';
-        out += '</g>';
+        var wl = cc.cm / 100 * k; xx -= wl;
+        var w = wl - 5, cls = 'colis' + (selection === cc.id ? ' sel' : '') + (o.trop && f === 3 ? ' rouge' : '');
+        var s = '<g class="' + cls + '" data-c="' + esc(cc.id) + '" data-row="' + key + '">';
+        s += '<rect class="paquet" x="' + xx.toFixed(1) + '" y="' + yy + '" width="' + Math.max(w, 8).toFixed(1) + '" height="' + laneH + '" rx="3" fill="url(#tex' + u + ')"/>';
+        s += '<rect class="ombre" x="' + xx.toFixed(1) + '" y="' + yy + '" width="' + Math.max(w, 8).toFixed(1) + '" height="' + laneH + '" rx="3"/>';
+        if (w >= 100) {
+          var tw = Math.min(w - 18, 190), tx = xx + w / 2 - tw / 2;
+          s += '<rect class="etiq" x="' + tx.toFixed(1) + '" y="' + (yy + 16) + '" width="' + tw.toFixed(1) + '" height="56" rx="9"/>';
+          s += '<text class="lg" x="' + (xx + w / 2).toFixed(1) + '" y="' + (yy + 58) + '">' + fm(cc.lo) + ' m</text>';
+          if (w >= 230) s += '<text class="sc" x="' + (xx + w / 2).toFixed(1) + '" y="' + (yy + 104) + '">' + fm(cc.ep) + '×' + fm(cc.la) + '</text>';
+        }
+        colis += s + '</g>';
       });
-      return out;
-    }
-    var h = '<svg class="camion-grand" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Camion chargé">' + defsSvg(u);
-    h += '<rect x="0" y="' + (H - 2.6) + '" width="' + W + '" height="1.6" fill="url(#sol' + u + ')"/>';
-    h += '<ellipse cx="178" cy="' + (H - 2.5) + '" rx="168" ry="3" fill="#000" opacity=".10"/>';
-    if (persp) {
-      [1, 2, 3].forEach(function (f) { h += rangee('D', f, 5, -5, true); });
-      [1, 2, 3].forEach(function (f) { h += rangee('G', f, 0, 0, false); });
-    } else {
-      [1, 2, 3].forEach(function (f) { h += rangee(o.mode, f, 0, 0, false); });
-    }
-    var finPlateau = x0 + 13.6 * k;
-    h += '<rect x="' + (x0 - 3) + '" y="' + (bedY + 1) + '" width="' + (finPlateau - x0 + 6) + '" height="5" rx="1.5" fill="#46546A"/>';
-    h += '<rect x="' + (x0 - 5) + '" y="' + (bedY + 6) + '" width="' + (W - x0 - 4) + '" height="3.5" rx="1.2" fill="#2B3442"/>';
-    var sc = persp ? 1.25 : 1.45;
-    h += cabine(u, finPlateau + 6, bedY + 6, sc);
-    var cy = bedY + 14, avant = finPlateau + 6 + 41 * sc;
-    [32, 52, finPlateau + 18, finPlateau + 36, avant].forEach(function (x) {
-      h += '<circle cx="' + x.toFixed(1) + '" cy="' + cy + '" r="7.5" fill="#1F2733"/><circle cx="' + x.toFixed(1) + '" cy="' + cy + '" r="2.6" fill="#9AA6B6"/>';
     });
+    h += colis;
     return h + '</svg>';
   }
 
@@ -442,7 +453,7 @@
   // ---------- Image du plan (partage) ----------
   function imagePlan(c) {
     var r = reg(), v = P.verifier(c.lignes, c.plan || {}, r);
-    var acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#2F5C8F';
+    var acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#2E6B4E';
     var W = 1080, pad = 48, rowH = 96;
     var msgs = v.erreurs.map(function (m) { return ['#D7261E', m]; }).concat(v.avis.map(function (m) { return ['#C46A00', m]; }));
     if (!msgs.length) msgs.push(['#18924C', '✔ Plan conforme']);
@@ -457,8 +468,8 @@
     var hEtage = 56 + 2 * (rowH + 46);
     var H = 210 + 3 * (hEtage + 24) + (v.nonPlaces.length ? rowH + 90 : 0) + lignesMsg.length * 40 + 90;
     cv.width = W; cv.height = H;
-    var fondG = x.createLinearGradient(0, 0, W, H); fondG.addColorStop(0, '#EEF2F6'); fondG.addColorStop(1, '#D3DDE8'); x.fillStyle = fondG; x.fillRect(0, 0, W, H);
-    x.fillStyle = '#F5A04A'; x.fillRect(0, 192, W, 3);
+    var fondG = x.createLinearGradient(0, 0, W, H); fondG.addColorStop(0, '#F4F1E8'); fondG.addColorStop(1, '#E1EAD9'); x.fillStyle = fondG; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#E3A94F'; x.fillRect(0, 192, W, 3);
     x.fillStyle = '#1E1B2E'; x.font = '700 50px Fraunces, Georgia, serif';
     var titre = 'Camion' + (c.client ? ' — ' + c.client : '') + (c.reference ? ' · Réf. ' + c.reference : '');
     x.fillText(titre, pad, 82);
@@ -472,16 +483,22 @@
     var teintes = [acc, '#3E7C8C', '#B5654A', '#4F8A5B', '#5468A8', '#8A5C93'];
     var idxLigne = {}; c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
     function piste(liste, yy) {
-      x.fillStyle = '#EEF2F6'; rond(pad, yy, larg, rowH, 14); x.fill();
+      x.fillStyle = '#EFEADC'; rond(pad, yy, larg, rowH, 14); x.fill();
       var xx = pad + larg - 4; // avant (cabine) à droite, chargé vers l'arrière
       liste.forEach(function (k) {
         var w = k.cm / maxLen * (larg - 8) - 4;
         xx -= w + 4;
-        x.fillStyle = teintes[idxLigne[k.ligneId] % 6]; rond(xx, yy + 4, Math.max(w, 6), rowH - 8, 10); x.fill();
+        var gb = x.createLinearGradient(0, yy, 0, yy + rowH); gb.addColorStop(0, '#F0D9A6'); gb.addColorStop(1, '#CFA864');
+        x.fillStyle = gb; rond(xx, yy + 4, Math.max(w, 6), rowH - 8, 8); x.fill();
+        x.strokeStyle = '#A07C43'; x.lineWidth = 2; x.stroke();
+        x.strokeStyle = 'rgba(160,124,67,.45)'; x.lineWidth = 1.5;
+        for (var pl = 1; pl < 5; pl++) { x.beginPath(); x.moveTo(xx + 3, yy + 4 + pl * (rowH - 8) / 5); x.lineTo(xx + w - 3, yy + 4 + pl * (rowH - 8) / 5); x.stroke(); }
+        x.fillStyle = '#2F3B47'; x.fillRect(xx + w * .2, yy + 4, 3, rowH - 8); x.fillRect(xx + w * .8 - 3, yy + 4, 3, rowH - 8);
         x.save(); x.beginPath(); x.rect(xx, yy, Math.max(w, 6), rowH); x.clip();
-        x.fillStyle = '#fff'; x.textAlign = 'center';
-        x.font = '700 24px Inter, system-ui, sans-serif'; x.fillText(fm(k.ep) + '×' + fm(k.la), xx + w / 2, yy + 42);
-        x.font = '500 21px Inter, system-ui, sans-serif'; x.fillText(fm(k.lo) + ' m · ' + f2(k.vol), xx + w / 2, yy + 72);
+        x.textAlign = 'center';
+        x.fillStyle = '#FFFDF7'; rond(xx + w / 2 - 54, yy + 14, 108, 38, 6); x.fill();
+        x.fillStyle = '#3A2A14'; x.font = '800 28px Inter, system-ui, sans-serif'; x.fillText(fm(k.lo) + ' m', xx + w / 2, yy + 43);
+        x.font = '600 20px Inter, system-ui, sans-serif'; x.fillStyle = '#5E4622'; x.fillText(fm(k.ep) + '×' + fm(k.la), xx + w / 2, yy + 78);
         x.restore(); x.textAlign = 'left';
       });
     }
@@ -616,11 +633,11 @@
 
   // ---------- Apparence ----------
   var PRESETS = {
-    accent: ['#2F5C8F', '#5B4FBF', '#7C3AED', '#0F766E', '#15803D', '#C2410C', '#D0332B', '#1F4D2E'],
-    bg: ['#EEF2F6', '#F1EEFB', '#F4F4F5', '#EFF6F0', '#FBF5EC', '#FFFFFF', '#1A2230', '#0F172A'],
-    card: ['#FFFFFF', '#F8FAFC', '#FAF9FF', '#FFFCF5', '#222C3B', '#1E293B'],
-    nav: ['#FFFFFF', '#F8FAFC', '#EEF2F6', '#1C2533', '#1E293B'],
-    text: ['#1C2633', '#111827', '#24364F', '#E8EDF4', '#F8FAFC']
+    accent: ['#2E6B4E', '#1F4D2E', '#8B5A2B', '#2F5C8F', '#5B4FBF', '#0F766E', '#C2410C', '#D0332B'],
+    bg: ['#F4F1E8', '#EEF2F6', '#F1EEFB', '#EFF6F0', '#FBF5EC', '#FFFFFF', '#141B17', '#0F172A'],
+    card: ['#FFFEFB', '#FFFFFF', '#F8FAFC', '#FFFCF5', '#1E2721', '#1E293B'],
+    nav: ['#FFFEFB', '#FFFFFF', '#F4F1E8', '#18201B', '#1E293B'],
+    text: ['#1F2A22', '#111827', '#24364F', '#ECF1EA', '#F8FAFC']
   };
   var NOMS_COUL = { accent: 'Couleur principale', bg: 'Fond', card: 'Cartes', nav: 'Barre du bas', text: 'Texte' };
   var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
@@ -634,7 +651,7 @@
     else { root.style.removeProperty('--bg'); root.style.removeProperty('--bg2'); }
     if (c.text) root.style.setProperty('--muted', 'color-mix(in srgb, ' + c.text + ' 62%, var(--card))'); else root.style.removeProperty('--muted');
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', getComputedStyle(root).getPropertyValue('--bg').trim() || '#EEF2F6');
+    if (meta) meta.setAttribute('content', getComputedStyle(root).getPropertyValue('--bg').trim() || '#F4F1E8');
   }
   if (mq && mq.addEventListener) mq.addEventListener('change', appliquerTheme);
 
@@ -754,7 +771,7 @@
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
-    navigator.serviceWorker.register('sw.js?v=4').catch(function () {});
+    navigator.serviceWorker.register('sw.js?v=6').catch(function () {});
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (avaitCtrl && !recharge) { recharge = true; location.reload(); }
     });
