@@ -65,10 +65,10 @@
     var c = 0, mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     for (var s = 0; s < 2; s++) {
       var b = s * 3, l1 = len[b], l2 = len[b + 1], l3 = len[b + 2];
-      if (l1 < mn) c += 10 * (mn - l1) + 100;
-      if (l1 > mx) c += 10 * (l1 - mx) + 100;
-      if (l2 > l1) c += 10 * (l2 - l1) + 100;
-      if (l3 > l2) c += 10 * (l3 - l2) + 100;
+      if (l1 < mn) { var d0 = mn - l1; c += 10 * d0 + d0 * d0 / 40 + 100; }
+      if (l1 > mx) { var d1 = l1 - mx; c += 10 * d1 + d1 * d1 / 40 + 100; }
+      if (l2 > l1) { var d2 = l2 - l1; c += 10 * d2 + d2 * d2 / 40 + 100; }
+      if (l3 > l2) { var d3 = l3 - l2; c += 10 * d3 + d3 * d3 / 40 + 100; }
       if (l2 > mx) c += 10 * (l2 - mx);
       if (l3 > mx) c += 10 * (l3 - mx);
     }
