@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '6';
+  var VERSION_APP = '7';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -317,7 +317,7 @@
   var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
   // ---------- Camion en photo ----------
   var nSvg = 0, detailsOuverts = false;
-  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=6', bois: 'bois.jpg?v=6' };
+  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=7', bois: 'bois.jpg?v=7' };
   PH.k = (PH.xd - PH.x0) / 13.6;
   var PIQUETS = [105, 238, 370, 578, 722, 960, 1082];
   function cielDefs(u) {
@@ -350,46 +350,36 @@
     svg.classList.toggle('trop', !!trop);
   }
 
-  // Un côté du camion (photo) avec le vrai plan : 3 étages de paquets de bois
-  function svgCamion(c, v, o) {
-    var u = 'p' + (++nSvg), r = reg(), k = PH.k, laneH = 118, gap = 5;
-    var idxLigne = {}; c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
-    var selRow = selection && c.plan ? (c.plan[selection] || '') : null;
-    var side = o.mode === 'persp' ? 'G' : o.mode;
-    function yf(f) { return PH.deck - f * (laneH + gap) + gap; }
-    var h = '<svg class="camion-photo plan" viewBox="0 6 1672 560" role="img" aria-label="Plan de chargement, ' + NOMS[side] + '"><defs>' + cielDefs(u) +
-      '<pattern id="tex' + u + '" patternContentUnits="objectBoundingBox" width="1" height="1"><image href="' + PH.bois + '" width="1" height="1" preserveAspectRatio="none"/></pattern></defs>' +
-      '<image href="' + PH.img + '" x="0" y="0" width="1672" height="570" preserveAspectRatio="none"/>' +
-      '<rect x="20" y="0" width="' + (PH.xd - 18) + '" height="' + (PH.deck - 2) + '" fill="url(#ciel' + u + ')"/>';
-    var colis = '';
-    [1, 2, 3].forEach(function (f) {
-      var key = side + f, ro = v.rows[key], yy = yf(f);
-      var capM = f === 1 ? r.e1Max : v.rows[side + (f - 1)].m, capW = Math.max(0, capM * k);
-      h += '<rect class="fantome' + (ro.alerte ? ' alerte' : '') + '" x="' + (PH.xd - capW).toFixed(1) + '" y="' + yy + '" width="' + capW.toFixed(1) + '" height="' + laneH + '" rx="8"/>';
-      if (!o.lecture) h += '<rect class="zone' + (selection && selRow !== key ? ' cible' : '') + '" data-row="' + key + '" x="' + (PH.x0 - 20) + '" y="' + (yy - gap / 2) + '" width="' + (PH.xd - PH.x0 + 40) + '" height="' + (laneH + gap) + '" rx="12"/>';
-      var xx = PH.xd;
-      ro.colis.forEach(function (cc) {
-        var wl = cc.cm / 100 * k; xx -= wl;
-        var w = wl - 5, cls = 'colis' + (selection === cc.id ? ' sel' : '') + (o.trop && f === 3 ? ' rouge' : '');
-        var s = '<g class="' + cls + '" data-c="' + esc(cc.id) + '" data-row="' + key + '">';
-        s += '<rect class="paquet" x="' + xx.toFixed(1) + '" y="' + yy + '" width="' + Math.max(w, 8).toFixed(1) + '" height="' + laneH + '" rx="3" fill="url(#tex' + u + ')"/>';
-        s += '<rect class="ombre" x="' + xx.toFixed(1) + '" y="' + yy + '" width="' + Math.max(w, 8).toFixed(1) + '" height="' + laneH + '" rx="3"/>';
-        if (w >= 100) {
-          var tw = Math.min(w - 18, 190), tx = xx + w / 2 - tw / 2;
-          s += '<rect class="etiq" x="' + tx.toFixed(1) + '" y="' + (yy + 16) + '" width="' + tw.toFixed(1) + '" height="56" rx="9"/>';
-          s += '<text class="lg" x="' + (xx + w / 2).toFixed(1) + '" y="' + (yy + 58) + '">' + fm(cc.lo) + ' m</text>';
-          if (w >= 230) s += '<text class="sc" x="' + (xx + w / 2).toFixed(1) + '" y="' + (yy + 104) + '">' + fm(cc.ep) + '×' + fm(cc.la) + '</text>';
-        }
-        colis += s + '</g>';
+  // ---------- Plan : grand, simple, déplacement au doigt ----------
+  var NOMS_ET = { 1: 'Étage 1 (bas)', 2: 'Étage 2', 3: 'Étage 3 (haut)' };
+  function libColis(k) { return fm(k.lo) + ' m · ' + fm(k.ep) + '×' + fm(k.la); }
+
+  function htmlCote(c, v, side, opts) {
+    var r = reg(), idxLigne = {};
+    c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
+    var vol = side === 'G' ? v.volG : v.volD;
+    var h = '<div class="carte cote2" data-side="' + side + '"><div class="cote2-tete"><b>' + NOMS[side] + '</b><small>' + (side === 'G' ? 'gauche' : 'droite') + '</small><span>' + f2(vol) + ' m³</span></div>';
+    h += '<div class="cote2-corps"><div class="etages">';
+    [3, 2, 1].forEach(function (f) {
+      var key = side + f, ro = v.rows[key];
+      var capM = f === 1 ? r.e1Max : v.rows[side + (f - 1)].m;
+      var cible = !opts.lecture && selection && ((c.plan || {})[selection] || '') !== key;
+      h += '<div class="etage2' + (ro.alerte ? ' alerte' : '') + (cible ? ' cible' : '') + '" data-row="' + key + '">' +
+        '<div class="num"><b>' + f + '</b><small>' + fm(Math.round(ro.m * 10) / 10) + ' m</small></div>' +
+        '<div class="piste2"><i class="cap" style="width:' + Math.min(100, capM / 13.6 * 100).toFixed(2) + '%"></i>';
+      ro.colis.forEach(function (k) {
+        h += '<button type="button" class="colis2 b' + (idxLigne[k.ligneId] % 4) + (selection === k.id ? ' sel' : '') + (opts.trop && f === 3 ? ' rouge' : '') + '" data-c="' + esc(k.id) + '" data-row="' + key + '" style="width:' + (k.cm / 1360 * 100).toFixed(2) + '%" aria-label="' + esc(libColis(k)) + '">' +
+          '<b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>';
       });
+      h += '</div></div>';
     });
-    h += colis;
-    return h + '</svg>';
+    h += '</div><div class="cabine2" aria-hidden="true"></div></div></div>';
+    return h;
   }
 
   function htmlPlan(c, opts) {
     var r = reg(), v = P.verifier(c.lignes, c.plan || {}, r);
-    var enCours = v.etat.code === 'peu'; // camion pas encore plein : pas d'alerte, il se remplit
+    var enCours = v.etat.code === 'peu';
     var nb = enCours ? 0 : v.erreurs.length + v.avis.length;
     var cls = enCours ? 'n' : v.erreurs.length ? 'e' : v.avis.length ? 'a' : 'o';
     var txt = enCours ? 'Chargement en cours' : v.erreurs.length ? '⚠ ' + v.erreurs.length + ' problème' + (v.erreurs.length > 1 ? 's' : '') : v.avis.length ? 'À vérifier' : '✓ Plan OK';
@@ -398,37 +388,92 @@
     h += '<div class="details"' + (ouvert && nb ? '' : ' hidden') + '><div class="msgs">' +
       v.erreurs.map(function (x) { return '<p class="e">' + esc(x) + '</p>'; }).join('') +
       v.avis.map(function (x) { return '<p class="a">' + esc(x) + '</p>'; }).join('') + '</div></div>';
-    ['G', 'D'].forEach(function (s) {
-      var vol = s === 'G' ? v.volG : v.volD;
-      h += '<div class="carte cote"><div class="cote-tete"><b>' + NOMS[s] + '</b><span>' + f2(vol) + ' m³</span></div>' + svgCamion(c, v, { mode: s, lecture: opts.lecture }) + '</div>';
-    });
+    var trop = v.etat.code === 'trop';
+    h += htmlCote(c, v, 'G', { lecture: opts.lecture, trop: trop }) + htmlCote(c, v, 'D', { lecture: opts.lecture, trop: trop });
     if (v.nonPlaces.length) {
-      var selRow = selection && c.plan ? c.plan[selection] || '' : null;
-      h += '<div class="carte plateau rangee' + (!opts.lecture && selection && selRow !== '' ? ' cible' : '') + '" data-row=""><div class="tete"><b>Non placés</b><span class="info">' + v.nonPlaces.length + ' colis</span></div><div class="piste">' +
-        v.nonPlaces.map(function (k) { return '<button type="button" class="colis' + (selection === k.id ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="width:' + Math.max(18, k.lo * 7) + '%"><b>' + fm(k.ep) + '×' + fm(k.la) + '</b><span>' + fm(k.lo) + ' m</span></button>'; }).join('') + '</div></div>';
+      h += '<div class="carte plateau2' + (!opts.lecture && selection ? ' cible' : '') + '" data-row=""><b>Pas encore placés</b><div class="piste2 libre">' +
+        v.nonPlaces.map(function (k) { return '<button type="button" class="colis2 b0' + (selection === k.id ? ' sel' : '') + '" data-c="' + esc(k.id) + '" data-row="" style="width:' + (k.cm / 1360 * 100).toFixed(2) + '%"><b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>'; }).join('') + '</div></div>';
     }
-    if (!opts.lecture) h += '<p class="aide">' + (selection ? 'Touche l\'étage où le mettre.' : 'Pour déplacer : touche un colis, puis un étage.') + '</p>';
+    if (!opts.lecture) {
+      var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
+      if (sel) {
+        var ici = (c.plan || {})[sel.id] || '';
+        h += '<div class="deplacer"><div class="dep-tete"><span>Mettre <b>' + esc(libColis(sel)) + '</b> sur :</span><button type="button" class="btn-lien" data-annuler="1">Annuler</button></div><div class="dep-grille">' +
+          '<span class="dep-col">Côté conducteur</span><span class="dep-col">Côté passager</span>' +
+          [3, 2, 1].map(function (f) {
+            return ['G', 'D'].map(function (s) { return '<button type="button" class="dep' + (ici === s + f ? ' ici' : '') + '" data-dest="' + s + f + '"' + (ici === s + f ? ' disabled' : '') + '>' + NOMS_ET[f] + '</button>'; }).join('');
+          }).join('') + '</div></div>';
+      } else {
+        h += '<p class="aide">Touche un colis pour le déplacer, ou fais-le glisser avec le doigt.</p>';
+      }
+    }
     return h;
   }
 
   function rendrePlanVue() {
     var c = courant();
     $('#planZone').innerHTML = htmlPlan(c, {});
+    var d = $('#planZone .deplacer'); if (d) d.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
   $('#planZone').addEventListener('click', function (e) {
     var c = courant();
     if (e.target.closest('.statut')) { detailsOuverts = !detailsOuverts; rendrePlanVue(); return; }
-    var col = e.target.closest('.colis'), row = e.target.closest('[data-row]');
-    if (col) {
-      var id = col.dataset.c;
-      if (selection === id) { selection = null; }
-      else if (selection && row && ((c.plan || {})[selection] || '') !== row.dataset.row) { deplacer(c, selection, row.dataset.row); }
-      else selection = id;
-      rendrePlanVue(); return;
-    }
-    if (row && selection) { deplacer(c, selection, row.dataset.row); rendrePlanVue(); }
+    if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
+    var dest = e.target.closest('[data-dest]');
+    if (dest && selection) { deplacer(c, selection, dest.dataset.dest); rendrePlanVue(); toast('Colis déplacé'); return; }
+    if (glisse.bloquerClic) { glisse.bloquerClic = false; return; }
+    var col = e.target.closest('.colis2');
+    if (col) { selection = selection === col.dataset.c ? null : col.dataset.c; rendrePlanVue(); return; }
+    var row = e.target.closest('[data-row]');
+    if (row && selection && ((c.plan || {})[selection] || '') !== row.dataset.row) { deplacer(c, selection, row.dataset.row); rendrePlanVue(); toast('Colis déplacé'); }
   });
+
+  // Glisser-déposer au doigt (ou à la souris)
+  var glisse = { el: null, id: null, x: 0, y: 0, actif: false, fantome: null, bloquerClic: false };
+  function rangeeSous(x, y) {
+    if (glisse.fantome) glisse.fantome.style.display = 'none';
+    var el = document.elementFromPoint(x, y);
+    if (glisse.fantome) glisse.fantome.style.display = '';
+    var row = el && el.closest && el.closest('#planZone [data-row]');
+    return row && !row.classList.contains('colis2') ? row : (row && row.closest('.etage2, .plateau2'));
+  }
+  $('#planZone').addEventListener('pointerdown', function (e) {
+    var col = e.target.closest('.colis2'); if (!col) return;
+    glisse.el = col; glisse.id = col.dataset.c; glisse.x = e.clientX; glisse.y = e.clientY; glisse.actif = false;
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!glisse.el) return;
+    var dx = e.clientX - glisse.x, dy = e.clientY - glisse.y;
+    if (!glisse.actif && Math.abs(dx) + Math.abs(dy) > 10) {
+      glisse.actif = true;
+      var rc = glisse.el.getBoundingClientRect(), f = glisse.el.cloneNode(true);
+      f.classList.add('fantome-glisse'); f.style.width = rc.width + 'px'; f.style.height = rc.height + 'px';
+      f.style.left = rc.left + 'px'; f.style.top = rc.top + 'px';
+      document.body.appendChild(f); glisse.fantome = f; glisse.ox = e.clientX - rc.left; glisse.oy = e.clientY - rc.top;
+      glisse.el.classList.add('en-glisse');
+    }
+    if (glisse.actif) {
+      e.preventDefault();
+      glisse.fantome.style.left = (e.clientX - glisse.ox) + 'px'; glisse.fantome.style.top = (e.clientY - glisse.oy) + 'px';
+      $$('#planZone .survol').forEach(function (x) { x.classList.remove('survol'); });
+      var row = rangeeSous(e.clientX, e.clientY); if (row) row.classList.add('survol');
+    }
+  }, { passive: false });
+  function finGlisse(e) {
+    if (!glisse.el) return;
+    if (glisse.actif) {
+      var row = rangeeSous(e.clientX, e.clientY), c = courant();
+      if (glisse.fantome) glisse.fantome.remove();
+      glisse.bloquerClic = true; setTimeout(function () { glisse.bloquerClic = false; }, 350);
+      if (row && ((c.plan || {})[glisse.id] || '') !== row.dataset.row) { deplacer(c, glisse.id, row.dataset.row); toast('Colis déplacé'); }
+      selection = null; rendrePlanVue();
+    }
+    glisse.el = null; glisse.actif = false; glisse.fantome = null;
+  }
+  window.addEventListener('pointerup', finGlisse);
+  window.addEventListener('pointercancel', function (e) { if (glisse.fantome) glisse.fantome.remove(); glisse.el = null; glisse.actif = false; glisse.fantome = null; rendrePlanVue(); });
+
   function deplacer(c, id, dest) {
     c.plan = c.plan || {};
     if (dest) c.plan[id] = dest; else delete c.plan[id];
@@ -771,7 +816,7 @@
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
-    navigator.serviceWorker.register('sw.js?v=6').catch(function () {});
+    navigator.serviceWorker.register('sw.js?v=7').catch(function () {});
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (avaitCtrl && !recharge) { recharge = true; location.reload(); }
     });
