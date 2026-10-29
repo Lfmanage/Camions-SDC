@@ -150,15 +150,16 @@
   }
 
   // Calcule un plan. Renvoie { plan: {colisId: 'G1'...}, verif }
-  function proposer(lignes, cfg) {
+  function proposer(lignes, cfg, rapide) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var colis = colisDe(lignes).filter(function (c) { return c.cm > 0 && c.vol > 0; });
     var plan = {};
     if (!colis.length) return { plan: plan, verif: verifier(lignes, plan, cfg) };
     var r = rng(colis.length * 7919 + 17);
     var iters = Math.min(120000, 4000 + colis.length * 3000);
+    if (rapide) iters = Math.round(iters / 3);
     var essais = [depart(colis, cfg, null)];
-    for (var e = 0; e < 5; e++) essais.push(depart(colis, cfg, r));
+    for (var e = 0; e < (rapide ? 1 : 5); e++) essais.push(depart(colis, cfg, r));
     var best = null;
     essais.forEach(function (aff) {
       var res = optimiser(colis, cfg, aff, r, iters);

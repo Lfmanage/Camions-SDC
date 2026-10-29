@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '2';
+  var VERSION_APP = '4';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -46,6 +46,10 @@
     var c = db.camions[db.courant];
     if (!c || c.supprime || c.statut !== 'en_cours') { c = nouveauCamion(); sauver(true); }
     return c;
+  }
+  function majPlan(c) { // le camion se remplit tout seul au fil de la saisie
+    c.plan = c.lignes.length ? P.proposer(c.lignes, reg(), true).plan : null;
+    c.planManuel = false;
   }
   function toucher(c) {
     c.total_m3 = Math.round(P.totalM3(c.lignes) * 1000) / 1000;
@@ -119,32 +123,28 @@
 
   function messageEtat(total) {
     var e = P.etat(total, reg());
-    if (e.code === 'peu') return 'Pas assez : il manque ' + f2(e.manque) + ' m³ pour atteindre ' + fm(reg().m3Min) + ' m³';
-    if (e.code === 'trop') return '⚠ ATTENTION : limite autorisée dépassée de ' + f2(e.depasse) + ' m³';
-    return 'Camion OK';
+    if (e.code === 'peu') return 'Il manque ' + f2(e.manque) + ' m³';
+    if (e.code === 'trop') return '⚠ Dépassé de ' + f2(e.depasse) + ' m³';
+    return 'Camion OK ✓';
   }
 
+  var vusHero = null; // colis déjà dessinés (pour animer seulement les nouveaux)
   function rendreCompteur(c) {
     var r = reg(), tot = c.total_m3, e = P.etat(tot, r);
     var reste = Math.round((r.m3Max - tot) * 100) / 100;
-    $('#lblReste').textContent = reste < 0 ? 'Dépassé de' : 'Reste';
+    $('#lblReste').textContent = reste < 0 ? 'Dépassé' : 'Reste';
     $('#reste').textContent = f2(Math.abs(reste));
     $('#total').textContent = f2(tot);
+    $('#totMax').textContent = fm(r.m3Max);
     var cpt = $('#compteur');
     cpt.classList.remove('peu', 'ok', 'trop'); cpt.classList.add(e.code);
-    var echelle = r.m3Max * 1.12;
-    $('#jaugeFill').style.width = Math.min(100, tot / echelle * 100) + '%';
-    $('#rep1').style.left = (r.m3Min / echelle * 100) + '%';
-    $('#rep2').style.left = (r.m3Max / echelle * 100) + '%';
-    $('#rep1 em').textContent = fm(r.m3Min);
-    $('#rep2 em').textContent = fm(r.m3Max);
-    $('#msgEtat').textContent = messageEtat(tot);
-    // camion dessiné : les colis se remplissent avec le volume
-    var n = tot > 0 ? Math.max(1, Math.min(9, Math.ceil(tot / r.m3Max * 9 - 1e-6))) : 0;
-    $$('.camion-svg .pk').forEach(function (g, i) {
-      g.classList.toggle('plein', i < n);
-      g.classList.toggle('rouge', e.code === 'trop' && i >= 6);
-    });
+    $('#msgEtat').textContent = c.lignes.length ? messageEtat(tot) : 'Camion vide : ajoute les colis';
+    var v = P.verifier(c.lignes, c.plan || {}, r);
+    var nouveaux = {}, vus = {};
+    P.ROWS.forEach(function (k) { v.rows[k].colis.forEach(function (cc) { vus[cc.id] = 1; if (vusHero && !vusHero[cc.id]) nouveaux[cc.id] = 1; }); });
+    if (vusHero === null || c.id !== vusHero._camion) nouveaux = {};
+    vus._camion = c.id; vusHero = vus;
+    $('#heroCamion').innerHTML = svgCamion(c, v, { mode: 'persp', lecture: true, nouveaux: nouveaux, trop: e.code === 'trop' });
   }
 
   function rendreListe(c) {
@@ -166,11 +166,14 @@
     el.innerHTML = h;
   }
 
-  function rendreRapides() {
-    var v = P.num($('#fLo').value);
-    $('#rapides').innerHTML = (reg().longueurs || []).map(function (x) {
-      return '<button type="button" data-l="' + x + '" class="' + (v === x ? 'actif' : '') + '">' + fLong(x) + '</button>';
-    }).join('');
+  function rendreApercu() {
+    var v = champs.map(function (sel) { return P.num($(sel).value); });
+    var ok = v.every(function (x) { return isFinite(x) && x > 0; });
+    var el = $('#apercu');
+    if (!ok) { el.innerHTML = 'Ce colis : <b>—</b> m³'; el.classList.remove('plein'); return; }
+    var vol = v[0] * v[1] * v[2] * v[3] / 1e6;
+    el.innerHTML = nb > 1 ? nb + ' colis : <b>' + f3(vol * nb) + '</b> m³ <small>(' + f3(vol) + ' chacun)</small>' : 'Ce colis : <b>' + f3(vol) + '</b> m³';
+    el.classList.add('plein');
   }
 
   function rendreCamion() {
@@ -180,7 +183,7 @@
     $('#listeClients').innerHTML = tousClients().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('');
     rendreCompteur(c);
     rendreListe(c);
-    rendreRapides();
+    rendreApercu();
     $('#nbVal').textContent = nb;
     $('#btnAjouter').textContent = editId ? 'Enregistrer' : 'Ajouter';
     $('#btnAnnulerEdit').hidden = !editId;
@@ -211,7 +214,7 @@
       l.id = petitId();
       c.lignes.push(l);
     }
-    toucher(c);
+    majPlan(c); toucher(c);
     viderForm();
     rendreCamion();
     $('#fEp').focus();
@@ -224,7 +227,7 @@
       e.preventDefault();
       if (i < champs.length - 1) $(champs[i + 1]).focus(); else ajouter();
     });
-    $(s).addEventListener('input', function () { $(s).classList.remove('erreur'); if (s === '#fLo') rendreRapides(); });
+    $(s).addEventListener('input', function () { $(s).classList.remove('erreur'); rendreApercu(); });
   });
   $('#client').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#reference').focus(); } });
   $('#reference').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#fEp').focus(); } });
@@ -235,18 +238,13 @@
   });
   $('#reference').addEventListener('input', function () { var c = courant(); c.reference = $('#reference').value.trim(); toucher(c); });
 
-  $('#rapides').addEventListener('click', function (e) {
-    var b = e.target.closest('button'); if (!b) return;
-    $('#fLo').value = fLong(Number(b.dataset.l)); $('#fLo').classList.remove('erreur');
-    rendreRapides();
-  });
-  $('#nbMoins').addEventListener('click', function () { nb = Math.max(1, nb - 1); $('#nbVal').textContent = nb; });
-  $('#nbPlus').addEventListener('click', function () { nb = Math.min(99, nb + 1); $('#nbVal').textContent = nb; });
+  $('#nbMoins').addEventListener('click', function () { nb = Math.max(1, nb - 1); $('#nbVal').textContent = nb; rendreApercu(); });
+  $('#nbPlus').addEventListener('click', function () { nb = Math.min(99, nb + 1); $('#nbVal').textContent = nb; rendreApercu(); });
   $('#btnMeme').addEventListener('click', function () {
     var c = courant();
     if (!c.lignes.length) { toast('Aucune ligne à dupliquer.'); return; }
     var d = Object.assign({}, c.lignes[c.lignes.length - 1], { id: petitId() });
-    c.lignes.push(d); toucher(c); rendreCamion();
+    c.lignes.push(d); majPlan(c); toucher(c); rendreCamion();
     toast('Ajouté : ' + fm(d.ep) + ' × ' + fm(d.la) + ' · ' + fLong(d.lo) + ' m');
   });
   $('#btnAnnulerEdit').addEventListener('click', function () { viderForm(); rendreCamion(); });
@@ -265,8 +263,8 @@
     } else {
       c.lignes.splice(idx, 1);
       if (editId === id) viderForm();
-      toucher(c); rendreCamion();
-      toast('Ligne supprimée', function () { c.lignes.splice(idx, 0, l); toucher(c); rendreCamion(); });
+      majPlan(c); toucher(c); rendreCamion();
+      toast('Ligne supprimée', function () { c.lignes.splice(idx, 0, l); majPlan(c); toucher(c); rendreCamion(); });
     }
   });
 
@@ -308,47 +306,97 @@
 
   // ---------- Plan de chargement ----------
   var selection = null;
-  var NOMS = { G: 'Gauche · conducteur', D: 'Droite · passager' };
+  var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
+  var BOIS = ['#E2CC94', '#D3B171', '#ECDCB0', '#C9A462', '#E7C686', '#D8C291'];
+  var nSvg = 0, detailsOuverts = false;
+
+  function defsSvg(u) {
+    return '<defs><linearGradient id="sol' + u + '" x1="0" x2="1"><stop offset="0" stop-color="#F5A04A" stop-opacity="0"/><stop offset=".2" stop-color="#F5A04A"/><stop offset=".85" stop-color="#F5A04A"/><stop offset="1" stop-color="#F5A04A" stop-opacity="0"/></linearGradient>' +
+      '<linearGradient id="cab' + u + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F08A83"/><stop offset=".55" stop-color="#DC4A44"/><stop offset="1" stop-color="#B8322E"/></linearGradient>' +
+      '<linearGradient id="vit' + u + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B4656"/><stop offset="1" stop-color="#8E99A8"/></linearGradient>' +
+      '<radialGradient id="ph' + u + '"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#CFE3FF" stop-opacity=".9"/><stop offset="1" stop-color="#9CC3FF" stop-opacity="0"/></radialGradient></defs>';
+  }
+  function cabine(u, x, yb, sc) {
+    return '<g transform="translate(' + x + ' ' + (yb - 41 * sc).toFixed(2) + ') scale(' + sc + ')">' +
+      '<path d="M0 41V11q0-9 9-10l25-.8q10 0 12.5 9.5L50 32q.6 9-6 9z" fill="url(#cab' + u + ')"/>' +
+      '<path d="M9 1.5l24-.6q3 0 3.2 2.6V10H8.8z" fill="#fff" opacity=".18"/>' +
+      '<path d="M36.5 4.5q6 .3 7.6 6l1.6 11h-9.2z" fill="url(#vit' + u + ')"/>' +
+      '<rect x="20" y="7" width="12" height="10" rx="2" fill="url(#vit' + u + ')"/>' +
+      '<g fill="none" stroke="#fff" stroke-opacity=".28" stroke-width=".9"><path d="M6 26l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/><path d="M14.5 21.5l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/><path d="M14.5 31l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/></g>' +
+      '<rect x="45.5" y="24" width="4.5" height="12" rx="1" fill="#2B3442"/>' +
+      '<circle cx="48.5" cy="36" r="7" fill="url(#ph' + u + ')"/><circle cx="48.5" cy="36" r="1.4" fill="#fff"/></g>';
+  }
+
+  // Dessin d'un camion chargé. mode 'persp' : les deux côtés (droite derrière) ; 'G' ou 'D' : un côté vu de profil
+  function svgCamion(c, v, o) {
+    var u = 'c' + (++nSvg), r = reg(), persp = o.mode === 'persp';
+    var W = 356, k = 252 / 13.6, x0 = 10;
+    var laneH = persp ? 15 : 21, gap = persp ? 1 : 1.5, bedY = persp ? 80 : 86, H = bedY + 24;
+    var nouveaux = o.nouveaux || {};
+    var idxLigne = {}; c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
+    var selRow = selection && c.plan ? (c.plan[selection] || '') : null;
+    function yf(f) { return bedY - f * (laneH + gap); }
+    function rangee(side, f, dx, dy, arr) {
+      var key = side + f, ro = v.rows[key], out = '', yy = yf(f) + dy;
+      var avantX = x0 + 13.6 * k + dx; // on charge de l'avant (cabine) vers l'arrière
+      var xx = avantX;
+      var capM = f === 1 ? r.e1Max : v.rows[side + (f - 1)].m;
+      if (!arr) out += '<rect class="fantome' + (ro.alerte && !persp ? ' alerte' : '') + '" x="' + (avantX - Math.max(0, capM * k)).toFixed(1) + '" y="' + yy + '" width="' + Math.max(0, capM * k).toFixed(1) + '" height="' + laneH + '" rx="2.5"/>';
+      if (!persp && !o.lecture) out += '<rect class="zone' + (selection && selRow !== key ? ' cible' : '') + '" data-row="' + key + '" x="' + (x0 - 4) + '" y="' + (yy - gap / 2) + '" width="' + (13.6 * k + 8) + '" height="' + (laneH + gap) + '" rx="3"/>';
+      ro.colis.forEach(function (cc) {
+        xx -= cc.cm / 100 * k;
+        var w = cc.cm / 100 * k - 1.2;
+        var cls = 'colis' + (arr ? ' arr' : '') + (selection === cc.id ? ' sel' : '') + (nouveaux[cc.id] ? ' nouveau' : '') + (o.trop && f === 3 ? ' rouge' : '');
+        out += '<g class="' + cls + '" data-c="' + esc(cc.id) + '" data-row="' + key + '">' +
+          '<rect x="' + xx.toFixed(1) + '" y="' + yy + '" width="' + Math.max(w, 3).toFixed(1) + '" height="' + laneH + '" rx="2.5" fill="' + BOIS[idxLigne[cc.ligneId] % 6] + '"/>';
+        if (!persp && w > 34) out += '<text x="' + (xx + w / 2).toFixed(1) + '" y="' + (yy + laneH / 2 + 3) + '">' + fm(cc.ep) + '×' + fm(cc.la) + '</text>';
+        else if (w > 10) out += '<path d="M' + (xx + w * .33).toFixed(1) + ' ' + (yy + 3) + 'v' + (laneH - 6) + 'M' + (xx + w * .66).toFixed(1) + ' ' + (yy + 3) + 'v' + (laneH - 6) + '"/>';
+        out += '</g>';
+      });
+      return out;
+    }
+    var h = '<svg class="camion-grand" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Camion chargé">' + defsSvg(u);
+    h += '<rect x="0" y="' + (H - 2.6) + '" width="' + W + '" height="1.6" fill="url(#sol' + u + ')"/>';
+    h += '<ellipse cx="178" cy="' + (H - 2.5) + '" rx="168" ry="3" fill="#000" opacity=".10"/>';
+    if (persp) {
+      [1, 2, 3].forEach(function (f) { h += rangee('D', f, 5, -5, true); });
+      [1, 2, 3].forEach(function (f) { h += rangee('G', f, 0, 0, false); });
+    } else {
+      [1, 2, 3].forEach(function (f) { h += rangee(o.mode, f, 0, 0, false); });
+    }
+    var finPlateau = x0 + 13.6 * k;
+    h += '<rect x="' + (x0 - 3) + '" y="' + (bedY + 1) + '" width="' + (finPlateau - x0 + 6) + '" height="5" rx="1.5" fill="#46546A"/>';
+    h += '<rect x="' + (x0 - 5) + '" y="' + (bedY + 6) + '" width="' + (W - x0 - 4) + '" height="3.5" rx="1.2" fill="#2B3442"/>';
+    var sc = persp ? 1.25 : 1.45;
+    h += cabine(u, finPlateau + 6, bedY + 6, sc);
+    var cy = bedY + 14, avant = finPlateau + 6 + 41 * sc;
+    [32, 52, finPlateau + 18, finPlateau + 36, avant].forEach(function (x) {
+      h += '<circle cx="' + x.toFixed(1) + '" cy="' + cy + '" r="7.5" fill="#1F2733"/><circle cx="' + x.toFixed(1) + '" cy="' + cy + '" r="2.6" fill="#9AA6B6"/>';
+    });
+    return h + '</svg>';
+  }
 
   function htmlPlan(c, opts) {
     var r = reg(), v = P.verifier(c.lignes, c.plan || {}, r);
-    var idxLigne = {}; c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
-    var maxLen = Math.max.apply(null, P.ROWS.map(function (k) { return v.rows[k].len; }).concat([r.e1Max * 100]));
-    var echelle = maxLen * 1.02;
-    function bloc(k) {
-      var w = k.cm / echelle * 100;
-      return '<button type="button" class="colis c' + (idxLigne[k.ligneId] % 6) + (selection === k.id ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="width:calc(' + w.toFixed(3) + '% - 2px)">' +
-        '<b>' + fm(k.ep) + '×' + fm(k.la) + '</b><span>' + fm(k.lo) + ' m · ' + f2(k.vol) + '</span></button>';
-    }
-    var selRow = selection && c.plan ? c.plan[selection] || '' : null;
-    function rangee(s, f) {
-      var key = s + f, ro = v.rows[key];
-      var lims = f === 1 ? [r.e1Min * 100, r.e1Max * 100] : [v.rows[s + (f - 1)].len];
-      var cible = !opts.lecture && selection && selRow !== key;
-      return '<div class="rangee' + (ro.alerte ? ' alerte' : '') + (cible ? ' cible' : '') + '" data-row="' + key + '">' +
-        '<div class="tete"><b>' + NOMS[s] + '</b><span class="info">' + f2(ro.m) + ' m · ' + f2(ro.vol) + ' m³</span></div>' +
-        '<div class="piste">' + ro.colis.map(bloc).join('') +
-        lims.map(function (L) { return L > 0 ? '<i class="limite" style="left:' + (L / echelle * 100).toFixed(3) + '%"></i>' : ''; }).join('') +
-        '</div></div>';
-    }
-    var ecartNeg = v.ecart < -0.005;
-    var h = '<div class="carte plan-totaux">' +
-      '<div><small>Gauche</small><b>' + f2(v.volG) + '</b></div>' +
-      '<div><small>Droite</small><b>' + f2(v.volD) + '</b></div>' +
-      '<div class="' + (ecartNeg ? 'neg' : '') + '"><small>Écart G−D</small><b>' + (v.ecart >= 0 ? '+' : '−') + f2(Math.abs(v.ecart)) + '</b></div>' +
-      '<div><small>Total m³</small><b>' + f2(v.total) + '</b></div></div>';
-    [3, 2, 1].forEach(function (f) {
-      h += '<div class="carte etage"><h3><span>Étage ' + f + (f === 1 ? ' (bas)' : '') + '</span><span>' +
-        f2(v.rows['G' + f].vol + v.rows['D' + f].vol) + ' m³</span></h3>' + rangee('G', f) + rangee('D', f) + '</div>';
+    var enCours = v.etat.code === 'peu'; // camion pas encore plein : pas d'alerte, il se remplit
+    var nb = enCours ? 0 : v.erreurs.length + v.avis.length;
+    var cls = enCours ? 'n' : v.erreurs.length ? 'e' : v.avis.length ? 'a' : 'o';
+    var txt = enCours ? 'Chargement en cours' : v.erreurs.length ? '⚠ ' + v.erreurs.length + ' problème' + (v.erreurs.length > 1 ? 's' : '') : v.avis.length ? 'À vérifier' : '✓ Plan OK';
+    var ouvert = opts.lecture || detailsOuverts;
+    var h = '<button type="button" class="statut ' + cls + '"><span>' + txt + '</span><span class="tot">' + f2(v.total) + ' / ' + fm(r.m3Max) + ' m³' + (nb ? ' <i>' + (ouvert ? '▴' : '▾') + '</i>' : '') + '</span></button>';
+    h += '<div class="details"' + (ouvert && nb ? '' : ' hidden') + '><div class="msgs">' +
+      v.erreurs.map(function (x) { return '<p class="e">' + esc(x) + '</p>'; }).join('') +
+      v.avis.map(function (x) { return '<p class="a">' + esc(x) + '</p>'; }).join('') + '</div></div>';
+    ['G', 'D'].forEach(function (s) {
+      var vol = s === 'G' ? v.volG : v.volD;
+      h += '<div class="carte cote"><div class="cote-tete"><b>' + NOMS[s] + '</b><span>' + f2(vol) + ' m³</span></div>' + svgCamion(c, v, { mode: s, lecture: opts.lecture }) + '</div>';
     });
     if (v.nonPlaces.length) {
-      h += '<div class="carte plateau rangee' + (!opts.lecture && selection && selRow !== '' ? ' cible' : '') + '" data-row=""><div class="tete"><b>Non placés</b><span class="info">' + v.nonPlaces.length + ' colis</span></div>' +
-        '<div class="piste">' + v.nonPlaces.map(bloc).join('') + '</div></div>';
+      var selRow = selection && c.plan ? c.plan[selection] || '' : null;
+      h += '<div class="carte plateau rangee' + (!opts.lecture && selection && selRow !== '' ? ' cible' : '') + '" data-row=""><div class="tete"><b>Non placés</b><span class="info">' + v.nonPlaces.length + ' colis</span></div><div class="piste">' +
+        v.nonPlaces.map(function (k) { return '<button type="button" class="colis' + (selection === k.id ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="width:' + Math.max(18, k.lo * 7) + '%"><b>' + fm(k.ep) + '×' + fm(k.la) + '</b><span>' + fm(k.lo) + ' m</span></button>'; }).join('') + '</div></div>';
     }
-    var m = v.erreurs.map(function (x) { return '<p class="e">' + esc(x) + '</p>'; }).concat(v.avis.map(function (x) { return '<p class="a">' + esc(x) + '</p>'; }));
-    if (!m.length) m.push('<p class="o">✔ Plan conforme : longueurs et équilibre respectés.</p>');
-    h += '<div class="msgs">' + m.join('') + '</div>';
-    if (!opts.lecture) h += '<p class="aide">' + (selection ? 'Touche la rangée où mettre ce colis (ou le colis pour annuler).' : 'Touche un colis, puis la rangée où le mettre.') + '</p>';
+    if (!opts.lecture) h += '<p class="aide">' + (selection ? 'Touche l\'étage où le mettre.' : 'Pour déplacer : touche un colis, puis un étage.') + '</p>';
     return h;
   }
 
@@ -359,6 +407,7 @@
 
   $('#planZone').addEventListener('click', function (e) {
     var c = courant();
+    if (e.target.closest('.statut')) { detailsOuverts = !detailsOuverts; rendrePlanVue(); return; }
     var col = e.target.closest('.colis'), row = e.target.closest('[data-row]');
     if (col) {
       var id = col.dataset.c;
@@ -424,16 +473,16 @@
     var idxLigne = {}; c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
     function piste(liste, yy) {
       x.fillStyle = '#EEF2F6'; rond(pad, yy, larg, rowH, 14); x.fill();
-      var xx = pad + 4;
+      var xx = pad + larg - 4; // avant (cabine) à droite, chargé vers l'arrière
       liste.forEach(function (k) {
         var w = k.cm / maxLen * (larg - 8) - 4;
+        xx -= w + 4;
         x.fillStyle = teintes[idxLigne[k.ligneId] % 6]; rond(xx, yy + 4, Math.max(w, 6), rowH - 8, 10); x.fill();
         x.save(); x.beginPath(); x.rect(xx, yy, Math.max(w, 6), rowH); x.clip();
         x.fillStyle = '#fff'; x.textAlign = 'center';
         x.font = '700 24px Inter, system-ui, sans-serif'; x.fillText(fm(k.ep) + '×' + fm(k.la), xx + w / 2, yy + 42);
         x.font = '500 21px Inter, system-ui, sans-serif'; x.fillText(fm(k.lo) + ' m · ' + f2(k.vol), xx + w / 2, yy + 72);
         x.restore(); x.textAlign = 'left';
-        xx += w + 4;
       });
     }
     function rond(a, b, w, h, rr) { x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
@@ -441,6 +490,7 @@
       x.fillStyle = '#fff'; rond(pad - 16, y, larg + 32, hEtage, 22); x.fill();
       x.fillStyle = '#6E6A80'; x.font = '700 28px Inter, system-ui, sans-serif';
       x.fillText('Étage ' + f + (f === 1 ? ' (bas)' : ''), pad, y + 40);
+      x.textAlign = 'right'; x.fillText('cabine →', pad + larg, y + 40); x.textAlign = 'left';
       var yy = y + 56;
       ['G', 'D'].forEach(function (s) {
         var ro = v.rows[s + f];
@@ -610,7 +660,7 @@
       '<div class="carte reg"><h2>Limites du camion</h2>' +
       '<div class="g2">' + champNum('rMin', 'Volume mini (m³)', r.m3Min) + champNum('rMax', 'Volume maxi (m³)', r.m3Max) + '</div>' +
       '<div class="g3">' + champNum('rE1Min', 'Étage 1 mini (m)', r.e1Min) + champNum('rE1Max', 'Étage 1 maxi (m)', r.e1Max) + champNum('rEcart', 'Écart G/D max (m³)', r.ecartMax) + '</div>' +
-      '<label class="champ"><span>Longueurs rapides (m), séparées par « ; »</span><input id="rLong" inputmode="decimal" value="' + (r.longueurs || []).map(fLong).join(' ; ') + '"></label></div>' +
+      '</div>' +
 
       '<div class="carte reg"><h2>Apparence</h2><div class="seg" id="segTheme">' +
       [['auto', 'Auto'], ['clair', 'Clair'], ['sombre', 'Sombre']].map(function (t) { return '<button type="button" data-t="' + t[0] + '" class="' + (r.theme === t[0] ? 'actif' : '') + '">' + t[1] + '</button>'; }).join('') +
@@ -648,11 +698,6 @@
     numChamp('rE1Min', 'e1Min', function (v) { return v < r.e1Max; });
     numChamp('rE1Max', 'e1Max', function (v) { return v > r.e1Min; });
     numChamp('rEcart', 'ecartMax');
-    $('#rLong').addEventListener('change', function () {
-      var l = this.value.split(/[;\s]+/).map(P.num).filter(function (x) { return isFinite(x) && x > 0; });
-      r.longueurs = l.slice(0, 12); db.sync.reglagesSales = true; sauver();
-      this.value = r.longueurs.map(fLong).join(' ; ');
-    });
     $$('#segTheme button').forEach(function (b) { b.onclick = function () { r.theme = b.dataset.t; db.sync.reglagesSales = true; sauver(); appliquerTheme(); rendreReglages(); }; });
     $$('.couleur').forEach(function (bloc) {
       var k = bloc.dataset.k;
@@ -709,7 +754,7 @@
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
-    navigator.serviceWorker.register('sw.js?v=2').catch(function () {});
+    navigator.serviceWorker.register('sw.js?v=4').catch(function () {});
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (avaitCtrl && !recharge) { recharge = true; location.reload(); }
     });

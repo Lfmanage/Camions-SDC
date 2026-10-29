@@ -293,3 +293,37 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
   #btnMeme { font-size: 12.5px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- v3 : camion qui se remplit, plan simplifié ---------- */
+.hero-haut { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hero-haut .gros { display: flex; align-items: baseline; gap: 5px; }
+.hero-haut .lbl { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+#heroCamion { margin: 2px -4px 0; }
+.camion-grand { display: block; width: 100%; height: auto; overflow: hidden; }
+.camion-grand .fantome { fill: none; stroke: var(--muted); stroke-opacity: .35; stroke-width: .8; stroke-dasharray: 3 2.5; }
+.camion-grand .fantome.alerte { stroke: var(--rouge); stroke-opacity: .8; }
+.camion-grand .colis rect { stroke: #A88A4E; stroke-width: .7; }
+.camion-grand .colis path { stroke: #B4975C; stroke-width: .6; opacity: .7; }
+.camion-grand .colis.arr rect { filter: brightness(.86); }
+.camion-grand .colis.rouge rect { fill: #F2A29C; stroke: var(--rouge); }
+.camion-grand .colis.sel rect { fill: var(--horizon); stroke: var(--text); stroke-width: 1.4; }
+.camion-grand .colis text { font: 600 7.5px var(--sans); fill: #4A3818; text-anchor: middle; pointer-events: none; }
+.camion-grand .colis.nouveau rect, .camion-grand .colis.nouveau path { transform-box: fill-box; animation: pose .5s cubic-bezier(.2,.8,.3,1.2); }
+@keyframes pose { from { transform: translateY(-12px); opacity: 0; } }
+.camion-grand .zone { fill: transparent; }
+.camion-grand .zone.cible { fill: var(--accent-soft); stroke: var(--accent); stroke-width: .8; stroke-dasharray: 3 2; }
+.compteur .msg { margin-top: 2px; }
+.apercu { font-size: 13px; color: var(--muted); padding: 2px 2px 0; }
+.apercu b { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.apercu.plein b { color: var(--accent); }
+.apercu small { font-size: 11.5px; }
+.statut { display: flex; justify-content: space-between; align-items: center; width: 100%; border: 0; border-radius: 12px; padding: 0 12px; min-height: 42px; font-weight: 700; font-size: 14px; }
+.statut .tot { font-variant-numeric: tabular-nums; }
+.statut i { font-style: normal; margin-left: 4px; }
+.statut.o { background: var(--vert-bg); color: var(--vert); }
+.statut.a { background: var(--orange-bg); color: var(--orange); }
+.statut.e { background: var(--rouge-bg); color: var(--rouge); }
+.statut.n { background: var(--card); color: var(--text); }
+.cote { padding: 8px 8px 6px; }
+.cote-tete { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin: 0 2px 2px; }
+.cote-tete b { color: var(--text); font-weight: 600; }
