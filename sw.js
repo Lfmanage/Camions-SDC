@@ -1,20 +1,20 @@
 /* Camions SDC — service worker (hors ligne). Changer VERSION à chaque mise à jour. */
-const VERSION = 'camions-sdc-v9';
+const VERSION = 'camions-sdc-v10';
 const FICHIERS = [
   './',
   'index.html',
-  'style.css?v=9',
-  'plan.js?v=9',
-  'sync.js?v=9',
-  'app.js?v=9',
-  'manifest.webmanifest?v=9',
+  'style.css?v=10',
+  'plan.js?v=10',
+  'sync.js?v=10',
+  'app.js?v=10',
+  'manifest.webmanifest?v=10',
   'icon-192.png',
   'icon-512.png',
   'icon-maskable-512.png',
-  'apple-touch-icon.png?v=9',
-  'favicon-32.png?v=9',
-  'camion.jpg?v=9',
-  'bois.jpg?v=9'
+  'apple-touch-icon.png?v=10',
+  'favicon-32.png?v=10',
+  'camion.jpg?v=10',
+  'bois.jpg?v=10'
 ];
 
 self.addEventListener('install', (e) => {

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '9';
+  var VERSION_APP = '10';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -89,7 +89,9 @@
   }
   window.addEventListener('popstate', function () {
     if (!$('#feuille').hidden) { fermerFeuille(true); return; }
-    if (vueActive === 'plan' && !(history.state && history.state.v === 'plan')) { selection = null; montrer('camion'); }
+    var vh = history.state && history.state.v;
+    if (vueActive === 'plan' && vh !== 'plan') { selection = null; montrer('camion'); }
+    else if (vueActive === 'camion' && vh !== 'colis') montrer('client');
   });
   $('#feuilleFond').addEventListener('click', function () { if (!$('#feuilleFond').onclick) fermerFeuille(); });
   function demander(o) {
@@ -107,15 +109,16 @@
   function montrer(v) {
     vueActive = v;
     $$('.vue').forEach(function (s) { s.classList.toggle('active', s.id === 'v-' + v); });
-    var onglet = v === 'plan' ? 'camion' : v;
+    var onglet = (v === 'plan' || v === 'client') ? 'camion' : v;
     $$('.onglet').forEach(function (b) { b.classList.toggle('actif', b.dataset.vue === onglet); });
     window.scrollTo(0, 0);
+    if (v === 'client') rendreClient();
     if (v === 'camion') rendreCamion();
     if (v === 'plan') rendrePlanVue();
     if (v === 'historique') rendreHisto();
     if (v === 'reglages') rendreReglages();
   }
-  $$('.onglet').forEach(function (b) { b.addEventListener('click', function () { selection = null; if (history.state && history.state.v) history.replaceState(null, ''); montrer(b.dataset.vue); }); });
+  $$('.onglet').forEach(function (b) { b.addEventListener('click', function () { selection = null; if (history.state && history.state.v) history.replaceState(null, ''); montrer(b.dataset.vue === 'camion' ? (courant().lignes.length ? 'camion' : 'client') : b.dataset.vue); }); });
 
   // ---------- Écran Camion ----------
   var nb = 1, editId = null;
@@ -189,6 +192,7 @@
     if (document.activeElement !== $('#client')) $('#client').value = c.client || '';
     if (document.activeElement !== $('#reference')) $('#reference').value = c.reference || '';
     $('#listeClients').innerHTML = tousClients().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('');
+    $('#titreColis').textContent = c.client ? c.client + (c.reference ? ' · ' + c.reference : '') : (c.reference ? 'Commande ' + c.reference : 'Colis');
     rendreCompteur(c);
     rendreListe(c);
     rendreApercu();
@@ -238,7 +242,7 @@
     $(s).addEventListener('input', function () { $(s).classList.remove('erreur'); rendreApercu(); });
   });
   $('#client').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#reference').focus(); } });
-  $('#reference').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#fEp').focus(); } });
+  $('#reference').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#btnEtape2').click(); } });
   $('#client').addEventListener('input', function () {
     var el = $('#client'), p = el.selectionStart, up = el.value.toUpperCase();
     if (up !== el.value) { el.value = up; try { el.setSelectionRange(p, p); } catch (e) {} }
@@ -276,12 +280,37 @@
     }
   });
 
-  $('#btnNouveau').addEventListener('click', function () {
+  // ---------- Étape 1 : client ----------
+  function rendreClient() {
     var c = courant();
-    if (!c.lignes.length && !c.client && !c.reference) { toast('Ce camion est déjà vide.'); return; }
-    viderForm(); nouveauCamion(); sauver(true); rendreCamion();
-    toast('Camion précédent gardé dans Historique › En cours.');
+    if (document.activeElement !== $('#client')) $('#client').value = c.client || '';
+    if (document.activeElement !== $('#reference')) $('#reference').value = c.reference || '';
+    $('#listeClients').innerHTML = tousClients().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('');
+    var h = '';
+    if (c.lignes.length) {
+      var n = c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0);
+      h += '<div class="carte en-cours"><div><b>Camion en cours</b><small>' + n + ' colis · ' + f2(c.total_m3) + ' m³</small></div>' +
+        '<button class="btn-lien" type="button" data-vide="1">+ Nouveau camion vide</button></div>';
+    }
+    var autres = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (x) { return x.statut === 'en_cours' && !x.supprime && x.lignes.length && x.id !== c.id; });
+    if (autres.length) {
+      h += '<div class="jour-tete"><h2>Autres camions en cours</h2></div><div class="carte reprise">' + autres.map(function (x) {
+        return '<button class="cam" type="button" data-reprendre="' + esc(x.id) + '"><span class="qui"><b>' + esc(x.client || 'Sans client') + '</b><small>' + (x.reference ? 'Réf. ' + esc(x.reference) + ' · ' : '') + f2(x.total_m3) + ' m³</small></span><span class="pastille cours">Reprendre</span></button>';
+      }).join('') + '</div>';
+    }
+    $('#infoCourant').innerHTML = h;
+  }
+  $('#infoCourant').addEventListener('click', function (e) {
+    var r = e.target.closest('[data-reprendre]');
+    if (r) { db.courant = r.dataset.reprendre; sauver(true); viderForm(); rendreClient(); toast('Camion repris'); return; }
+    if (e.target.closest('[data-vide]')) { viderForm(); nouveauCamion(); sauver(true); rendreClient(); $('#client').focus(); toast('Camion précédent gardé dans « En cours ».'); }
   });
+  $('#btnEtape2').addEventListener('click', function () {
+    history.pushState({ v: 'colis' }, '');
+    montrer('camion');
+    setTimeout(function () { $('#fEp').focus(); }, 80);
+  });
+  $('#btnVersClient').addEventListener('click', function () { if (history.state && history.state.v === 'colis') history.back(); else montrer('client'); });
 
   $('#btnTerminer').addEventListener('click', function () {
     var c = courant();
@@ -298,7 +327,8 @@
       if (c.client && db.clients.indexOf(c.client) < 0) db.clients.push(c.client);
       toucher(c);
       viderForm(); nouveauCamion(); sauver(true);
-      rendreCamion();
+      selection = null; history.replaceState(null, ''); setTimeout(function () { history.replaceState(null, ''); }, 120);
+      montrer('client');
       toast('Camion enregistré ✔');
     });
   });
@@ -317,7 +347,7 @@
   var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
   // ---------- Camion en photo ----------
   var nSvg = 0, detailsOuverts = false;
-  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=9', bois: 'bois.jpg?v=9' };
+  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=10', bois: 'bois.jpg?v=10' };
   PH.k = (PH.xd - PH.x0) / 13.6;
   var PIQUETS = [105, 238, 370, 578, 722, 960, 1082];
   function cielDefs(u) {
@@ -864,14 +894,15 @@
       if (vueActive === 'reglages') rendreReglages();
       else if (vueActive === 'historique') rendreHisto();
       else if (vueActive === 'camion' && !document.activeElement.matches('input')) rendreCamion();
+      else if (vueActive === 'client' && !document.activeElement.matches('input')) rendreClient();
     }
   });
   appliquerTheme();
-  montrer('camion');
+  montrer(courant().lignes.length ? 'camion' : 'client');
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
-    navigator.serviceWorker.register('sw.js?v=9').catch(function () {});
+    navigator.serviceWorker.register('sw.js?v=10').catch(function () {});
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (avaitCtrl && !recharge) { recharge = true; location.reload(); }
     });

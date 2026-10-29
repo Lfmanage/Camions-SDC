@@ -459,7 +459,7 @@ h1.petit { white-space: nowrap; }
 .piste2 .cap { position: absolute; right: 0; top: 0; bottom: 0; border: 1.5px dashed rgba(60, 70, 60, .35); border-radius: 7px; pointer-events: none; }
 .etage2.alerte .piste2 .cap { border-color: var(--rouge); }
 .colis2 { position: relative; flex: 0 0 auto; min-width: 34px; border: 0; padding: 2px 2px; border-radius: 6px; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; line-height: 1.1;
-  background: linear-gradient(rgba(40, 22, 8, .05), rgba(40, 22, 8, .3)), url('bois.jpg?v=9') center / cover; box-shadow: inset 0 0 0 1px rgba(60, 35, 15, .55), 0 1px 2px rgba(0, 0, 0, .2);
+  background: linear-gradient(rgba(40, 22, 8, .05), rgba(40, 22, 8, .3)), url('bois.jpg?v=10') center / cover; box-shadow: inset 0 0 0 1px rgba(60, 35, 15, .55), 0 1px 2px rgba(0, 0, 0, .2);
   touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .colis2.b1 { filter: saturate(.9) brightness(1.05); }
 .colis2.b2 { filter: hue-rotate(-8deg) brightness(.95); }
@@ -514,3 +514,25 @@ h1.petit { white-space: nowrap; }
 .att-colis { display: flex; flex-wrap: wrap; gap: 6px; }
 .att-colis .colis2 { min-height: 56px; }
 .attente-btn { width: 100%; margin-top: 6px; background: var(--field); color: var(--text); }
+
+
+/* ---------- v10 : 3 étapes ---------- */
+.etapes { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0; padding: 0; }
+.etapes li { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 6px 4px; border-radius: 12px; background: var(--field); }
+.etapes li b { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--card); font-size: 11px; color: var(--muted); }
+.etapes li.actif { background: var(--accent); color: #fff; }
+.etapes li.actif b { background: #fff; color: var(--accent); }
+.etapes li.fait { background: var(--accent-soft); color: var(--accent); }
+.etapes li.fait b { background: var(--accent); color: #fff; }
+.etape-carte { display: flex; flex-direction: column; gap: 12px; padding: 16px 14px; }
+.etape-carte h2 { margin: 0; font-size: 20px; }
+.etape-carte .petit-txt { margin-top: -8px; }
+.etape-carte input { min-height: 50px; font-size: 18px; font-weight: 600; }
+.btn.gros { display: flex; align-items: center; justify-content: center; text-align: center; height: 54px; min-height: 54px; flex: 0 0 auto; font-size: 16px; }
+.btn.plein { grid-column: 1 / -1; }
+.en-cours { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.en-cours div { display: flex; flex-direction: column; }
+.en-cours small { color: var(--muted); font-size: 12.5px; }
+.reprise { padding: 2px 10px; }
+.top .place { width: 60px; }
+#v-camion .top h1.petit { overflow: hidden; text-overflow: ellipsis; }
