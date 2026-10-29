@@ -241,7 +241,7 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 .c3-tete span { font-size: 12.5px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
 .et3 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .et3.inv { flex-direction: row-reverse; }
-.trk { position: relative; flex: 1; min-width: 0; height: 30px; border-radius: 10px; background: var(--trk); display: flex; gap: 3px; padding: 3px; }
+.trk { position: relative; flex: 1; min-width: 0; height: 40px; border-radius: 10px; background: var(--trk); display: flex; gap: 3px; padding: 3px; }
 .et3.inv .trk { flex-direction: row-reverse; }
 .trk .cab { position: absolute; top: 3px; bottom: 3px; left: -6px; width: 3px; border-radius: 2px; background: var(--rouge); }
 .et3.inv .trk .cab { left: auto; right: -6px; }
@@ -249,7 +249,10 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 .et3.inv .trk .lim { border-left: 0; border-right: 1.5px dashed var(--muted); }
 .et3.ko .trk { background: var(--rouge-bg); }
 .chip { flex: 0 0 auto; min-width: 0; height: 100%; border-radius: 7px; display: grid; place-items: center; overflow: hidden; font-size: 11.5px; font-weight: 800; color: #3E2A10; font-variant-numeric: tabular-nums;
-  background: linear-gradient(180deg, #F6DCA8 0%, #E2B46E 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 2px rgba(80, 50, 10, .18); transition: transform .12s; }
+  background: linear-gradient(180deg, #F6DCA8 0%, #E2B46E 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 2px rgba(80, 50, 10, .18); transition: transform .12s;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+.chip b { font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.chip small { font-size: 9.5px; font-weight: 700; opacity: .72; white-space: nowrap; }
 .chip.b1 { background: linear-gradient(180deg, #EDCB8C 0%, #D29F57 100%); }
 .chip.b2 { background: linear-gradient(180deg, #F3E2BF 0%, #DDBE86 100%); }
 .chip.b3 { background: linear-gradient(180deg, #F0D29A 0%, #D8A964 100%); }
@@ -343,3 +346,19 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
   .ligne-btns .btn { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- v14 : longueur et volume par camion ---------- */
+.cfg-ligne { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: -4px; }
+.cfg-t { font-size: 13px; font-weight: 700; }
+.cfg-ligne small { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.lg-zone { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center; }
+.lg-champ { position: relative; display: block; }
+.lg-champ input { padding-right: 34px; font-size: 20px; font-weight: 800; text-align: center; }
+.lg-champ i { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; color: var(--muted); font-weight: 700; font-size: 13px; pointer-events: none; }
+.lg-rapides { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.lg-rapides button { min-height: 44px; border-radius: 12px; background: var(--field); font-weight: 700; font-size: 14px; }
+.seg2 { grid-template-columns: 1fr 1fr; }
+.seg2 button { font-size: 13px; }
+#volExactZone .sous { margin-top: 6px; font-size: 12px; }
+.cfg-resume { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
+#client::placeholder { text-transform: none; }

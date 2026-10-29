@@ -10,13 +10,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=12">
-<link rel="icon" href="favicon-32.png?v=12" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=12">
+<link rel="manifest" href="manifest.webmanifest?v=14">
+<link rel="icon" href="favicon-32.png?v=14" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=14">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 <main id="app">
@@ -72,6 +72,16 @@
       </label>
       <datalist id="listeClients"></datalist>
     </div>
+    <div class="carte etape-carte">
+      <div class="cfg-ligne"><span class="cfg-t">Longueur de chargement</span><small id="lgDefaut">Par défaut 13 m</small></div>
+      <div class="lg-zone">
+        <label class="lg-champ"><input id="lgMax" inputmode="decimal" autocomplete="off" value="13"><i>m</i></label>
+        <div class="lg-rapides" id="lgRapides"><button type="button" data-l="12">12</button><button type="button" data-l="12,5">12,5</button><button type="button" data-l="13">13</button><button type="button" data-l="13,6">13,6</button></div>
+      </div>
+      <div class="cfg-ligne"><span class="cfg-t">Volume du camion</span></div>
+      <div class="seg seg2" id="segVol"><button type="button" data-m="plage" class="actif">Entre 39 et 41 m³</button><button type="button" data-m="exact">Volume exact</button></div>
+      <div id="volExactZone" hidden><label class="lg-champ"><input id="volExact" inputmode="decimal" autocomplete="off" placeholder="ex. 40"><i>m³</i></label><p class="sous">Tolérance ± 0,25 m³.</p></div>
+    </div>
     <div class="pied"><button class="btn gros" id="btnEtape2" type="button">Valider →</button></div>
   </section>
 
@@ -85,7 +95,7 @@
         <div class="cpt-txt">
           <small id="lblReste">Reste à charger</small>
           <div class="cpt-gros"><b id="reste">41,00</b><span>m³</span></div>
-          <span class="cpt-pill" id="msgEtat"><b id="total">0,00</b> / <span id="totMax">41</span> m³</span>
+          <span class="cpt-pill" id="msgEtat"><b id="total">0,00</b> / <span id="totMax">41</span> m³</span><span class="cfg-resume" id="cfgResume"></span>
         </div>
       </div>
       <div class="scene"><div id="heroCamion"></div><div class="pluie" id="pluie" aria-hidden="true"></div></div>
@@ -145,8 +155,8 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=12"></script>
-<script src="sync.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="plan.js?v=14"></script>
+<script src="sync.js?v=14"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

@@ -74,8 +74,10 @@
     }
     var d1 = vol[0] - vol[3], d2 = vol[1] - vol[4], d3 = vol[2] - vol[5], D = d1 + d2 + d3;
     c += 10 * (Math.abs(d1) + Math.abs(d2));
-    c += d3 < 0 ? -40 * d3 : 2 * d3;
-    c += D < 0 ? -80 * D : D;
+    c += d3 < 0 ? -40 * d3 : 6 * d3;
+    c += D < 0 ? -80 * D : 2 * D;
+    // longueurs semblables à gauche et à droite, étage par étage (camion visuellement équilibré)
+    c += 0.02 * (Math.abs(len[0] - len[3]) + Math.abs(len[1] - len[4]) + Math.abs(len[2] - len[5]));
     c += pref * 1e-7; // préférence : grosses sections en bas
     return c;
   }
@@ -187,6 +189,14 @@
     return best;
   }
 
+  function deseq(v) {
+    var m = 0;
+    [1, 2, 3].forEach(function (f) { m = Math.max(m, Math.abs(v.rows['G' + f].vol - v.rows['D' + f].vol)); });
+    m = Math.max(m, Math.abs(v.ecart));
+    if (v.ecart < -0.005) m += 100;
+    return m;
+  }
+
   function f2(x) { return (Math.round(x * 100) / 100).toFixed(2).replace('.', ','); }
   var COTE = ['gauche', 'droite'];
 
@@ -224,6 +234,7 @@
       if (Math.abs(d) > cfg.ecartMax + tol) avis.push('Étage ' + f + ' déséquilibré de ' + f2(Math.abs(d)) + ' m³ (plus lourd à ' + (d > 0 ? 'gauche' : 'droite') + '). L\'écart devrait être à l\'étage 3.');
     });
     var d3 = rows.G3.vol - rows.D3.vol;
+    if (Math.abs(d3) > cfg.ecartMax + tol) avis.push('Étage 3 déséquilibré de ' + f2(Math.abs(d3)) + ' m³ (plus lourd à ' + (d3 > 0 ? 'gauche' : 'droite') + ').');
     if (d3 < -tol && ecart >= -tol) avis.push('Étage 3 : la droite est plus chargée que la gauche de ' + f2(-d3) + ' m³.');
 
     // Conseils quand c'est impossible
@@ -247,7 +258,7 @@
     };
   }
 
-  var Plan = { ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, verifier: verifier, f2: f2 };
+  var Plan = { ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, verifier: verifier, f2: f2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = Plan;
   else root.Plan = Plan;
 })(typeof window !== 'undefined' ? window : this);
