@@ -459,7 +459,7 @@ h1.petit { white-space: nowrap; }
 .piste2 .cap { position: absolute; right: 0; top: 0; bottom: 0; border: 1.5px dashed rgba(60, 70, 60, .35); border-radius: 7px; pointer-events: none; }
 .etage2.alerte .piste2 .cap { border-color: var(--rouge); }
 .colis2 { position: relative; flex: 0 0 auto; min-width: 34px; border: 0; padding: 2px 2px; border-radius: 6px; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; line-height: 1.1;
-  background: linear-gradient(rgba(40, 22, 8, .05), rgba(40, 22, 8, .3)), url('bois.jpg?v=10') center / cover; box-shadow: inset 0 0 0 1px rgba(60, 35, 15, .55), 0 1px 2px rgba(0, 0, 0, .2);
+  background: linear-gradient(rgba(40, 22, 8, .05), rgba(40, 22, 8, .3)), url('bois.jpg?v=11') center / cover; box-shadow: inset 0 0 0 1px rgba(60, 35, 15, .55), 0 1px 2px rgba(0, 0, 0, .2);
   touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .colis2.b1 { filter: saturate(.9) brightness(1.05); }
 .colis2.b2 { filter: hue-rotate(-8deg) brightness(.95); }
@@ -536,3 +536,47 @@ h1.petit { white-space: nowrap; }
 .reprise { padding: 2px 10px; }
 .top .place { width: 60px; }
 #v-camion .top h1.petit { overflow: hidden; text-overflow: ellipsis; }
+
+
+/* ---------- v11 : simple et compact ---------- */
+.top { display: grid; grid-template-columns: 78px 1fr 78px; align-items: center; }
+.top > :nth-child(2) { justify-self: center; }
+.top > :last-child { justify-self: end; }
+.top .retour { justify-self: start; padding-left: 0; }
+.top .place { width: auto; }
+h1.petit { font-size: 17px; gap: 6px; }
+h1.petit .logo, h1.petit .logo svg { width: 24px; height: 24px; }
+.vue { gap: 7px; }
+.etapes li { padding: 4px 2px; font-size: 11.5px; }
+.etapes li b { width: 18px; height: 18px; font-size: 10px; }
+.etape-carte { gap: 10px; padding: 14px 12px; }
+.etape-carte h2 { font-size: 18px; }
+.etape-carte input { min-height: 46px; font-size: 17px; }
+.btn.gros { height: 50px; min-height: 50px; font-size: 15.5px; }
+#reste { font-size: 26px; }
+.hero-haut { padding-bottom: 3px; }
+#heroCamion .camion-photo { height: 84px; aspect-ratio: auto; }
+.scene .msg { top: 6px; font-size: 11.5px; padding: 3px 8px; }
+
+.statut3 { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 14px; font-size: 13.5px; font-weight: 700; line-height: 1.3; }
+.statut3 b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.statut3.o { background: var(--vert-bg); color: var(--vert); }
+.statut3.a { background: var(--orange-bg); color: var(--orange); }
+.statut3.e { background: var(--rouge-bg); color: var(--rouge); }
+.cote3 { padding: 8px 10px 4px; }
+.c3-tete { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+.c3-tete b { font-size: 13.5px; }
+.c3-tete span { font-size: 12.5px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.et3 { display: flex; align-items: center; gap: 8px; min-height: 42px; border-top: 1px solid var(--line); }
+.et3 .n3 { width: 24px; flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--muted); }
+.et3 .chips { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0; }
+.et3 .lg3 { flex: 0 0 auto; font-size: 12.5px; font-weight: 700; color: var(--vert); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.et3.ko .lg3 { color: var(--rouge); }
+.et3.ko .n3 { color: var(--rouge); }
+.chip { min-width: 44px; height: 32px; padding: 0 8px; border-radius: 9px; border: 1px solid rgba(110, 72, 32, .45); color: #3A2A14; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums;
+  background: linear-gradient(rgba(255, 245, 225, .55), rgba(255, 245, 225, .35)), url('bois.jpg?v=11') center / cover; }
+.chip.sel { outline: 3px solid #F2A33A; outline-offset: 1px; background: #FFE2B0; }
+.chip:disabled { opacity: 1; }
+.vide3 { font-size: 12px; color: var(--muted); font-style: normal; align-self: center; }
+.barre-sel { position: sticky; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 8px); display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--card); border: 2px solid #F2A33A; border-radius: 14px; padding: 8px 12px; font-size: 13px; line-height: 1.35; box-shadow: 0 8px 22px rgba(20, 30, 20, .18); z-index: 5; }
+.recalc { align-self: center; font-size: 13.5px; }

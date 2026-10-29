@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '10';
+  var VERSION_APP = '11';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -48,7 +48,7 @@
     return c;
   }
   function majPlan(c) { // le camion se remplit tout seul au fil de la saisie
-    c.plan = c.lignes.length ? P.proposer(c.lignes, reg(), true).plan : null;
+    c.plan = c.lignes.length ? P.meilleur(c.lignes, reg()).plan : null;
     c.planManuel = false;
   }
   function toucher(c) {
@@ -79,7 +79,7 @@
     f.innerHTML = '<div class="poignee"></div>' + html;
     f.hidden = false; $('#feuilleFond').hidden = false;
     f.scrollTop = 0;
-    if (!(history.state && history.state.f)) history.pushState({ f: 1, v: history.state && history.state.v }, '');
+    if (!(history.state && history.state.f)) history.pushState({ f: 1, v: vueActive, d: profondeur() + 1 }, '');
     return f;
   }
   function fermerFeuille(parRetour) {
@@ -87,12 +87,23 @@
     $('#feuille').hidden = true; $('#feuilleFond').hidden = true; $('#feuille').innerHTML = '';
     if (parRetour !== true && history.state && history.state.f) history.back();
   }
+  // Navigation : chaque écran se met dans l'historique, le bouton ‹ Retour (et celui du téléphone) revient en arrière
+  var retourDebut = false;
+  function profondeur() { return (history.state && history.state.d) || 0; }
+  function aller(v) { history.pushState({ v: v, d: profondeur() + 1 }, ''); montrer(v); }
+  function retour() { if (profondeur() > 0) history.back(); }
+  function revenirAuDebut(v) { // après « Terminer » : on repart d'un historique propre
+    var d = profondeur();
+    if (d > 0) { retourDebut = v; history.go(-d); } else { history.replaceState({ v: v, d: 0 }, ''); montrer(v); }
+  }
   window.addEventListener('popstate', function () {
-    if (!$('#feuille').hidden) { fermerFeuille(true); return; }
-    var vh = history.state && history.state.v;
-    if (vueActive === 'plan' && vh !== 'plan') { selection = null; montrer('camion'); }
-    else if (vueActive === 'camion' && vh !== 'colis') montrer('client');
+    if (!$('#feuille').hidden) { fermerFeuille(true); majRetour(); return; }
+    if (retourDebut) { var v0 = retourDebut; retourDebut = false; history.replaceState({ v: v0, d: 0 }, ''); montrer(v0); return; }
+    selection = null;
+    montrer((history.state && history.state.v) || 'client');
   });
+  document.addEventListener('click', function (e) { if (e.target.closest('[data-retour]')) retour(); });
+  function majRetour() { var ok = profondeur() > 0; $$('[data-retour]').forEach(function (b) { b.style.visibility = ok ? 'visible' : 'hidden'; }); }
   $('#feuilleFond').addEventListener('click', function () { if (!$('#feuilleFond').onclick) fermerFeuille(); });
   function demander(o) {
     return new Promise(function (ok) {
@@ -117,8 +128,13 @@
     if (v === 'plan') rendrePlanVue();
     if (v === 'historique') rendreHisto();
     if (v === 'reglages') rendreReglages();
+    majRetour();
   }
-  $$('.onglet').forEach(function (b) { b.addEventListener('click', function () { selection = null; if (history.state && history.state.v) history.replaceState(null, ''); montrer(b.dataset.vue === 'camion' ? (courant().lignes.length ? 'camion' : 'client') : b.dataset.vue); }); });
+  $$('.onglet').forEach(function (b) { b.addEventListener('click', function () {
+    selection = null;
+    var cible = b.dataset.vue === 'camion' ? (courant().lignes.length ? 'camion' : 'client') : b.dataset.vue;
+    if (cible !== vueActive) aller(cible);
+  }); });
 
   // ---------- Écran Camion ----------
   var nb = 1, editId = null;
@@ -306,11 +322,9 @@
     if (e.target.closest('[data-vide]')) { viderForm(); nouveauCamion(); sauver(true); rendreClient(); $('#client').focus(); toast('Camion précédent gardé dans « En cours ».'); }
   });
   $('#btnEtape2').addEventListener('click', function () {
-    history.pushState({ v: 'colis' }, '');
-    montrer('camion');
+    aller('camion');
     setTimeout(function () { $('#fEp').focus(); }, 80);
   });
-  $('#btnVersClient').addEventListener('click', function () { if (history.state && history.state.v === 'colis') history.back(); else montrer('client'); });
 
   $('#btnTerminer').addEventListener('click', function () {
     var c = courant();
@@ -327,8 +341,8 @@
       if (c.client && db.clients.indexOf(c.client) < 0) db.clients.push(c.client);
       toucher(c);
       viderForm(); nouveauCamion(); sauver(true);
-      selection = null; history.replaceState(null, ''); setTimeout(function () { history.replaceState(null, ''); }, 120);
-      montrer('client');
+      selection = null;
+      setTimeout(function () { revenirAuDebut('client'); }, 150);
       toast('Camion enregistré ✔');
     });
   });
@@ -336,10 +350,7 @@
   $('#btnPlan').addEventListener('click', function () {
     var c = courant();
     if (!c.lignes.length) { toast('Ajoute d\'abord des colis.'); return; }
-    var place = c.plan && P.colisDe(c.lignes).some(function (k) { return c.plan[k.id]; });
-    if (!place) { c.plan = P.proposer(c.lignes, reg()).plan; c.planManuel = false; toucher(c); }
-    history.pushState({ v: 'plan' }, '');
-    montrer('plan');
+    aller('plan');
   });
 
   // ---------- Plan de chargement ----------
@@ -347,7 +358,7 @@
   var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
   // ---------- Camion en photo ----------
   var nSvg = 0, detailsOuverts = false;
-  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=10', bois: 'bois.jpg?v=10' };
+  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=11', bois: 'bois.jpg?v=11' };
   PH.k = (PH.xd - PH.x0) / 13.6;
   var PIQUETS = [105, 238, 370, 578, 722, 960, 1082];
   function cielDefs(u) {
@@ -380,203 +391,74 @@
     svg.classList.toggle('trop', !!trop);
   }
 
-  // ---------- Plan : vue d'ensemble (camion entier en photo) + grandes rangées ----------
-  var NOMS_ET = { 1: 'Étage 1 (bas)', 2: 'Étage 2', 3: 'Étage 3 (haut)' };
-  var coteVue = 'G';
+  // ---------- Plan : tableau compact + échange simple ----------
+  var NOMS_COURT = { G: 'Gauche · conducteur', D: 'Droite · passager' };
   function libColis(k) { return fm(k.lo) + ' m · ' + fm(k.ep) + '×' + fm(k.la); }
 
-  // Camion entier (photo) avec les paquets d'un côté posés sur la remorque
-  function svgEnsemble(c, v, side, opts) {
-    var u = 'e' + (++nSvg), r = reg(), k = PH.k, laneH = 118, gap = 5;
-    var idxLigne = {}; c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
-    function yf(f) { return PH.deck - f * (laneH + gap) + gap; }
-    var h = '<svg class="camion-photo ensemble" viewBox="0 6 1672 560" role="img" aria-label="Camion entier, ' + NOMS[side] + '"><defs>' + cielDefs(u) +
-      '<pattern id="tex' + u + '" patternContentUnits="objectBoundingBox" width="1" height="1"><image href="' + PH.bois + '" width="1" height="1" preserveAspectRatio="none"/></pattern></defs>' +
-      '<image href="' + PH.img + '" x="0" y="0" width="1672" height="570" preserveAspectRatio="none"/>' +
-      '<rect x="20" y="0" width="' + (PH.xd - 18) + '" height="' + (PH.deck - 2) + '" fill="url(#ciel' + u + ')"/>';
-    [1, 2, 3].forEach(function (f) {
-      var key = side + f, ro = v.rows[key], yy = yf(f);
-      var capM = f === 1 ? r.e1Max : v.rows[side + (f - 1)].m, capW = Math.max(0, capM * k);
-      h += '<rect class="fantome' + (ro.alerte ? ' alerte' : '') + '" x="' + (PH.xd - capW).toFixed(1) + '" y="' + yy + '" width="' + capW.toFixed(1) + '" height="' + laneH + '" rx="8"/>';
-      var xx = PH.xd;
-      ro.colis.forEach(function (cc) {
-        var wl = cc.cm / 100 * k; xx -= wl;
-        var w = wl - 5;
-        h += '<g class="colis' + (selection === cc.id ? ' sel' : '') + (opts.trop && f === 3 ? ' rouge' : '') + '" data-c="' + esc(cc.id) + '">' +
-          '<rect class="paquet" x="' + xx.toFixed(1) + '" y="' + yy + '" width="' + Math.max(w, 8).toFixed(1) + '" height="' + laneH + '" rx="3" fill="url(#tex' + u + ')"/>' +
-          '<rect class="ombre" x="' + xx.toFixed(1) + '" y="' + yy + '" width="' + Math.max(w, 8).toFixed(1) + '" height="' + laneH + '" rx="3"/>';
-        if (w >= 100) {
-          var tw = Math.min(w - 18, 190), tx = xx + w / 2 - tw / 2;
-          h += '<rect class="etiq" x="' + tx.toFixed(1) + '" y="' + (yy + 16) + '" width="' + tw.toFixed(1) + '" height="56" rx="9"/>' +
-            '<text class="lg" x="' + (xx + w / 2).toFixed(1) + '" y="' + (yy + 58) + '">' + fm(cc.lo) + ' m</text>';
-        }
-        h += '</g>';
-      });
-    });
-    return h + '</svg>';
-  }
-
-  // Grandes rangées d'un côté (pour toucher / glisser)
-  function htmlRangees(c, v, side, opts) {
-    var r = reg(), idxLigne = {};
-    c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
-    var h = '<div class="carte cote2" data-side="' + side + '"><div class="etages">';
-    [3, 2, 1].forEach(function (f) {
-      var key = side + f, ro = v.rows[key];
-      var capM = f === 1 ? r.e1Max : v.rows[side + (f - 1)].m;
-      var cible = selection && ((c.plan || {})[selection] || '') !== key;
-      h += '<div class="etage2' + (ro.alerte ? ' alerte' : '') + (cible ? ' cible' : '') + '" data-row="' + key + '">' +
-        '<div class="num"><b>' + f + '</b><small>' + fm(Math.round(ro.m * 10) / 10) + ' m</small></div>' +
-        '<div class="piste2"><i class="cap" style="width:' + Math.min(100, capM / 13.6 * 100).toFixed(2) + '%"></i>';
-      ro.colis.forEach(function (k) {
-        h += '<button type="button" class="colis2 b' + (idxLigne[k.ligneId] % 4) + (selection === k.id ? ' sel' : '') + (opts.trop && f === 3 ? ' rouge' : '') + '" data-c="' + esc(k.id) + '" data-row="' + key + '" style="width:' + (k.cm / 1360 * 100).toFixed(2) + '%" aria-label="' + esc(libColis(k)) + '">' +
-          '<b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>';
-      });
-      h += '</div></div>';
-    });
-    return h + '</div><div class="cabine-txt">◀ arrière · · · cabine ▶</div></div>';
+  function statutPlan(v, r) {
+    if (v.nonPlaces.length) return { cls: 'e', txt: v.nonPlaces.length + ' colis non placé(s)' };
+    var lg = v.erreurs.filter(function (m) { return /^Étage/.test(m); });
+    if (lg.length) return { cls: 'e', txt: lg[0] };
+    if (v.erreurs.length) return { cls: 'e', txt: v.erreurs[0] };
+    if (v.etat.code === 'peu') return { cls: 'a', txt: 'Il manque ' + f2(v.etat.manque) + ' m³' };
+    if (v.etat.code === 'trop') return { cls: 'e', txt: 'Dépassé de ' + f2(v.etat.depasse) + ' m³' };
+    if (v.avis.length) return { cls: 'a', txt: v.avis[0] };
+    return { cls: 'o', txt: '✓ Plan bon et équilibré' };
   }
 
   function htmlPlan(c, opts) {
-    var r = reg(), v = P.verifier(c.lignes, c.plan || {}, r);
-    var attente = v.nonPlaces.length; // réorganisation en cours : pas d'alerte qui gêne
-    var enCours = v.etat.code === 'peu' || attente > 0;
-    var nb = enCours ? 0 : v.erreurs.length + v.avis.length;
-    var cls = enCours ? 'n' : v.erreurs.length ? 'e' : v.avis.length ? 'a' : 'o';
-    var txt = attente ? attente + ' colis en zone d\'attente' : enCours ? 'Chargement en cours' : v.erreurs.length ? '⚠ ' + v.erreurs.length + ' problème' + (v.erreurs.length > 1 ? 's' : '') : v.avis.length ? 'À vérifier' : '✓ Plan OK';
-    var ouvert = opts.lecture || detailsOuverts, trop = v.etat.code === 'trop';
-    var h = '<button type="button" class="statut ' + cls + '"><span>' + txt + '</span><span class="tot">' + f2(v.total) + ' / ' + fm(r.m3Max) + ' m³' + (nb ? ' <i>' + (ouvert ? '▴' : '▾') + '</i>' : '') + '</span></button>';
-    h += '<div class="details"' + (ouvert && nb ? '' : ' hidden') + '><div class="msgs">' +
-      v.erreurs.map(function (x) { return '<p class="e">' + esc(x) + '</p>'; }).join('') +
-      v.avis.map(function (x) { return '<p class="a">' + esc(x) + '</p>'; }).join('') + '</div></div>';
-    if (opts.lecture) {
-      ['G', 'D'].forEach(function (s) {
-        h += '<div class="carte vue-ens"><div class="ens-tete"><b>' + NOMS[s] + '</b><span>' + f2(s === 'G' ? v.volG : v.volD) + ' m³</span></div>' + svgEnsemble(c, v, s, { trop: trop }) + '</div>';
+    var r = reg(), v = P.verifier(c.lignes, c.plan || {}, r), st = statutPlan(v, r);
+    var h = '<div class="statut3 ' + st.cls + '"><span>' + esc(st.txt) + '</span><b>' + f2(v.total) + ' m³</b></div>';
+    ['G', 'D'].forEach(function (s) {
+      h += '<div class="carte cote3"><div class="c3-tete"><b>' + NOMS_COURT[s] + '</b><span>' + f2(s === 'G' ? v.volG : v.volD) + ' m³</span></div>';
+      [3, 2, 1].forEach(function (f) {
+        var ro = v.rows[s + f];
+        h += '<div class="et3' + (ro.alerte ? ' ko' : '') + '"><span class="n3">É' + f + '</span><span class="chips">' +
+          (ro.colis.length ? ro.colis.map(function (k) {
+            return '<button type="button" class="chip' + (selection === k.id ? ' sel' : '') + '" data-c="' + esc(k.id) + '"' + (opts.lecture ? ' disabled' : '') + '>' + fm(k.lo) + '</button>';
+          }).join('') : '<i class="vide3">vide</i>') +
+          '</span><span class="lg3">' + fm(Math.round(ro.m * 100) / 100) + ' m ' + (ro.alerte ? '✗' : (ro.colis.length ? '✓' : '')) + '</span></div>';
       });
-      return h;
-    }
-    h += '<div class="seg cotes">' + ['G', 'D'].map(function (s) {
-      return '<button type="button" data-cote="' + s + '" class="' + (coteVue === s ? 'actif' : '') + '">' + NOMS[s] + '<small>' + f2(s === 'G' ? v.volG : v.volD) + ' m³</small></button>';
-    }).join('') + '</div>';
-    h += '<div class="carte vue-ens">' + svgEnsemble(c, v, coteVue, { trop: trop }) + '</div>';
-    h += htmlRangees(c, v, coteVue, { trop: trop });
-    var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
-    if (sel) {
-      var ici = (c.plan || {})[sel.id] || '';
-      h += '<div class="deplacer"><div class="dep-tete"><span>Mettre <b>' + esc(libColis(sel)) + '</b> sur :</span><button type="button" class="btn-lien" data-annuler="1">Annuler</button></div><div class="dep-grille">' +
-        '<span class="dep-col">Côté conducteur</span><span class="dep-col">Côté passager</span>' +
-        [3, 2, 1].map(function (f) {
-          return ['G', 'D'].map(function (s) { return '<button type="button" class="dep' + (ici === s + f ? ' ici' : '') + '" data-dest="' + s + f + '"' + (ici === s + f ? ' disabled' : '') + '>' + NOMS_ET[f] + '</button>'; }).join('');
-        }).join('') + '</div>' +
-        (ici ? '<button type="button" class="dep attente-btn" data-dest="">⬇ Mettre en zone d\'attente</button>' : '') + '</div>';
-    } else {
-      h += '<p class="aide">Touche un colis pour le déplacer, ou fais-le glisser sur un autre étage ou dans la zone d\'attente.</p>';
+      h += '</div>';
+    });
+    if (!opts.lecture) {
+      var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
+      if (sel) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Touche un autre colis pour les échanger.</span><button type="button" class="btn-lien" data-annuler="1">Annuler</button></div>';
+      else h += '<p class="aide">Plan calculé automatiquement, de la cabine vers l\'arrière. Pour échanger deux colis : touche l\'un puis l\'autre.</p>';
+      if (c.planManuel) h += '<button type="button" class="btn-lien recalc" data-recalc="1">↺ Revenir au plan automatique</button>';
     }
     return h;
   }
 
-  function htmlAttente(c) {
-    var v = P.verifier(c.lignes, c.plan || {}, reg());
-    var idxLigne = {}; c.lignes.forEach(function (l, i) { idxLigne[l.id] = i; });
-    var n = v.nonPlaces.length;
-    var h = '<div class="attente' + (selection && ((c.plan || {})[selection] || '') ? ' cible' : '') + '" data-row="">' +
-      '<div class="att-tete"><b>Zone d\'attente</b><span>' + (n ? n + ' colis · à remettre sur le camion' : 'vide') + '</span></div>';
-    if (!n) h += '<p class="att-vide">Glisse ici un ou plusieurs colis pour les mettre de côté, puis remets-les où tu veux.</p>';
-    else h += '<div class="att-colis">' + v.nonPlaces.map(function (k) {
-      return '<button type="button" class="colis2 b' + (idxLigne[k.ligneId] % 4) + (selection === k.id ? ' sel' : '') + '" data-c="' + esc(k.id) + '" data-row="" style="width:' + Math.max(24, k.cm / 1360 * 100).toFixed(2) + '%" aria-label="' + esc(libColis(k)) + '"><b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>';
-    }).join('') + '</div>';
-    return h + '</div>';
-  }
-
   function rendrePlanVue() {
     var c = courant();
+    // le plan doit toujours être bon : on le refait s'il est faux ou incomplet (sauf échange manuel valide)
+    var v = P.verifier(c.lignes, c.plan || {}, reg());
+    if (c.lignes.length && (v.nonPlaces.length || (!c.planManuel && P.noteVerif(v) >= 1000))) { majPlan(c); toucher(c); }
     $('#planZone').innerHTML = htmlPlan(c, {});
-    $('#attenteZone').innerHTML = htmlAttente(c);
-    var d = $('#planZone .deplacer'); if (d) d.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
-  $('#v-plan').addEventListener('click', function (e) {
+  function echanger(c, a, b) {
+    var plan = Object.assign({}, c.plan || {}), ra = plan[a], rb = plan[b];
+    if (!ra || !rb || ra === rb) { selection = null; return toast(ra === rb ? 'Ces deux colis sont sur le même étage.' : 'Échange impossible.'); }
+    plan[a] = rb; plan[b] = ra;
+    var avant = P.noteVerif(P.verifier(c.lignes, c.plan, reg())), v2 = P.verifier(c.lignes, plan, reg());
+    var lg = v2.erreurs.filter(function (m) { return /^Étage/.test(m); });
+    if (lg.length && P.noteVerif(v2) > avant) { selection = null; return toast('Échange refusé : ' + lg[0]); }
+    c.plan = plan; c.planManuel = true; selection = null; toucher(c);
+    toast('Colis échangés');
+  }
+
+  $('#planZone').addEventListener('click', function (e) {
     var c = courant();
-    if (e.target.closest('.statut')) { detailsOuverts = !detailsOuverts; rendrePlanVue(); return; }
     if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
-    var bc = e.target.closest('[data-cote]');
-    if (bc) { coteVue = bc.dataset.cote; rendrePlanVue(); return; }
-    var dest = e.target.closest('[data-dest]');
-    if (dest && selection) {
-      var dd = dest.dataset.dest; deplacer(c, selection, dd);
-      if (dd) coteVue = dd.charAt(0);
-      rendrePlanVue(); toast(dd ? 'Colis mis ' + NOMS[dd.charAt(0)].toLowerCase() + ', étage ' + dd.charAt(1) : 'Colis mis en zone d\'attente'); return;
-    }
-    if (glisse.bloquerClic) { glisse.bloquerClic = false; return; }
-    var col = e.target.closest('.colis2, .ensemble .colis');
-    if (col) { selection = selection === col.dataset.c ? null : col.dataset.c; rendrePlanVue(); return; }
-    var row = e.target.closest('[data-row]');
-    if (row && selection && ((c.plan || {})[selection] || '') !== row.dataset.row) { deplacer(c, selection, row.dataset.row); rendrePlanVue(); toast('Colis déplacé'); }
-  });
-
-  // Glisser-déposer au doigt (ou à la souris)
-  var glisse = { el: null, id: null, x: 0, y: 0, actif: false, fantome: null, bloquerClic: false };
-  function rangeeSous(x, y) {
-    if (glisse.fantome) glisse.fantome.style.display = 'none';
-    var el = document.elementFromPoint(x, y);
-    if (glisse.fantome) glisse.fantome.style.display = '';
-    var row = el && el.closest && el.closest('#v-plan [data-row]');
-    return row && !row.classList.contains('colis2') ? row : (row && row.closest('.etage2, .attente'));
-  }
-  $('#v-plan').addEventListener('pointerdown', function (e) {
-    var col = e.target.closest('.colis2'); if (!col) return;
-    glisse.el = col; glisse.id = col.dataset.c; glisse.x = e.clientX; glisse.y = e.clientY; glisse.actif = false;
-  });
-  window.addEventListener('pointermove', function (e) {
-    if (!glisse.el) return;
-    var dx = e.clientX - glisse.x, dy = e.clientY - glisse.y;
-    if (!glisse.actif && Math.abs(dx) + Math.abs(dy) > 10) {
-      glisse.actif = true;
-      var rc = glisse.el.getBoundingClientRect(), f = glisse.el.cloneNode(true);
-      f.classList.add('fantome-glisse'); f.style.width = rc.width + 'px'; f.style.height = rc.height + 'px';
-      f.style.left = rc.left + 'px'; f.style.top = rc.top + 'px';
-      document.body.appendChild(f); glisse.fantome = f; glisse.ox = e.clientX - rc.left; glisse.oy = e.clientY - rc.top;
-      glisse.el.classList.add('en-glisse');
-    }
-    if (glisse.actif) {
-      e.preventDefault();
-      glisse.fantome.style.left = (e.clientX - glisse.ox) + 'px'; glisse.fantome.style.top = (e.clientY - glisse.oy) + 'px';
-      $$('#v-plan .survol').forEach(function (x) { x.classList.remove('survol'); });
-      var row = rangeeSous(e.clientX, e.clientY); if (row) row.classList.add('survol');
-    }
-  }, { passive: false });
-  function finGlisse(e) {
-    if (!glisse.el) return;
-    if (glisse.actif) {
-      var row = rangeeSous(e.clientX, e.clientY), c = courant();
-      if (glisse.fantome) glisse.fantome.remove();
-      glisse.bloquerClic = true; setTimeout(function () { glisse.bloquerClic = false; }, 350);
-      if (row && ((c.plan || {})[glisse.id] || '') !== row.dataset.row) { deplacer(c, glisse.id, row.dataset.row); toast(row.dataset.row ? 'Colis déplacé' : 'Colis mis en zone d\'attente'); }
-      selection = null; rendrePlanVue();
-    }
-    glisse.el = null; glisse.actif = false; glisse.fantome = null;
-  }
-  window.addEventListener('pointerup', finGlisse);
-  window.addEventListener('pointercancel', function (e) { if (glisse.fantome) glisse.fantome.remove(); glisse.el = null; glisse.actif = false; glisse.fantome = null; rendrePlanVue(); });
-
-  function deplacer(c, id, dest) {
-    c.plan = c.plan || {};
-    if (dest) c.plan[id] = dest; else delete c.plan[id];
-    // on garde l'ordre : le colis déplacé va en bout de rangée
-    var o = {}; Object.keys(c.plan).forEach(function (k) { if (k !== id) o[k] = c.plan[k]; }); if (dest) o[id] = dest;
-    c.plan = o;
-    c.planManuel = true; selection = null; toucher(c);
-  }
-  $('#btnRetour').addEventListener('click', function () { selection = null; if (history.state && history.state.v === 'plan') history.back(); else montrer('camion'); });
-  $('#btnRecalc').addEventListener('click', function () {
-    var c = courant();
-    if (!c.lignes.length) { toast('Aucun colis.'); return; }
-    var go = c.planManuel ? demander({ titre: 'Remplacer le plan ?', texte: 'Tes déplacements à la main seront remplacés par un nouveau plan calculé.', oui: 'Recalculer' }) : Promise.resolve(true);
-    go.then(function (ok) {
-      if (!ok) return;
-      c.plan = P.proposer(c.lignes, reg()).plan; c.planManuel = false; selection = null; toucher(c); rendrePlanVue();
-      toast('Plan recalculé');
-    });
+    if (e.target.closest('[data-recalc]')) { majPlan(c); toucher(c); selection = null; rendrePlanVue(); toast('Plan automatique remis'); return; }
+    var ch = e.target.closest('.chip'); if (!ch) return;
+    var id = ch.dataset.c;
+    if (!selection) selection = id;
+    else if (selection === id) selection = null;
+    else echanger(c, selection, id);
+    rendrePlanVue();
   });
   $('#btnPartager').addEventListener('click', function () { partagerImage(courant()); });
 
@@ -747,11 +629,11 @@
         var a = b.dataset.a;
         if (a === 'fermer') fermerFeuille();
         if (a === 'image') partagerImage(c);
-        if (a === 'reprendre') { db.courant = c.id; sauver(true); fermerFeuille(); viderForm(); montrer('camion'); }
+        if (a === 'reprendre') { db.courant = c.id; sauver(true); fermerFeuille(); viderForm(); setTimeout(function () { aller('camion'); }, 60); }
         if (a === 'dupliquer') {
           var copie = JSON.parse(JSON.stringify({ client: c.client, reference: c.reference, lignes: c.lignes, plan: c.plan }));
           var n = nouveauCamion(copie); toucher(n);
-          fermerFeuille(); viderForm(); montrer('camion'); toast('Camion dupliqué : il est ouvert.');
+          fermerFeuille(); viderForm(); setTimeout(function () { aller('camion'); }, 60); toast('Camion dupliqué : il est ouvert.');
         }
         if (a === 'suppr') {
           c.supprime = true; toucher(c); fermerFeuille(); rendreHisto();
@@ -898,11 +780,12 @@
     }
   });
   appliquerTheme();
-  montrer(courant().lignes.length ? 'camion' : 'client');
+  history.replaceState({ v: courant().lignes.length ? 'camion' : 'client', d: 0 }, '');
+  montrer(history.state.v);
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
-    navigator.serviceWorker.register('sw.js?v=10').catch(function () {});
+    navigator.serviceWorker.register('sw.js?v=11').catch(function () {});
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (avaitCtrl && !recharge) { recharge = true; location.reload(); }
     });

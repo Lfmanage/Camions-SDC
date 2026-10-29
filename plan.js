@@ -150,12 +150,12 @@
   }
 
   // Calcule un plan. Renvoie { plan: {colisId: 'G1'...}, verif }
-  function proposer(lignes, cfg, rapide) {
+  function proposer(lignes, cfg, rapide, graine) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var colis = colisDe(lignes).filter(function (c) { return c.cm > 0 && c.vol > 0; });
     var plan = {};
     if (!colis.length) return { plan: plan, verif: verifier(lignes, plan, cfg) };
-    var r = rng(colis.length * 7919 + 17);
+    var r = rng(colis.length * 7919 + 17 + (graine || 0) * 104729);
     var iters = Math.min(120000, 4000 + colis.length * 3000);
     if (rapide) iters = Math.round(iters / 3);
     var essais = [depart(colis, cfg, null)];
@@ -170,6 +170,21 @@
     if (fin.cout < best.cout) best = fin;
     colis.forEach(function (c, i) { plan[c.id] = ROWS[best.aff[i]]; });
     return { plan: plan, verif: verifier(lignes, plan, cfg) };
+  }
+
+  // Plan sûr : si le premier calcul laisse une erreur de rangement, on recommence avec d'autres essais
+  function noteVerif(v) {
+    var e = v.erreurs.filter(function (m) { return !/^(Pas assez de colis|Trop de colis|Un seul colis)/.test(m); }).length;
+    return e * 1000 + (v.ecart < -0.005 ? 100 + -v.ecart * 10 : 0) + Math.abs(v.ecart);
+  }
+  function meilleur(lignes, cfg, essaisMax) {
+    var best = null, n = essaisMax || 8;
+    for (var g = 0; g < n; g++) {
+      var res = proposer(lignes, cfg, false, g), note = noteVerif(res.verif);
+      if (!best || note < best.note) best = { plan: res.plan, verif: res.verif, note: note };
+      if (note < 1000 && res.verif.ecart >= -0.005 && res.verif.ecart <= (Object.assign({}, DEFAUT, cfg || {})).ecartMax + 0.005) break;
+    }
+    return best;
   }
 
   function f2(x) { return (Math.round(x * 100) / 100).toFixed(2).replace('.', ','); }
@@ -232,7 +247,7 @@
     };
   }
 
-  var Plan = { ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, verifier: verifier, f2: f2 };
+  var Plan = { ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, verifier: verifier, f2: f2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = Plan;
   else root.Plan = Plan;
 })(typeof window !== 'undefined' ? window : this);
