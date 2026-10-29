@@ -3,8 +3,11 @@
 (function (root) {
   'use strict';
 
-  // 6 rangées : index 0..2 = gauche (conducteur) étages 1..3, 3..5 = droite (passager) étages 1..3
-  var ROWS = ['G1', 'G2', 'G3', 'D1', 'D2', 'D3'];
+  // 7 rangées : 0..2 = gauche (conducteur) étages 1..3, 3..5 = droite (passager) étages 1..3,
+  // 6 = centre de l'étage 3 (colis posé à cheval sur les deux piles, au milieu)
+  var ROWS = ['G1', 'G2', 'G3', 'D1', 'D2', 'D3', 'C3'];
+  var NR = 7;
+  function etageDe(r) { return r === 6 ? 2 : r % 3; }
   var DEFAUT = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1 };
 
   function num(v) {
@@ -60,8 +63,8 @@
     };
   }
 
-  // Coût d'un plan à partir des totaux des 6 rangées (longueurs en cm, volumes en m³)
-  function cout(len, vol, pref, cfg) {
+  // Coût d'un plan (longueurs en cm, volumes en m³, nombre de colis par rangée)
+  function cout(len, vol, cnt, pref, cfg) {
     var c = 0, mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     for (var s = 0; s < 2; s++) {
       var b = s * 3, l1 = len[b], l2 = len[b + 1], l3 = len[b + 2];
@@ -69,26 +72,32 @@
       if (l1 > mx) { var d1 = l1 - mx; c += 10 * d1 + d1 * d1 / 40 + 100; }
       if (l2 > l1) { var d2 = l2 - l1; c += 10 * d2 + d2 * d2 / 40 + 100; }
       if (l3 > l2) { var d3 = l3 - l2; c += 10 * d3 + d3 * d3 / 40 + 100; }
-      if (l2 > mx) c += 10 * (l2 - mx);
-      if (l3 > mx) c += 10 * (l3 - mx);
+      // étage 2 le plus plein possible (aussi long que l'étage 1)
+      var g = Math.max(0, l1 - l2); c += g + g * g / 300;
     }
-    var d1 = vol[0] - vol[3], d2 = vol[1] - vol[4], d3 = vol[2] - vol[5], D = d1 + d2 + d3;
-    c += 10 * (Math.abs(d1) + Math.abs(d2));
-    c += d3 < 0 ? -40 * d3 : 6 * d3;
+    // étage 3 : paires gauche/droite puis le centre ; le tout doit tenir sur l'étage 2
+    var E = Math.max(len[2], len[5]) + len[6], sup = Math.min(len[1], len[4]);
+    if (E > sup) { var de = E - sup; c += 10 * de + de * de / 40 + 100; }
+    if (cnt[6] > 1) c += 300 * (cnt[6] - 1);
+    c += 4 * cnt[6] + 0.05 * Math.abs(len[2] - len[5]);
+    // équilibre : le centre pèse à moitié de chaque côté
+    var d1v = vol[0] - vol[3], d2v = vol[1] - vol[4], d3v = vol[2] - vol[5], D = d1v + d2v + d3v;
+    c += 30 * (Math.abs(d1v) + Math.abs(d2v));
+    c += d3v < 0 ? -40 * d3v : 6 * d3v;
     c += D < 0 ? -80 * D : 2 * D;
-    // longueurs semblables à gauche et à droite, étage par étage (camion visuellement équilibré)
-    c += 0.02 * (Math.abs(len[0] - len[3]) + Math.abs(len[1] - len[4]) + Math.abs(len[2] - len[5]));
+    if (Math.abs(D) > cfg.ecartMax) c += 400 * (Math.abs(D) - cfg.ecartMax);
+    c += 0.02 * (Math.abs(len[0] - len[3]) + Math.abs(len[1] - len[4]));
     c += pref * 1e-7; // préférence : grosses sections en bas
     return c;
   }
 
   function agreger(colis, aff) {
-    var len = [0, 0, 0, 0, 0, 0], vol = [0, 0, 0, 0, 0, 0], pref = 0;
+    var len = [0, 0, 0, 0, 0, 0, 0], vol = [0, 0, 0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0, 0, 0], pref = 0;
     for (var i = 0; i < colis.length; i++) {
       var r = aff[i];
-      len[r] += colis[i].cm; vol[r] += colis[i].vol; pref += colis[i].aire * (r % 3);
+      len[r] += colis[i].cm; vol[r] += colis[i].vol; cnt[r]++; pref += colis[i].aire * etageDe(r);
     }
-    return { len: len, vol: vol, pref: pref };
+    return { len: len, vol: vol, cnt: cnt, pref: pref };
   }
 
   // Placement de départ glouton : étage 1 alterné jusqu'à ~milieu de la plage, puis 2, puis 3
@@ -100,7 +109,7 @@
       ordre.sort(function (a, b) { return colis[b].aire - colis[a].aire || colis[b].cm - colis[a].cm; });
     }
     var cible = Math.round((cfg.e1Min + cfg.e1Max) * 50);
-    var len = [0, 0, 0, 0, 0, 0], aff = new Array(colis.length);
+    var len = [0, 0, 0, 0, 0, 0, 0], aff = new Array(colis.length);
     ordre.forEach(function (i) {
       var c = colis[i], best = -1, bestScore = Infinity;
       for (var f = 0; f < 3; f++) {
@@ -122,27 +131,27 @@
 
   function optimiser(colis, cfg, aff, r, iters) {
     var n = colis.length;
-    var a = agreger(colis, aff), len = a.len, vol = a.vol, pref = a.pref;
-    var cur = cout(len, vol, pref, cfg), best = cur, bestAff = aff.slice();
+    var a = agreger(colis, aff), len = a.len, vol = a.vol, cnt = a.cnt, pref = a.pref;
+    var cur = cout(len, vol, cnt, pref, cfg), best = cur, bestAff = aff.slice();
     var T0 = 30, T1 = 0.01;
     for (var it = 0; it < iters; it++) {
       var T = T0 * Math.pow(T1 / T0, it / iters);
       var i = Math.floor(r() * n), ri = aff[i], ci = colis[i];
       if (r() < 0.5 || n < 2) {
-        var to = Math.floor(r() * 5); if (to >= ri) to++;
-        len[ri] -= ci.cm; vol[ri] -= ci.vol; len[to] += ci.cm; vol[to] += ci.vol;
-        var p2 = pref + ci.aire * ((to % 3) - (ri % 3));
-        var c2 = cout(len, vol, p2, cfg);
+        var to = Math.floor(r() * (NR - 1)); if (to >= ri) to++;
+        len[ri] -= ci.cm; vol[ri] -= ci.vol; cnt[ri]--; len[to] += ci.cm; vol[to] += ci.vol; cnt[to]++;
+        var p2 = pref + ci.aire * (etageDe(to) - etageDe(ri));
+        var c2 = cout(len, vol, cnt, p2, cfg);
         if (c2 <= cur || r() < Math.exp((cur - c2) / T)) { aff[i] = to; cur = c2; pref = p2; }
-        else { len[to] -= ci.cm; vol[to] -= ci.vol; len[ri] += ci.cm; vol[ri] += ci.vol; }
+        else { len[to] -= ci.cm; vol[to] -= ci.vol; cnt[to]--; len[ri] += ci.cm; vol[ri] += ci.vol; cnt[ri]++; }
       } else {
         var j = Math.floor(r() * n), rj = aff[j];
         if (rj === ri) continue;
         var cj = colis[j];
         len[ri] += cj.cm - ci.cm; vol[ri] += cj.vol - ci.vol;
         len[rj] += ci.cm - cj.cm; vol[rj] += ci.vol - cj.vol;
-        var p3 = pref + (ci.aire - cj.aire) * ((rj % 3) - (ri % 3));
-        var c3 = cout(len, vol, p3, cfg);
+        var p3 = pref + (ci.aire - cj.aire) * (etageDe(rj) - etageDe(ri));
+        var c3 = cout(len, vol, cnt, p3, cfg);
         if (c3 <= cur || r() < Math.exp((cur - c3) / T)) { aff[i] = rj; aff[j] = ri; cur = c3; pref = p3; }
         else { len[ri] -= cj.cm - ci.cm; vol[ri] -= cj.vol - ci.vol; len[rj] -= ci.cm - cj.cm; vol[rj] -= ci.vol - cj.vol; }
       }
@@ -225,7 +234,10 @@
       else if (r2.len > mx) { r2.alerte = true; erreurs.push('Étage 2 ' + COTE[s] + ' : ' + f2(r2.m) + ' m, plus de ' + f2(cfg.e1Max) + ' m.'); }
       if (r3.len > r2.len) { r3.alerte = true; erreurs.push('Étage 3 ' + COTE[s] + ' : ' + f2(r3.m) + ' m, plus long que l\'étage 2 (' + f2(r2.m) + ' m).'); }
     });
-    var volG = rows.G1.vol + rows.G2.vol + rows.G3.vol, volD = rows.D1.vol + rows.D2.vol + rows.D3.vol;
+    // étage 3 avec le centre : doit tenir sur les deux piles de l'étage 2
+    var E3 = Math.max(rows.G3.len, rows.D3.len) + rows.C3.len, sup3 = Math.min(rows.G2.len, rows.D2.len);
+    if (rows.C3.colis.length && E3 > sup3) { rows.C3.alerte = rows.G3.alerte = rows.D3.alerte = true; erreurs.push('Étage 3 : ' + f2(E3 / 100) + ' m avec le colis du centre, plus long que l\'étage 2 (' + f2(sup3 / 100) + ' m).'); }
+    var volG = rows.G1.vol + rows.G2.vol + rows.G3.vol + rows.C3.vol / 2, volD = rows.D1.vol + rows.D2.vol + rows.D3.vol + rows.C3.vol / 2;
     var ecart = volG - volD, tol = 0.005;
     if (ecart < -tol) avis.push('Côté passager (droite) plus chargé de ' + f2(-ecart) + ' m³ : le côté conducteur doit être le plus lourd.');
     else if (ecart > cfg.ecartMax + tol) avis.push('Écart gauche/droite de ' + f2(ecart) + ' m³ (max conseillé ' + f2(cfg.ecartMax) + ' m³).');
@@ -253,7 +265,7 @@
     erreurs = uniq(erreurs); avis = uniq(avis);
     return {
       rows: rows, nonPlaces: nonPlaces, erreurs: erreurs, avis: avis,
-      volG: volG, volD: volD, ecart: ecart, total: total, etat: et,
+      volG: volG, volD: volD, ecart: ecart, total: total, etat: et, e3: E3 / 100, sup3: sup3 / 100,
       ok: erreurs.length === 0, parfait: erreurs.length === 0 && avis.length === 0
     };
   }

@@ -362,3 +362,9 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 #volExactZone .sous { margin-top: 6px; font-size: 12px; }
 .cfg-resume { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
 #client::placeholder { text-transform: none; }
+
+/* ---------- v16 : colis au centre de l'étage 3 ---------- */
+.trk .esp { flex: 0 0 auto; }
+.chip.centre { background: repeating-linear-gradient(135deg, #F6DCA8 0 7px, #EDCB8C 7px 14px); box-shadow: inset 0 0 0 1.5px #B88443, 0 1px 2px rgba(80, 50, 10, .18); }
+.chip.centre.sel { background: #FFC56B; }
+.centre-mini { display: inline-block; padding: 0 5px; border-radius: 5px; font-weight: 700; color: #3E2A10; background: repeating-linear-gradient(135deg, #F6DCA8 0 5px, #EDCB8C 5px 10px); box-shadow: inset 0 0 0 1px #B88443; }

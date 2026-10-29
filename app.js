@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '14';
+  var VERSION_APP = '16';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -455,7 +455,7 @@
   var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
   // ---------- Camion en photo ----------
   var nSvg = 0, detailsOuverts = false;
-  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=14', bois: 'bois.jpg?v=14' };
+  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=16', bois: 'bois.jpg?v=16' };
   PH.k = (PH.xd - PH.x0) / 13.6;
   var PIQUETS = [105, 238, 370, 578, 722, 960, 1082];
   function cielDefs(u) {
@@ -521,10 +521,21 @@
         var ro = v.rows[s + f];
         h += '<div class="et3' + (inv ? ' inv' : '') + (ro.alerte ? ' ko' : '') + '"><div class="trk"><i class="cab"></i>' +
           '<i class="lim" style="' + (inv ? 'right' : 'left') + ':calc(3px + ' + (r.e1Max * 100 / maxLen * 100).toFixed(2) + '% * (100% - 6px) / 100%)"></i>';
-        ro.colis.forEach(function (k) {
-          h += '<button type="button" class="chip b' + (idxLigne[k.ligneId] % 4) + (selection === k.id ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="width:calc((100% - 6px) * ' + (k.cm / maxLen).toFixed(4) + ' - 3px)"' + (opts.lecture ? ' disabled' : '') + ' aria-label="' + esc(libColis(k)) + '">' + (k.cm / maxLen > .06 ? '<b>' + fm(k.lo) + ' m</b>' : '') + (k.cm / maxLen > .13 ? '<small>' + fm(k.ep) + '×' + fm(k.la) + '</small>' : '') + '</button>';
-        });
-        h += '</div><div class="tag">É' + f + '<b>' + fm(Math.round(ro.m * 100) / 100) + ' m</b></div></div>';
+        function chip(k, centre) {
+          return '<button type="button" class="chip b' + (idxLigne[k.ligneId] % 4) + (centre ? ' centre' : '') + (selection === k.id ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="width:calc((100% - 6px) * ' + (k.cm / maxLen).toFixed(4) + ' - 3px)"' + (opts.lecture ? ' disabled' : '') + ' aria-label="' + esc(libColis(k) + (centre ? ' · au centre' : '')) + '">' + (k.cm / maxLen > .06 ? '<b>' + fm(k.lo) + ' m</b>' : '') + (k.cm / maxLen > .13 ? '<small>' + (centre ? 'centre · ' : '') + fm(k.ep) + '×' + fm(k.la) + '</small>' : '') + '</button>';
+        }
+        function vide(cm) { return cm > 1 ? '<i class="esp" style="width:calc((100% - 6px) * ' + (cm / maxLen).toFixed(4) + ' - 3px)"></i>' : ''; }
+        var lgAff = ro.m;
+        if (f === 3) {
+          // étage 3 : paires gauche/droite puis le colis du centre, le tout centré dans la longueur
+          var c3 = v.rows.C3, maxPaire = Math.max(v.rows.G3.len, v.rows.D3.len);
+          var E = maxPaire + c3.len, sup = Math.min(v.rows.G2.len, v.rows.D2.len);
+          h += vide(Math.max(0, (sup - E) / 2));
+          ro.colis.forEach(function (k) { h += chip(k, false); });
+          if (c3.colis.length) { h += vide(maxPaire - ro.len); c3.colis.forEach(function (k) { h += chip(k, true); }); }
+          lgAff = E / 100;
+        } else ro.colis.forEach(function (k) { h += chip(k, false); });
+        h += '</div><div class="tag">É' + f + '<b>' + fm(Math.round(lgAff * 100) / 100) + ' m</b></div></div>';
       });
       h += inv ? '<div class="sens inv"><span>◂ Arrière</span><span class="c">Cabine ▮</span></div>' : '<div class="sens"><span class="c">▮ Cabine</span><span>Arrière ▸</span></div>';
       h += '</div>';
@@ -532,7 +543,7 @@
     if (!opts.lecture) {
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
       if (sel) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Touche un autre colis pour les échanger.</span><button type="button" class="btn-lien" data-annuler="1">Annuler</button></div>';
-      else h += '<p class="aide">Plan calculé et équilibré automatiquement.<br>Pour échanger deux colis : touche l\'un puis l\'autre.</p>';
+      else h += '<p class="aide">Plan calculé et équilibré automatiquement. En haut : paires gauche/droite, le colis seul <span class="centre-mini">au centre</span>.<br>Pour échanger deux colis : touche l\'un puis l\'autre.</p>';
       if (c.planManuel) h += '<button type="button" class="btn-lien recalc" data-recalc="1">↺ Revenir au plan automatique</button>';
     }
     return h;
@@ -637,7 +648,7 @@
         x.fillText(NOMS[s] + (s === 'G' ? '  ·  ▮ cabine à gauche' : '  ·  cabine à droite ▮'), pad, yy + 26);
         x.textAlign = 'right'; x.fillStyle = ro.alerte ? '#D7261E' : '#6E6A80';
         x.fillText(f2(ro.m) + ' m · ' + f2(ro.vol) + ' m³', pad + larg, yy + 26); x.textAlign = 'left';
-        piste.side = s; piste(ro.colis, yy + 38);
+        piste.side = s; piste(f === 3 ? ro.colis.concat(v.rows.C3.colis) : ro.colis, yy + 38);
         yy += rowH + 46;
       });
       y += hEtage + 24;
@@ -896,7 +907,7 @@
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
-    navigator.serviceWorker.register('sw.js?v=14').catch(function () {});
+    navigator.serviceWorker.register('sw.js?v=16').catch(function () {});
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (avaitCtrl && !recharge) { recharge = true; location.reload(); }
     });
