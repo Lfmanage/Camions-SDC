@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<title>Camions SDC</title>
+<meta name="theme-color" content="#E6EBF1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Camions SDC">
+<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="icon" href="favicon-32.png?v=2" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+<main id="app">
+
+  <!-- ============ CAMION ============ -->
+  <section class="vue active" id="v-camion">
+    <header class="top">
+      <h1><span class="badge-sdc">SDC</span> Camion</h1>
+      <button class="btn-lien" id="btnNouveau" type="button">+ Nouveau</button>
+    </header>
+
+    <div class="carte meta">
+      <label class="champ"><span>Client</span>
+        <input id="client" list="listeClients" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="—" enterkeyhint="next">
+      </label>
+      <label class="champ ref"><span>Réf. commande</span>
+        <input id="reference" inputmode="numeric" autocomplete="off" placeholder="—" enterkeyhint="next">
+      </label>
+      <datalist id="listeClients"></datalist>
+    </div>
+
+    <div class="carte compteur" id="compteur">
+      <div class="hero">
+        <div class="chiffres">
+          <span class="lbl" id="lblReste">Reste</span>
+          <div class="gros"><b id="reste">41,00</b><span class="unite">m³</span></div>
+          <div class="total">Total <b id="total">0,00</b> m³</div>
+        </div>
+        <svg class="camion-svg" viewBox="0 0 200 80" aria-hidden="true">
+          <defs>
+            <linearGradient id="gSol" x1="0" x2="1"><stop offset="0" stop-color="#F5A04A" stop-opacity="0"/><stop offset=".25" stop-color="#F5A04A"/><stop offset=".8" stop-color="#F5A04A"/><stop offset="1" stop-color="#F5A04A" stop-opacity="0"/></linearGradient>
+            <linearGradient id="gCab" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F08A83"/><stop offset=".55" stop-color="#DC4A44"/><stop offset="1" stop-color="#B8322E"/></linearGradient>
+            <linearGradient id="gVitre" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B4656"/><stop offset="1" stop-color="#8E99A8"/></linearGradient>
+            <radialGradient id="gPhare"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#CFE3FF" stop-opacity=".9"/><stop offset="1" stop-color="#9CC3FF" stop-opacity="0"/></radialGradient>
+          </defs>
+          <rect class="sol" x="0" y="72.5" width="200" height="1.6" fill="url(#gSol)"/>
+          <ellipse cx="100" cy="72" rx="92" ry="3" fill="#000" opacity=".12"/>
+          <g class="packs"><g class="pk" data-i="0"><rect x="10" y="45" width="39" height="11" rx="2"/><path d="M20 47v7M30 47v7M39 47v7"/></g><g class="pk" data-i="1"><rect x="51" y="45" width="39" height="11" rx="2"/><path d="M61 47v7M71 47v7M80 47v7"/></g><g class="pk" data-i="2"><rect x="92" y="45" width="39" height="11" rx="2"/><path d="M102 47v7M112 47v7M121 47v7"/></g><g class="pk" data-i="3"><rect x="10" y="33" width="39" height="11" rx="2"/><path d="M20 35v7M30 35v7M39 35v7"/></g><g class="pk" data-i="4"><rect x="51" y="33" width="39" height="11" rx="2"/><path d="M61 35v7M71 35v7M80 35v7"/></g><g class="pk" data-i="5"><rect x="92" y="33" width="39" height="11" rx="2"/><path d="M102 35v7M112 35v7M121 35v7"/></g><g class="pk" data-i="6"><rect x="10" y="21" width="39" height="11" rx="2"/><path d="M20 23v7M30 23v7M39 23v7"/></g><g class="pk" data-i="7"><rect x="51" y="21" width="39" height="11" rx="2"/><path d="M61 23v7M71 23v7M80 23v7"/></g><g class="pk" data-i="8"><rect x="92" y="21" width="39" height="11" rx="2"/><path d="M102 23v7M112 23v7M121 23v7"/></g></g>
+          <rect x="6" y="56.5" width="132" height="4.5" rx="1.5" fill="#46546A"/>
+          <rect x="6" y="61" width="186" height="3" rx="1.2" fill="#2B3442"/>
+          <path d="M141 61V31q0-9 9-10l25-.8q10 0 12.5 9.5L191 52q.6 9-6 9z" fill="url(#gCab)"/>
+          <path d="M150 21.5l24-.6q3 0 3.2 2.6V30h-27.4z" fill="#fff" opacity=".18"/>
+          <path d="M177.5 24.5q6 .3 7.6 6l1.6 11h-9.2z" fill="url(#gVitre)"/>
+          <rect x="161" y="27" width="12" height="10" rx="2" fill="url(#gVitre)"/>
+          <g fill="none" stroke="#fff" stroke-opacity=".28" stroke-width=".9"><path d="M147 46l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/><path d="M155.5 41.5l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/><path d="M155.5 51l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/><path d="M164 46l4-2.3 4 2.3v4.6l-4 2.3-4-2.3z"/></g>
+          <rect x="186.5" y="44" width="4.5" height="12" rx="1" fill="#2B3442"/>
+          <circle cx="189.5" cy="56" r="7" fill="url(#gPhare)"/>
+          <circle cx="189.5" cy="56" r="1.4" fill="#fff"/>
+          <g class="roues"><circle cx="24" cy="65" r="7"/><circle cx="40" cy="65" r="7"/><circle cx="146" cy="65" r="7"/><circle cx="161" cy="65" r="7"/><circle cx="180" cy="65" r="7"/></g>
+          <g fill="#9AA6B6"><circle cx="24" cy="65" r="2.4"/><circle cx="40" cy="65" r="2.4"/><circle cx="146" cy="65" r="2.4"/><circle cx="161" cy="65" r="2.4"/><circle cx="180" cy="65" r="2.4"/></g>
+        </svg>
+      </div>
+      <div class="jauge"><div class="fill" id="jaugeFill"></div><i class="repere" id="rep1"><em>39</em></i><i class="repere" id="rep2"><em>41</em></i></div>
+      <div class="msg" id="msgEtat">Pas assez : il manque 39,00 m³ pour atteindre 39 m³</div>
+    </div>
+
+    <form class="carte saisie" id="formLigne" autocomplete="off" novalidate>
+      <div class="grille4">
+        <label class="champ"><span>Épaiss. mm</span><input id="fEp" inputmode="decimal" enterkeyhint="next"></label>
+        <label class="champ"><span>Largeur mm</span><input id="fLa" inputmode="decimal" enterkeyhint="next"></label>
+        <label class="champ"><span>Pièces</span><input id="fPi" inputmode="numeric" enterkeyhint="next"></label>
+        <label class="champ"><span>Long. m</span><input id="fLo" inputmode="decimal" enterkeyhint="done"></label>
+      </div>
+      <div class="rapides" id="rapides"></div>
+      <div class="ligne-btns">
+        <div class="stepper" title="Nombre de colis identiques">
+          <button type="button" id="nbMoins" aria-label="Moins">−</button>
+          <span><b id="nbVal">1</b><small>colis</small></span>
+          <button type="button" id="nbPlus" aria-label="Plus">+</button>
+        </div>
+        <button type="button" class="btn sec" id="btnMeme">Même section</button>
+        <button type="submit" class="btn" id="btnAjouter">Ajouter</button>
+      </div>
+      <button type="button" class="btn-lien annuler-edit" id="btnAnnulerEdit" hidden>Annuler la modification</button>
+    </form>
+
+    <div class="carte liste" id="liste"></div>
+
+    <div class="actions">
+      <button class="btn sec" id="btnPlan" type="button">Voir le plan</button>
+      <button class="btn" id="btnTerminer" type="button">Terminer ✓</button>
+    </div>
+  </section>
+
+  <!-- ============ PLAN ============ -->
+  <section class="vue" id="v-plan">
+    <header class="top">
+      <button class="btn-lien" id="btnRetour" type="button">‹ Camion</button>
+      <h1 class="petit">Plan de chargement</h1>
+      <button class="btn-lien" id="btnPartager" type="button">Partager</button>
+    </header>
+    <div id="planZone"></div>
+    <div class="actions">
+      <button class="btn" id="btnRecalc" type="button">Proposer un plan</button>
+    </div>
+  </section>
+
+  <!-- ============ HISTORIQUE ============ -->
+  <section class="vue" id="v-historique">
+    <header class="top"><h1>Historique</h1></header>
+    <div class="recherche"><input id="recherche" type="search" placeholder="Rechercher client ou référence" autocomplete="off"></div>
+    <div id="histo"></div>
+  </section>
+
+  <!-- ============ RÉGLAGES ============ -->
+  <section class="vue" id="v-reglages">
+    <header class="top"><h1>Réglages</h1></header>
+    <div id="reglagesZone"></div>
+  </section>
+
+</main>
+
+<nav class="barre" id="barre">
+  <button class="onglet actif" data-vue="camion" type="button">
+    <span class="ico"><svg viewBox="0 0 24 24"><path d="M2 6.5h11v9H2zM13 9.5h4.2l3.3 3.4v2.6H13z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span>
+    <span>Camion</span>
+  </button>
+  <button class="onglet" data-vue="historique" type="button">
+    <span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+    <span>Historique</span>
+  </button>
+  <button class="onglet" data-vue="reglages" type="button">
+    <span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span>
+    <span>Réglages</span>
+  </button>
+</nav>
+
+<div class="feuille-fond" id="feuilleFond" hidden></div>
+<div class="feuille" id="feuille" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="plan.js?v=2"></script>
+<script src="sync.js?v=2"></script>
+<script src="app.js?v=2"></script>
+</body>
+</html>

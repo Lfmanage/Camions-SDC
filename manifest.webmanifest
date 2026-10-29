@@ -1,0 +1,17 @@
+{
+  "name": "Camions SDC",
+  "short_name": "Camions",
+  "description": "Calcul du chargement des camions : volume, plan équilibré, historique.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E6EBF1",
+  "theme_color": "#E6EBF1",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
