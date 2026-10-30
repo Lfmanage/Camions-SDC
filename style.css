@@ -1,6 +1,6 @@
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
-  --accent: #1F6B4A;
+  --accent: #28533F;
   --on-accent: #FFFFFF;
   --bg: #F2F3F0;
   --card: #FFFFFF;
@@ -10,15 +10,15 @@
   --line: #E3E6E1;
   --field: #EEF0EC;
   --trk: #F4F5F2;
-  --accent-soft: rgba(31, 107, 74, .10);
+  --accent-soft: rgba(40, 83, 63, .10);
   --orange: #B4690E;
   --vert: #1E7A50;
   --rouge: #C23A2B;
   --orange-bg: #FBF0E0;
   --vert-bg: #E5F2EA;
   --rouge-bg: #FBE9E6;
-  --birch: #E7D6B8;
-  --grain: #C9AC7E;
+  --birch: #E6DAC6;
+  --grain: #C0AD90;
   --birch-ink: #2B2216;
   --birch-mu: #6A5536;
   --rose: rgba(255, 92, 170, .42);
@@ -33,7 +33,7 @@
   :root { --accent-soft: color-mix(in srgb, var(--accent) 11%, transparent); }
 }
 :root[data-theme="sombre"] {
-  --accent: #62C394;
+  --accent: #7FBF9C;
   --on-accent: #0E1210;
   --bg: #0E1210;
   --card: #161B18;
@@ -49,8 +49,8 @@
   --orange-bg: #2E2312;
   --vert-bg: #12281C;
   --rouge-bg: #34171A;
-  --birch: #D8C29C;
-  --grain: #B8996A;
+  --birch: #D5C4A6;
+  --grain: #A8936F;
   --rose: rgba(255, 92, 170, .55);
   --bleu: rgba(64, 160, 255, .55);
   color-scheme: dark;
@@ -187,11 +187,11 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 .sv-h p { margin: 1px 0 0; font-size: 12.5px; color: var(--muted); }
 .suivi.trop .sv-h b { color: var(--rouge); }
 .sv-liste { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; flex: 1 1 auto; min-height: 0; }
-.sv-liste > div { display: grid; grid-template-columns: 26px 1fr auto 34px; align-items: center; font-size: 13.5px; min-height: 40px; border-top: 1px solid var(--line); }
+.sv-liste > div { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 62px; gap: 6px; align-items: center; font-size: 13.5px; min-height: 40px; border-top: 1px solid var(--line); }
 .sv-liste .n { color: var(--muted); font-size: 11.5px; font-family: var(--num); }
 .sv-liste em { font-style: normal; font-weight: 500; }
 .sv-liste em span { color: var(--muted); font-weight: 400; margin-left: 2px; }
-.sv-liste i { font-style: normal; font-family: var(--num); font-weight: 500; }
+.sv-liste i { font-style: normal; font-family: var(--num); font-weight: 500; text-align: right; }
 .sv-liste .dernier em::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: var(--accent); margin-right: 7px; vertical-align: 2px; }
 .x { width: 34px; height: 34px; color: var(--muted); font-size: 18px; border-radius: 8px; justify-self: end; }
 .x:active { background: var(--rouge-bg); color: var(--rouge); }
@@ -254,7 +254,8 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 .apercu b { font-family: var(--num); color: var(--muted); font-weight: 600; }
 .apercu.plein b { color: var(--accent); }
 .apercu small { font-size: 11.5px; }
-.ligne-btns { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; }
+.ligne-btns { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.ligne-btns .btn { overflow: hidden; text-overflow: ellipsis; }
 .ligne-btns .btn { min-height: 42px; padding: 0 8px; font-size: 14px; border-radius: 10px; }
 .ligne-btns .btn.sec { color: var(--accent); }
 .annuler-edit { align-self: center; min-height: 32px; font-size: 13px; }
@@ -429,3 +430,21 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .reg .g3 .champ, .reg .g2 .champ { justify-content: flex-end; }
+
+/* ---------- v21 : logo, compteur par ligne, tout enlever, derniers camions ---------- */
+.logo { display: block; height: 56px; margin-top: 0; }
+.logo img { height: 100%; width: auto; display: block; }
+.logo .l-sombre, :root[data-theme="sombre"] .logo .l-clair { display: none; }
+:root[data-theme="sombre"] .logo .l-sombre { display: block; }
+.cnt { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; height: 34px; flex: none; }
+.cnt button { width: 32px; height: 32px; color: var(--accent); font-size: 18px; font-weight: 500; border-radius: 8px; }
+.cnt button:active { background: var(--field); }
+.cnt button.sup { color: var(--rouge); font-size: 16px; }
+.cnt b { min-width: 20px; text-align: center; font-family: var(--num); font-weight: 600; font-size: 14px; }
+.lig .cnt { margin-left: auto; }
+.lig .vol { min-width: 52px; text-align: right; }
+.lig .txt { flex-wrap: nowrap; flex-direction: column; align-items: flex-start; gap: 0; }
+.pied.trois { display: grid; grid-template-columns: auto 1fr 1.3fr; gap: 8px; }
+.btn.vider { padding: 0 12px; font-size: 12.5px; line-height: 1.15; color: var(--muted); white-space: normal; text-align: center; }
+.stat-go { text-align: left; display: flex; flex-direction: column; color: var(--text); }
+.stat-go i { font-style: normal; font-size: 12px; color: var(--accent); font-weight: 500; margin-top: 2px; }

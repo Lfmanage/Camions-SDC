@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '20';
+  var VERSION_APP = '21';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -190,6 +190,25 @@
     setTimeout(function () { z.innerHTML = ''; }, 3600);
   }
 
+  // Compteur − n + d'une ligne : à 1 colis, le − devient × (supprimer la ligne)
+  function compteurHtml(n) {
+    return '<span class="cnt"><button type="button" data-act="' + (n > 1 ? 'moins' : 'del') + '" class="' + (n > 1 ? '' : 'sup') + '" aria-label="' + (n > 1 ? 'Un colis de moins' : 'Supprimer la ligne') + '">' + (n > 1 ? '−' : '×') + '</button><b>' + n + '</b><button type="button" data-act="plus" aria-label="Un colis de plus">+</button></span>';
+  }
+  // Ajoute ou retire un colis d'une ligne ; à 0 la ligne disparaît (avec Annuler). Renvoie false si rien n'a changé.
+  function changerNb(c, id, d, rendre) {
+    var idx = c.lignes.findIndex(function (x) { return x.id === id; }); if (idx < 0) return;
+    var l = c.lignes[idx], n = (l.nb || 1) + d;
+    if (n > 99) return;
+    if (n < 1) {
+      c.lignes.splice(idx, 1);
+      if (editId === id) viderForm();
+      majPlan(c); toucher(c); rendre();
+      toast('Ligne supprimée', function () { c.lignes.splice(idx, 0, l); majPlan(c); toucher(c); rendre(); }, 'Annuler');
+      return;
+    }
+    l.nb = n; majPlan(c); toucher(c); rendre();
+  }
+
   function rendreListe(c) {
     var el = $('#liste');
     if (!c.lignes.length) {
@@ -201,10 +220,9 @@
       var l = c.lignes[i], n = l.nb || 1;
       h += '<div class="lig' + (l.id === editId ? ' edite' : '') + '" data-id="' + esc(l.id) + '">' +
         '<span class="n">' + (i + 1) + '</span>' +
-        '<button class="txt" type="button" data-act="edit"><div class="sec">' + fm(l.ep) + ' × ' + fm(l.la) + (n > 1 ? '<span class="mult">×' + n + '</span>' : '') + '</div>' +
+        '<button class="txt" type="button" data-act="edit"><div class="sec">' + fm(l.ep) + ' × ' + fm(l.la) + '</div>' +
         '<div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m</div></button>' +
-        '<span class="vol">' + f3(P.volTotalLigne(l)) + '</span>' +
-        '<button class="suppr" type="button" data-act="del" aria-label="Supprimer">×</button></div>';
+        compteurHtml(n) + '<span class="vol">' + f3(P.volTotalLigne(l)) + '</span></div>';
     }
     el.innerHTML = h;
   }
@@ -358,12 +376,7 @@
       $('#fEp').value = fm(l.ep); $('#fLa').value = fm(l.la); $('#fPi').value = fm(l.pi); $('#fLo').value = fLong(l.lo);
       nb = l.nb || 1; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs();
       rendreCamion();
-    } else {
-      c.lignes.splice(idx, 1);
-      if (editId === id) viderForm();
-      majPlan(c); toucher(c); rendreCamion();
-      toast('Ligne supprimée', function () { c.lignes.splice(idx, 0, l); majPlan(c); toucher(c); rendreCamion(); });
-    }
+    } else changerNb(c, id, b.dataset.act === 'plus' ? 1 : (b.dataset.act === 'moins' ? -1 : -99), function () { rendreCamion(); });
   });
 
   // ---------- Accueil ----------
@@ -376,7 +389,7 @@
     var auj = jourCle(d.toISOString()), tous = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime; });
     var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj; });
     var m3 = jour.reduce(function (a, c) { return a + c.total_m3; }, 0);
-    $('#accStats').innerHTML = '<div class="stat"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></div><div class="stat"><small>Camions</small><b>' + jour.length + '</b></div>';
+    $('#accStats').innerHTML = '<div class="stat"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></div><button type="button" class="stat stat-go" data-camions="1"><small>Camions aujourd\'hui</small><b>' + jour.length + '</b><i>Voir les derniers</i></button>';
     $('#accNbJour').textContent = jour.length ? jour.length + ' camion' + (jour.length > 1 ? 's' : '') + ' aujourd\'hui' : 'Tous les camions';
     var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
     $('#accEnCours').innerHTML = cours.length ? '<p class="titre-sec">En cours</p><div class="carte liste-cours">' + cours.map(function (c) {
@@ -411,6 +424,7 @@
   });
   $('#v-accueil').addEventListener('click', function (e) {
     var g = e.target.closest('[data-go]'); if (g) { aller(g.dataset.go); return; }
+    if (e.target.closest('[data-camions]')) { derniersCamions(); return; }
     var r = e.target.closest('[data-reprendre]');
     if (r) { db.courant = r.dataset.reprendre; sauver(true); viderForm(); aller('camion'); }
   });
@@ -444,7 +458,7 @@
     var n = c.lignes.length;
     var liste = c.lignes.slice().reverse().map(function (l, j) {
       var nb = l.nb || 1;
-      return '<div class="' + (j === 0 ? 'dernier' : '') + '"><span class="n">' + (n - j) + '</span><em>' + fm(l.ep) + ' × ' + fm(l.la) + ' <span>' + fLong(l.lo) + ' m' + (nb > 1 ? ' ×' + nb : '') + '</span></em><i>' + f3(P.volTotalLigne(l)) + '</i><button type="button" class="x" data-suppr="' + esc(l.id) + '" aria-label="Supprimer">×</button></div>';
+      return '<div class="' + (j === 0 ? 'dernier' : '') + '" data-id="' + esc(l.id) + '"><span class="n">' + (n - j) + '</span><em>' + fm(l.ep) + ' × ' + fm(l.la) + ' <span>' + fLong(l.lo) + ' m</span></em>' + compteurHtml(nb) + '<i>' + f3(P.volTotalLigne(l)) + '</i></div>';
     }).join('');
     $('#calcSuivi').className = 'suivi ' + e.code;
     $('#calcSuivi').innerHTML =
@@ -489,11 +503,8 @@
   $('#calcSuivi').addEventListener('click', function (e) {
     var c = courant();
     if (e.target.closest('[data-voirplan]')) { if (!c.lignes.length) { toast('Ajoute d\'abord un paquet.'); return; } aller('plan'); return; }
-    var x = e.target.closest('[data-suppr]'); if (!x) return;
-    var idx = c.lignes.findIndex(function (l) { return l.id === x.dataset.suppr; }); if (idx < 0) return;
-    var l = c.lignes.splice(idx, 1)[0];
-    majPlan(c); toucher(c); rendreSuivi();
-    toast('Paquet supprimé', function () { c.lignes.splice(idx, 0, l); majPlan(c); toucher(c); rendreSuivi(); }, 'Annuler');
+    var x = e.target.closest('[data-act]'); if (!x) return;
+    changerNb(c, x.closest('[data-id]').dataset.id, x.dataset.act === 'plus' ? 1 : (x.dataset.act === 'moins' ? -1 : -99), rendreSuivi);
   });
 
   // ---------- Étape 1 : client ----------
@@ -573,6 +584,16 @@
     c.plan = nouveauPlan; c.ordre = nouvelOrdre; c.planManuel = true; selection = null;
     toucher(c);
   }
+
+  $('#btnVider').addEventListener('click', function () {
+    var c = courant(); if (!c.lignes.length) return;
+    var avant = { plan: c.plan, ordre: c.ordre, man: c.planManuel };
+    fixerOrdre(c);
+    var plan = {}; P.colisDe(c.lignes).forEach(function (k) { plan[k.id] = 'X'; });
+    c.plan = plan; c.planManuel = true; selection = null; toucher(c); rendrePlanVue();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast('Tous les colis sont de côté', function () { c.plan = avant.plan; c.ordre = avant.ordre; c.planManuel = avant.man; toucher(c); rendrePlanVue(); }, 'Annuler');
+  });
 
   $('#btnTerminer').addEventListener('click', function () {
     var c = courant();
@@ -782,6 +803,7 @@
   $('#btnPartager').addEventListener('click', function () { partagerImage(courant()); });
 
   // ---------- Image du plan (partage) ----------
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=21';
   function imagePlan(c) {
     var r = cfgC(c), v = vplan(c);
     var W = 1080, pad = 56, larg = W - 2 * pad, rowH = 92, tagW = 120;
@@ -872,7 +894,9 @@
     x.font = F(500, 26);
     lignesMsg.forEach(function (m) { x.fillStyle = m[0]; x.fillText((m[2] ? '• ' : '   ') + m[1], pad, y + 20); y += 38; });
     x.fillStyle = LINE; x.fillRect(pad, H - 74, larg, 2);
-    x.fillStyle = MU; x.font = F(500, 22); x.fillText('SDC – Les Scieries du Centre', pad, H - 34);
+    x.fillStyle = MU; x.font = F(500, 22);
+    if (LOGO.complete && LOGO.naturalWidth) { var lh = 52, lw = LOGO.naturalWidth * lh / LOGO.naturalHeight; x.drawImage(LOGO, pad, H - 64, lw, lh); }
+    else x.fillText('SDC – Les Scieries du Centre', pad, H - 34);
     x.textAlign = 'right'; x.fillText('Camions SDC', W - pad, H - 34); x.textAlign = 'left';
     return cv;
   }
@@ -940,6 +964,26 @@
   $('#recherche').addEventListener('input', rendreHisto);
   $('#histo').addEventListener('click', function (e) { var b = e.target.closest('.cam'); if (b) detail(db.camions[b.dataset.id]); });
 
+  // Les 20 derniers camions terminés, par jour
+  function derniersCamions() {
+    var fini = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime && c.statut === 'termine'; })
+      .sort(function (a, b) { return b.termine_le < a.termine_le ? -1 : 1; }).slice(0, 20);
+    var h = '', jours = {}, ordre = [];
+    fini.forEach(function (c) { var k = jourCle(c.termine_le); if (!jours[k]) { jours[k] = []; ordre.push(k); } jours[k].push(c); });
+    ordre.forEach(function (k) {
+      var tot = jours[k].reduce(function (a, c) { return a + c.total_m3; }, 0);
+      h += '<div class="jour"><div class="jour-tete"><h2>' + jourNom(k) + '</h2><span>' + jours[k].length + ' camion' + (jours[k].length > 1 ? 's' : '') + ', ' + f2(tot) + ' m³</span></div><div class="carte">' + jours[k].map(function (c) { return ligneCam(c, false); }).join('') + '</div></div>';
+    });
+    var f = ouvrirFeuille('<div class="sec-tete"><h2>Derniers camions</h2><button class="lien" data-f="1" type="button">Fermer</button></div>' +
+      (h || '<div class="carte vide">Aucun camion terminé pour l\'instant.</div>') +
+      (fini.length ? '<button class="btn sec" data-histo="1" type="button">Tout l\'historique</button>' : ''));
+    f.onclick = function (e) {
+      if (e.target.closest('[data-f]')) { fermerFeuille(); return; }
+      if (e.target.closest('[data-histo]')) { fermerFeuille(); setTimeout(function () { aller('historique'); }, 80); return; }
+      var b = e.target.closest('.cam'); if (b) { f.onclick = null; detail(db.camions[b.dataset.id]); }
+    };
+  }
+
   function detail(c) {
     if (!c) return;
     var enCours = c.statut === 'en_cours';
@@ -980,7 +1024,7 @@
 
   // ---------- Apparence ----------
   var PRESETS = {
-    accent: ['#1F6B4A', '#18A06B', '#0F766E', '#1F4D2E', '#2F5C8F', '#5B4FBF', '#7C3AED', '#C2410C', '#D0332B'],
+    accent: ['#28533F', '#18A06B', '#0F766E', '#1F4D2E', '#2F5C8F', '#5B4FBF', '#7C3AED', '#C2410C', '#D0332B'],
     bg: ['#F5F6F4', '#EEF2F6', '#F1EEFB', '#FBF5EC', '#FFFFFF', '#0E1311', '#0F172A'],
     card: ['#FFFFFF', '#F8FAFC', '#FFFCF5', '#171E1B', '#1E293B'],
     nav: ['#FFFFFF', '#F5F6F4', '#131916', '#1E293B'],
