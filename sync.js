@@ -4,9 +4,8 @@
 (function () {
   'use strict';
   // ⬇⬇⬇ À REMPLIR UNE FOIS (Supabase › Project Settings › API) ⬇⬇⬇
-  var SUPABASE_URL = 'https://gkwpaylkblzwqtaelgvw.supabase.co/rest/v1/';   // ex. https://abcdefgh.supabase.co
-  var SUPABASE_CLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdrd3BheWxrYmx6d3F0YWVsZ3Z3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzk3MjcsImV4cCI6MjEwODk1NTcyN30.31xv8Lc20ngIQVfn82zhWwqZeCT70AqX64ZG7znq0m4';   // clé publique « anon » (commence par eyJ…)
-  // ⬆⬆⬆
+  var SUPABASE_URL = 'https://gkwpaylkblzwqtaelgvw.supabase.co/rest/v1/';
+  var SUPABASE_CLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdrd3BheWxrYmx6d3F0YWVsZ3Z3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzk3MjcsImV4cCI6MjEwODk1NTcyN30.31xv8Lc20ngIQVfn82zhWwqZeCT70AqX64ZG7znq0m4';
 
   var CLE = 'csdc.equipe';
   var PARTAGE = ['m3Min', 'm3Max', 'e1Min', 'e1Max', 'ecartMax', 'seuil4', 'sections', 'ajouts'];
