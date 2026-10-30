@@ -20,7 +20,7 @@
   }
   function actif() { var c = conf(); return !!(c.url && c.cle); }
   function rejoint() { return actif() && !!st.equipe && !!(st.session && st.session.uid); }
-  function nom(p) { return String(p || '').trim().toLowerCase().replace(/(^|[\s\-'])(\S)/g, function (m, a, b) { return a + b.toUpperCase(); }); }
+  function nom(p) { return String(p || '').trim().replace(/\s+/g, ' ').toUpperCase(); }
   function t(x) { return x ? new Date(x).getTime() : 0; }
   function notifier(change) { if (hooks.changement) hooks.changement(etat, change); }
 
@@ -189,7 +189,7 @@
   }
   function rejoindre(code, prenom) {
     if (!actif()) return Promise.reject(new Error('Supabase n\'est pas encore branché.'));
-    var ancien = st.session && st.session.uid;
+    var ancien = (st.session && st.session.uid) || st.dernierUid;
     return rpc('rejoindre', { p_code: code, p_prenom: nom(prenom) }).then(function (j) {
       st.equipe = j.equipe; st.prenom = nom(prenom); st.admin = !!j.admin; st.depuis = null; st.regLe = null;
       if (j.secret) st.secretAVoir = j.secret;
@@ -207,7 +207,18 @@
     }).catch(function (e) { throw new Error(message(e)); });
   }
 
+  function quitter() {
+    return lancer().then(function () {
+      var n = hooks.lire ? Object.keys(hooks.lire().camions).filter(function (k) { return hooks.lire().camions[k]._sale; }).length : 0;
+      if (n > 0) throw new Error('Des camions ne sont pas encore envoyés. Connecte-toi au réseau puis réessaie.');
+      st.dernierUid = st.session && st.session.uid;
+      ['equipe', 'session', 'prenom', 'admin', 'membres', 'depuis', 'regLe', 'secretAVoir'].forEach(function (k) { delete st[k]; });
+      garder(); notifier(true); return true;
+    });
+  }
+
   window.Sync = {
+    quitter: quitter,
     init: function (h) {
       hooks = h;
       window.addEventListener('online', bientot);

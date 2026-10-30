@@ -823,3 +823,22 @@ html, body { max-width: 100vw; overflow-x: hidden; touch-action: pan-x pan-y; }
 .reg { min-width: 0; max-width: 100%; }
 #reglagesZone { display: flex; flex-direction: column; gap: 12px; }
 #reglagesZone > .carte { margin: 0; }
+
+/* v43 compact */
+#reglagesZone { gap: 8px; }
+#reglagesZone .carte { padding: 10px 12px; }
+.reg { gap: 6px; }
+.reg h2 { font-size: 14px; }
+.reg .g3 { gap: 6px; }
+.reg .champ > span { font-size: 10.5px; white-space: nowrap; }
+.reg .champ input { min-height: 38px; padding: 6px 10px; font-size: 15px; }
+.reg-l { padding: 6px 0; }
+.reg-ouvrir { padding: 10px 12px; }
+.reg-ouvrir small { font-size: 12px; }
+.reg-admin > summary { cursor: pointer; font-size: 14px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+.reg-admin > summary::-webkit-details-marker { display: none; }
+.reg-admin > summary::after { content: '›'; transition: transform .2s; font-size: 18px; color: var(--muted); }
+.reg-admin[open] > summary::after { transform: rotate(90deg); }
+.reg-admin[open] > summary { margin-bottom: 6px; }
+.reg .seg button { min-height: 34px; }
+input.maj { text-transform: uppercase; }
