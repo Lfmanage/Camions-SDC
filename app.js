@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '32';
+  var VERSION_APP = '34';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -797,8 +797,12 @@
     });
     if (edit) {
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
-      if (sel && !selCote) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Touche un autre colis pour échanger, ou + pour le déplacer.</span><button type="button" class="btn sec petit" data-decote="1">Mettre de côté</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else if (sel) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Choisis où le poser.</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
+      var auMil = sel && (c.plan || {})[sel.id] === 'C' + N;
+      if (sel && !selCote) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b></span>' +
+        (auMil ? '<button type="button" class="btn sec petit" data-decote="1">Sortir</button>'
+               : '<button type="button" class="btn petit btn-mil" data-milieu="1">Milieu</button><button type="button" class="btn sec petit" data-decote="1">De côté</button>') +
+        '<button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
+      else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else h += '<div class="aide-l"><span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer.</span>' +
         ((c.planManuel || c.planVariante) ? '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>' : '') + '</div>';
       if (sel && (c.planManuel || c.planVariante)) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>';
@@ -869,6 +873,19 @@
     c.ordre = o; c.planManuel = true; selection = null; toucher(c);
   }
 
+  // Met le colis au milieu (à cheval sur les 2 côtés, au dernier étage, tout devant)
+  function auMilieu(c, id) {
+    var v1 = vplan(c), k = 'C' + v1.N, plan = Object.assign({}, c.plan || {});
+    plan[id] = k;
+    var v2 = vplan(c, plan);
+    if (P.noteVerif(v2) > P.noteVerif(v1)) {
+      var nouv = v2.erreurs.filter(function (m) { return v1.erreurs.indexOf(m) < 0; });
+      selection = null; return toast('Pas possible au milieu : ' + String(nouv[0] || 'le plan ne serait plus bon').replace(/\.$/, '') + '.');
+    }
+    if (P.deseq(v2) > Math.max(reg().ecartMax, P.deseq(v1)) + 0.001) { selection = null; return toast('Pas possible au milieu : le camion serait déséquilibré.'); }
+    placer(c, id, k);
+    toast('Colis mis au MILIEU, tout devant');
+  }
   $('#planZone').addEventListener('click', function (e) {
     var c = courant();
     if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
@@ -879,6 +896,7 @@
       else calculerPlan(c);
       toucher(c); selection = null; rendrePlanVue(); toast('Meilleur plan remis'); return;
     }
+    if (e.target.closest('[data-milieu]') && selection) { auMilieu(c, selection); rendrePlanVue(); return; }
     if (e.target.closest('[data-decote]') && selection) {
       if (!c.ordre) fixerOrdre(c);
       c.plan = Object.assign({}, c.plan); c.plan[selection] = 'X'; c.planManuel = true; selection = null; toucher(c);
