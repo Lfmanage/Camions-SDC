@@ -1,141 +1,232 @@
-/* Camions SDC — synchronisation Supabase (facultative).
-   Le stockage local reste la référence : rien n'est jamais perdu si la synchro échoue. */
+/* Camions SDC — équipe partagée avec Supabase, sans compte : un code d'équipe + un prénom.
+   Le téléphone garde tout en mémoire (marche sans réseau) et échange avec l'équipe dès que possible.
+   Rien n'est jamais effacé du téléphone par la synchro. */
 (function () {
   'use strict';
-  var CLE_CFG = 'csdc.supabase';
-  var SDK = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
-  var client = null, chargement = null, enCours = false, minuterie = null;
-  var etat = { connecte: false, email: '', erreur: '', derniere: null };
-  var hooks = { lire: null, ecrire: null, changement: null };
+  // ⬇⬇⬇ À REMPLIR UNE FOIS (Supabase › Project Settings › API) ⬇⬇⬇
+  var SUPABASE_URL = '';   // ex. https://abcdefgh.supabase.co
+  var SUPABASE_CLE = '';   // clé publique « anon » (commence par eyJ…)
+  // ⬆⬆⬆
 
-  function cfg() { try { return JSON.parse(localStorage.getItem(CLE_CFG)) || {}; } catch (e) { return {}; } }
-  function setCfg(c) { localStorage.setItem(CLE_CFG, JSON.stringify(c)); client = null; }
+  var CLE = 'csdc.equipe';
+  var PARTAGE = ['m3Min', 'm3Max', 'e1Min', 'e1Max', 'ecartMax', 'seuil4', 'sections', 'ajouts'];
+  var st = lire(), hooks = {}, enCours = null, minuterie = null, etat = { erreur: '', derniere: null };
 
-  function chargerSdk() {
-    if (window.supabase && window.supabase.createClient) return Promise.resolve();
-    if (chargement) return chargement;
-    chargement = new Promise(function (ok, ko) {
-      var s = document.createElement('script');
-      s.src = SDK; s.onload = ok; s.onerror = function () { chargement = null; ko(new Error('Connexion impossible (hors ligne ?)')); };
-      document.head.appendChild(s);
-    });
-    return chargement;
+  function lire() { try { return JSON.parse(localStorage.getItem(CLE)) || {}; } catch (e) { return {}; } }
+  function garder() { try { localStorage.setItem(CLE, JSON.stringify(st)); } catch (e) {} }
+  function conf() {
+    var o = window.CSDC_SUPABASE || {};
+    return { url: String(o.url || st.url || SUPABASE_URL || '').replace(/\/+$/, ''), cle: o.cle || st.cle || SUPABASE_CLE || '' };
   }
-
-  function getClient() {
-    var c = cfg();
-    if (!c.url || !c.key) return Promise.resolve(null);
-    if (client) return Promise.resolve(client);
-    return chargerSdk().then(function () {
-      client = window.supabase.createClient(c.url.trim(), c.key.trim(), { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'csdc-auth' } });
-      return client;
-    });
-  }
-
-  function notifier() { if (hooks.changement) hooks.changement(etat); }
-
-  function verifierSession() {
-    return getClient().then(function (sb) {
-      if (!sb) { etat.connecte = false; return null; }
-      return sb.auth.getSession().then(function (r) {
-        var s = r && r.data && r.data.session;
-        etat.connecte = !!s; etat.email = s ? s.user.email : '';
-        return s;
-      });
-    }).catch(function (e) { etat.erreur = e.message; return null; });
-  }
-
-  function versLigne(c) {
-    return { id: c.id, client: c.client || null, reference: c.reference || null, cree_le: c.cree_le, termine_le: c.termine_le || null,
-      statut: c.statut, etat: c.etat || null, total_m3: Math.round((c.total_m3 || 0) * 1000) / 1000,
-      lignes: c.lignes || [], plan: c.plan || null, maj_le: c.maj_le, supprime: !!c.supprime };
-  }
-  function depuisLigne(r) {
-    return { id: r.id, client: r.client || '', reference: r.reference || '', cree_le: r.cree_le, termine_le: r.termine_le,
-      statut: r.statut, etat: r.etat, total_m3: Number(r.total_m3) || 0, lignes: r.lignes || [], plan: r.plan || null,
-      maj_le: r.maj_le, supprime: !!r.supprime };
-  }
+  function actif() { var c = conf(); return !!(c.url && c.cle); }
+  function rejoint() { return actif() && !!st.equipe && !!(st.session && st.session.uid); }
   function t(x) { return x ? new Date(x).getTime() : 0; }
+  function notifier(change) { if (hooks.changement) hooks.changement(etat, change); }
 
-  // Une passe complète : envoie les modifs locales puis récupère celles du serveur
-  function lancer() {
-    if (enCours || !cfg().url) return Promise.resolve(false);
-    if (!navigator.onLine) { etat.erreur = 'Hors ligne'; notifier(); return Promise.resolve(false); }
-    enCours = true;
-    var db = hooks.lire();
-    return verifierSession().then(function (session) {
-      if (!session) return false;
-      var sb = client;
-      var sales = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return c._sale; });
-      var envoi = sales.length
-        ? sb.from('camions').upsert(sales.map(versLigne)).then(function (r) {
-            if (r.error) throw r.error;
-            var db2 = hooks.lire();
-            sales.forEach(function (c) { var l = db2.camions[c.id]; if (l && l.maj_le === c.maj_le) delete l._sale; });
-            hooks.ecrire(db2, true);
-          })
-        : Promise.resolve();
-      return envoi.then(function () {
-        var depuis = db.sync && db.sync.depuis ? new Date(t(db.sync.depuis) - 10 * 60 * 1000).toISOString() : '1970-01-01T00:00:00Z';
-        return sb.from('camions').select('*').gt('maj_le', depuis).order('maj_le', { ascending: true }).limit(2000);
-      }).then(function (r) {
-        if (r.error) throw r.error;
-        var db3 = hooks.lire(), max = db3.sync && db3.sync.depuis || null, change = false;
-        (r.data || []).forEach(function (row) {
-          var loc = db3.camions[row.id], dist = depuisLigne(row);
-          if (!loc || t(dist.maj_le) > t(loc.maj_le)) { db3.camions[row.id] = dist; change = true; }
-          if (!max || t(row.maj_le) > t(max)) max = row.maj_le;
+  // ---------- Appels réseau ----------
+  function http(chemin, o) {
+    o = o || {};
+    var c = conf(), h = { apikey: c.cle, 'Content-Type': 'application/json' };
+    if (o.auth !== false && st.session) h.Authorization = 'Bearer ' + st.session.at;
+    return fetch(c.url + chemin, { method: o.methode || 'GET', headers: h, body: o.corps !== undefined ? JSON.stringify(o.corps) : undefined })
+      .then(function (r) {
+        return r.text().then(function (tx) {
+          var j = null; try { j = tx ? JSON.parse(tx) : null; } catch (e) {}
+          if (!r.ok) {
+            var er = new Error((j && (j.message || j.msg || j.error_description || j.error)) || ('Erreur ' + r.status));
+            er.status = r.status; throw er;
+          }
+          return j;
         });
-        db3.sync = db3.sync || {}; db3.sync.depuis = max;
-        // réglages
-        var regEnvoi = db3.sync.reglagesSales
-          ? sb.from('reglages').upsert({ user_id: session.user.id, data: db3.reglages, maj_le: new Date().toISOString() }).then(function (r2) { if (r2.error) throw r2.error; db3.sync.reglagesSales = false; })
-          : sb.from('reglages').select('data, maj_le').maybeSingle().then(function (r2) {
-              if (r2.error) throw r2.error;
-              if (r2.data && r2.data.data && t(r2.data.maj_le) > t(db3.sync.reglagesLe)) { db3.reglages = Object.assign({}, db3.reglages, r2.data.data); db3.sync.reglagesLe = r2.data.maj_le; change = true; }
-            });
-        return regEnvoi.then(function () { hooks.ecrire(db3, true); etat.erreur = ''; etat.derniere = new Date(); return change; });
       });
-    }).catch(function (e) {
-      etat.erreur = (e && (e.message || e.error_description)) || 'Erreur de synchro';
-      return false;
-    }).then(function (change) { enCours = false; notifier(); return change; });
+  }
+  function garderSession(j) {
+    st.session = { at: j.access_token, rt: j.refresh_token, exp: j.expires_at || Math.floor(Date.now() / 1000) + (j.expires_in || 3600), uid: (j.user && j.user.id) || (st.session && st.session.uid) };
+    garder(); return st.session;
+  }
+  // Compte invisible créé tout seul pour ce téléphone (connexion anonyme Supabase)
+  function session() {
+    if (st.session && st.session.exp > Date.now() / 1000 + 60) return Promise.resolve(st.session);
+    if (st.session && st.session.rt) {
+      return http('/auth/v1/token?grant_type=refresh_token', { methode: 'POST', auth: false, corps: { refresh_token: st.session.rt } })
+        .then(garderSession)
+        .catch(function (e) {
+          if (e.status === 400 || e.status === 401 || e.status === 403) { st.session = null; st.equipe = null; garder(); etat.erreur = 'Reconnecte-toi à l\'équipe'; notifier(true); }
+          throw e;
+        });
+    }
+    return http('/auth/v1/signup', { methode: 'POST', auth: false, corps: { data: {} } }).then(garderSession);
+  }
+  function rpc(nom, args) { return session().then(function () { return http('/rest/v1/rpc/' + nom, { methode: 'POST', corps: args || {} }); }); }
+
+  // ---------- Camions ----------
+  function norm(x) { return String(x || '').trim().toUpperCase().replace(/\s+/g, ' '); }
+  function cleCamion(c) {
+    if (!c.client && !c.reference) return null;
+    return norm(c.client) + '|' + norm(c.reference) + '|' + String(c.termine_le || c.cree_le || '').slice(0, 10);
+  }
+  function versServeur(c) {
+    var d = JSON.parse(JSON.stringify(c)); delete d._sale;
+    return { id: c.id, cle: cleCamion(c), maj_le: c.maj_le, supprime: !!c.supprime, data: d };
+  }
+  function partage(r) { var o = {}; PARTAGE.forEach(function (k) { if (r[k] !== undefined) o[k] = r[k]; }); return o; }
+
+  function envoyer(db, fusion) {
+    var moi = st.session.uid;
+    var sales = Object.keys(db.camions).map(function (k) { return db.camions[k]; })
+      .filter(function (c) { return c._sale && (fusion || !c.auteur || c.auteur === moi || st.admin); });
+    if (!sales.length) return Promise.resolve(false);
+    var change = false;
+    function paquet(i) {
+      if (i >= sales.length) return Promise.resolve(change);
+      var lot = sales.slice(i, i + 40);
+      return rpc('envoyer_camions', { p_camions: lot.map(versServeur), p_fusion: !!fusion }).then(function (res) {
+        var d = hooks.lire();
+        lot.forEach(function (c) {
+          var r = res && res[c.id], l = d.camions[c.id];
+          if (!l) return;
+          if (r === 'refuse') { delete l._sale; st.depuis = null; change = true; return; } // on reprendra la version de l'équipe
+          if (r && r !== c.id) { // fusionné avec un camion déjà dans l'équipe
+            delete d.camions[c.id]; if (d.courant === c.id) d.courant = r; change = true; return;
+          }
+          if (l.maj_le === c.maj_le) delete l._sale;
+        });
+        hooks.ecrire(d);
+        return paquet(i + 40);
+      });
+    }
+    return paquet(0);
   }
 
-  function bientot() { clearTimeout(minuterie); minuterie = setTimeout(lancer, 1500); }
-
-  function connexion(email, mdp, creer) {
-    return getClient().then(function (sb) {
-      if (!sb) throw new Error('Renseigne l\'adresse et la clé Supabase.');
-      var p = creer ? sb.auth.signUp({ email: email, password: mdp }) : sb.auth.signInWithPassword({ email: email, password: mdp });
-      return p.then(function (r) {
-        if (r.error) throw r.error;
-        if (creer && !r.data.session) return 'Compte créé : confirme l\'e-mail reçu, puis connecte-toi.';
-        // tout renvoyer au premier branchement
-        var db = hooks.lire();
-        Object.keys(db.camions).forEach(function (k) { db.camions[k]._sale = true; });
-        db.sync = db.sync || {}; db.sync.reglagesSales = !db.sync.reglagesLe;
-        hooks.ecrire(db, true);
-        return lancer().then(function () { return 'Connecté.'; });
+  function recevoir() {
+    var change = false;
+    function page() {
+      var q = '/rest/v1/camions_equipe?select=id,auteur,auteur_prenom,data,supprime,maj_le,serveur_le&order=serveur_le.asc&limit=500' +
+        (st.depuis ? '&serveur_le=gt.' + encodeURIComponent(st.depuis) : '');
+      return http(q).then(function (rows) {
+        rows = rows || [];
+        var d = hooks.lire();
+        rows.forEach(function (r) {
+          var c = r.data || {}, l = d.camions[r.id];
+          c.id = r.id; c.auteur = r.auteur; c.auteur_prenom = r.auteur_prenom; c.supprime = !!r.supprime;
+          c.maj_le = new Date(r.maj_le).toISOString(); delete c._sale;
+          if (!l || !l._sale || t(c.maj_le) >= t(l.maj_le)) { d.camions[r.id] = c; change = true; }
+          st.depuis = r.serveur_le;
+        });
+        hooks.ecrire(d); garder();
+        return rows.length === 500 ? page() : change;
       });
+    }
+    return page();
+  }
+
+  function reglages() {
+    var d = hooks.lire();
+    if (st.admin && d.sync && d.sync.reglagesSales) {
+      return rpc('ecrire_reglages', { p: partage(d.reglages) }).then(function (le) {
+        var d2 = hooks.lire(); d2.sync.reglagesSales = false; st.regLe = le; garder(); hooks.ecrire(d2); return false;
+      }).catch(function (e) { if (/ADMIN/.test(e.message)) { st.admin = false; garder(); } throw e; });
+    }
+    return rpc('lire_reglages').then(function (j) {
+      if (!j) throw new Error('PAS_MEMBRE');
+      st.admin = !!j.admin;
+      var change = false;
+      if (j.le && t(j.le) > t(st.regLe) && j.reglages && Object.keys(j.reglages).length) {
+        var d2 = hooks.lire();
+        PARTAGE.forEach(function (k) { if (j.reglages[k] !== undefined) d2.reglages[k] = j.reglages[k]; });
+        d2.sync = d2.sync || {}; d2.sync.reglagesSales = false;
+        hooks.ecrire(d2); change = true;
+      }
+      st.regLe = j.le; garder();
+      return change;
     });
   }
 
-  function deconnexion() {
-    return getClient().then(function (sb) { return sb && sb.auth.signOut(); }).then(function () { etat.connecte = false; etat.email = ''; notifier(); });
+  function membres() {
+    return http('/rest/v1/membres?select=user_id,prenom,actif,rejoint_le,vu_le&order=rejoint_le.asc').then(function (l) { st.membres = l || []; garder(); });
   }
 
-  function attente(db) { return Object.keys(db.camions).filter(function (k) { return db.camions[k]._sale; }).length; }
+  function quitter(raison) {
+    st.equipe = null; st.admin = false; st.depuis = null; st.membres = []; garder();
+    etat.erreur = raison === 'retire' ? 'Ce téléphone n\'est plus dans l\'équipe (retiré, ou compte repris sur un autre téléphone).' : 'Reconnecte-toi à l\'équipe';
+    notifier(true);
+  }
+
+  // Une passe : envoie ce qui a changé ici, puis récupère ce que l'équipe a changé
+  function lancer() {
+    if (!rejoint()) return Promise.resolve(false);
+    if (enCours) return enCours;
+    if (!navigator.onLine) { etat.erreur = 'Hors ligne'; notifier(false); return Promise.resolve(false); }
+    var change = false;
+    enCours = session()
+      .then(function () { return envoyer(hooks.lire(), false); }).then(function (c) { change = change || c; return reglages(); })
+      .then(function (c) { change = change || c; return recevoir(); }).then(function (c) { change = change || c; return membres(); })
+      .then(function () { etat.erreur = ''; etat.derniere = new Date(); })
+      .catch(function (e) {
+        var m = (e && e.message) || '';
+        if (/PAS_MEMBRE|RETIRE/.test(m)) quitter('retire');
+        else etat.erreur = /Failed to fetch|NetworkError|Load failed/i.test(m) ? 'Pas de réseau' : (m || 'Erreur de synchro');
+      })
+      .then(function () { enCours = null; notifier(change); return change; });
+    return enCours;
+  }
+  function bientot() { if (!rejoint()) return; clearTimeout(minuterie); minuterie = setTimeout(lancer, 1200); }
+
+  // ---------- Rejoindre ----------
+  var MSG = {
+    CODE: 'Code d\'équipe incorrect.', CODE_COURT: 'Code trop court (4 caractères minimum).', PRENOM: 'Écris ton prénom.',
+    RETIRE: 'Ce téléphone a été retiré de l\'équipe.', PRENOM_PRIS: 'Ce prénom est déjà utilisé dans l\'équipe.', CODE_PRIS: 'Ce code ne peut pas être utilisé.', ADMIN: 'Action non autorisée.',
+    SOI_MEME: 'Impossible sur ce téléphone.'
+  };
+  function message(e) {
+    var m = (e && e.message) || '';
+    var cles = Object.keys(MSG).sort(function (a, b) { return b.length - a.length; }); // PRENOM_PRIS avant PRENOM
+    for (var i = 0; i < cles.length; i++) if (m.indexOf(cles[i]) >= 0) return MSG[cles[i]];
+    if (/anonymous/i.test(m)) return 'Dans Supabase, active « Allow anonymous sign-ins ».';
+    if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Pas de réseau : réessaie quand tu as du réseau.';
+    return m || 'Connexion impossible.';
+  }
+  function rejoindre(code, prenom) {
+    if (!actif()) return Promise.reject(new Error('Supabase n\'est pas encore branché.'));
+    var ancien = st.session && st.session.uid;
+    return rpc('rejoindre', { p_code: code, p_prenom: prenom }).then(function (j) {
+      st.equipe = j.equipe; st.prenom = String(prenom).trim(); st.admin = !!j.admin; st.depuis = null; st.regLe = null;
+      if (j.secret) st.secretAVoir = j.secret;
+      garder();
+      // mes camions déjà dans le téléphone partent dans l'équipe (rien n'est effacé)
+      var d = hooks.lire(), moi = st.session.uid;
+      Object.keys(d.camions).forEach(function (k) {
+        var c = d.camions[k];
+        if (!c.auteur || c.auteur === ancien) { c.auteur = moi; c.auteur_prenom = st.prenom; }
+        if (c.auteur === moi) c._sale = true;
+      });
+      d.sync = d.sync || {}; d.sync.reglagesSales = !!j.nouvelle; // la toute première équipe prend les réglages de ce téléphone
+      hooks.ecrire(d);
+      return envoyer(d, true).then(function () { return lancer(); }).then(function () { return j; });
+    }).catch(function (e) { throw new Error(message(e)); });
+  }
 
   window.Sync = {
     init: function (h) {
       hooks = h;
       window.addEventListener('online', bientot);
       document.addEventListener('visibilitychange', function () { if (!document.hidden) bientot(); });
-      setInterval(function () { if (!document.hidden) lancer(); }, 90000);
-      if (cfg().url) verifierSession().then(function (s) { notifier(); if (s) lancer(); });
+      setInterval(function () { if (!document.hidden) lancer(); }, 20000);
+      if (rejoint()) setTimeout(lancer, 300);
     },
-    cfg: cfg, setCfg: setCfg, lancer: lancer, bientot: bientot, connexion: connexion, deconnexion: deconnexion,
-    etat: function () { return etat; }, attente: attente, actif: function () { return !!cfg().url; }
+    actif: actif, rejoint: rejoint, lancer: lancer, bientot: bientot, rejoindre: rejoindre, message: message,
+    moi: function () { return { uid: st.session && st.session.uid, prenom: st.prenom || '', admin: !!st.admin }; },
+    membres: function () { return (st.membres || []).slice(); },
+    etat: function () { return etat; },
+    attente: function (db) { return Object.keys(db.camions).filter(function (k) { return db.camions[k]._sale; }).length; },
+    secretAVoir: function () { return st.secretAVoir || null; },
+    oublierSecret: function () { delete st.secretAVoir; garder(); },
+    changerCode: function (code) { return rpc('changer_code', { p_code: code }).catch(function (e) { throw new Error(message(e)); }); },
+    nouveauSecret: function () { return rpc('nouveau_secret').catch(function (e) { throw new Error(message(e)); }); },
+    retirer: function (uid, remettre) { return rpc('retirer_membre', { p_user: uid, p_actif: !!remettre }).then(membres).then(function () { notifier(true); }).catch(function (e) { throw new Error(message(e)); }); },
+    changerPrenom: function (p) {
+      return rpc('changer_prenom', { p_prenom: p }).then(function () { st.prenom = String(p).trim(); st.depuis = null; garder(); return lancer(); })
+        .catch(function (e) { throw new Error(message(e)); });
+    }
   };
 })();

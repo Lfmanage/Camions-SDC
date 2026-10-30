@@ -10,13 +10,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=36">
-<link rel="icon" href="favicon-32.png?v=36" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=36">
+<link rel="manifest" href="manifest.webmanifest?v=39">
+<link rel="icon" href="favicon-32.png?v=39" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=39">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=39">
 </head>
 <body>
 <div id="fondForet" aria-hidden="true"><i class="ff-img"></i><i class="ff-voile"></i></div>
@@ -25,7 +25,7 @@
 
   <!-- ============ ACCUEIL ============ -->
   <section class="vue active" id="v-accueil">
-    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=36" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=36" alt=""></span></header>
+    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=39" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=39" alt=""></span></header>
     <button class="hero-go" id="btnCommencer" type="button">
       <span class="hg-txt"><small>Nouveau camion</small><b>Charger un camion</b></span>
       <span class="hg-fl" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -122,7 +122,8 @@
     <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Plan</h1><button class="lien" id="btnPartager" type="button">Partager</button></header>
     <div class="etapes"><span class="on"><i></i>Client</span><span class="on"><i></i>Colis</span><span class="on"><i></i>Plan</span></div>
     <div id="planZone"></div>
-    <div class="pied trois"><button class="btn gros sec vider" id="btnVider" type="button">Tout<br>enlever</button><button class="btn gros sec" id="btnAutre" type="button">Autre plan</button><button class="btn gros noir" id="btnTerminer" type="button">Terminer</button></div>
+    <div class="pied pied-ro" id="piedRo" hidden><button class="btn gros" id="btnRecupPlan" type="button">Récupérer (copie à mon nom)</button></div>
+    <div class="pied trois" id="piedPlan"><button class="btn gros sec vider" id="btnVider" type="button">Tout<br>enlever</button><button class="btn gros sec" id="btnAutre" type="button">Autre plan</button><button class="btn gros noir" id="btnTerminer" type="button">Terminer</button></div>
   </section>
 
   <!-- ============ HISTORIQUE ============ -->
@@ -132,6 +133,16 @@
     <div class="recherche" id="histoCamions"><input id="recherche" type="search" placeholder="Rechercher client ou référence" autocomplete="off"></div>
     <div id="histo"></div>
     <div id="stats" hidden></div>
+  </section>
+
+  <!-- ============ ÉQUIPE ============ -->
+  <section class="vue" id="v-equipe">
+    <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Équipe</h1><span></span></header>
+    <div id="equipeZone"></div>
+  </section>
+  <section class="vue" id="v-profil">
+    <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Équipe</button><h1 id="profilNom">Profil</h1><span></span></header>
+    <div id="profilZone"></div>
   </section>
 
   <!-- ============ RÉGLAGES ============ -->
@@ -146,6 +157,7 @@
   <button class="onglet actif" data-vue="accueil" type="button"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3.5 10.5 12 4l8.5 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-4v-6h-6v6H5A1.5 1.5 0 0 1 3.5 19z"/></svg></span><span>Accueil</span></button>
   <button class="onglet" data-vue="calcul" type="button"><span class="ico"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg></span><span>Calcul m³</span></button>
   <button class="onglet" data-vue="historique" type="button"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span>Historique</span></button>
+  <button class="onglet" data-vue="equipe" type="button"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M15.8 14.2c2.3-.2 4.2 1.3 4.7 4.3"/></svg></span><span>Équipe</span></button>
   <button class="onglet" data-vue="reglages" type="button"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></span><span>Réglages</span></button>
 </nav>
 
@@ -153,8 +165,8 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=36"></script>
-<script src="sync.js?v=36"></script>
-<script src="app.js?v=36"></script>
+<script src="plan.js?v=39"></script>
+<script src="sync.js?v=39"></script>
+<script src="app.js?v=39"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '36';
+  var VERSION_APP = '39';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -58,6 +58,7 @@
   function nouveauCamion(base) {
     var c = { id: uid(), client: '', reference: '', cree_le: maintenant(), termine_le: null, statut: 'en_cours', lignes: [], plan: null, planManuel: false, total_m3: 0, etat: 'peu', maj_le: maintenant(), supprime: false };
     if (base) Object.assign(c, base);
+    if (enEquipe()) { c.auteur = Sync.moi().uid; c.auteur_prenom = Sync.moi().prenom; } else { delete c.auteur; delete c.auteur_prenom; }
     db.camions[c.id] = c; db.courant = c.id;
     return c;
   }
@@ -65,7 +66,7 @@
   function courant() {
     if (edition && db.camions[edition] && !db.camions[edition].supprime) return db.camions[edition];
     var c = db.camions[db.courant];
-    if (!c || c.supprime || c.statut !== 'en_cours') { c = nouveauCamion(); sauver(true); }
+    if (!c || c.supprime || c.statut !== 'en_cours' || !estAMoi(c)) { c = nouveauCamion(); sauver(true); }
     return c;
   }
   // Les colis ont changé : le plan sera recalculé (le meilleur possible) à l'ouverture du plan
@@ -80,13 +81,19 @@
     c.plan = res.plan; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
     c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
   }
-  function assurerPlan(c) { if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); toucher(c); } }
+  function assurerPlan(c) { if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); if (estAMoi(c)) toucher(c); } }
   function toucher(c) {
     c.total_m3 = Math.round(P.totalM3(c.lignes) * 1000) / 1000;
     c.etat = P.etat(c.total_m3, cfgC(c)).code;
-    c.maj_le = maintenant(); c._sale = true;
+    c.maj_le = maintenant();
+    if (estAMoi(c) || Sync.moi().admin) c._sale = true; // le camion d'un collègue ne part jamais vers l'équipe depuis ici
     sauver();
   }
+  // ---------- Équipe : à qui est ce camion ----------
+  function enEquipe() { return window.Sync && Sync.rejoint(); }
+  function estAMoi(c) { return !c || !c.auteur || !enEquipe() || c.auteur === Sync.moi().uid; }
+  function peutSupprimer(c) { return estAMoi(c) || (enEquipe() && Sync.moi().admin); }
+  function prenomDe(c) { return c.auteur_prenom || (estAMoi(c) ? (Sync.moi().prenom || 'Moi') : '?'); }
   function tousClients() {
     var s = {};
     db.clients.forEach(function (x) { if (x) s[x] = 1; });
@@ -147,9 +154,19 @@
     });
   }
 
+  function demanderTexte(titre, val, aide) {
+    return new Promise(function (ok) {
+      var f = ouvrirFeuille('<h2>' + esc(titre) + '</h2>' + (aide ? '<p class="petit-txt">' + esc(aide) + '</p>' : '') +
+        '<label class="champ"><input id="dtVal" value="' + esc(val || '') + '" autocomplete="off" spellcheck="false"></label>' +
+        '<div class="grille-btns"><button class="btn sec" data-r="0" type="button">Annuler</button><button class="btn" data-r="1" type="button">Valider</button></div>');
+      setTimeout(function () { var e = $('#dtVal'); if (e) e.focus(); }, 80);
+      $$('[data-r]', f).forEach(function (b) { b.onclick = function () { var v = $('#dtVal').value.trim(); $('#feuilleFond').onclick = null; fermerFeuille(); ok(b.dataset.r === '1' ? v : null); }; });
+      $('#feuilleFond').onclick = function () { $('#feuilleFond').onclick = null; fermerFeuille(); ok(null); };
+    });
+  }
   // ---------- Navigation ----------
   var vueActive = 'accueil';
-  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages' };
+  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', equipe: 'equipe', profil: 'equipe' };
   function montrer(v) {
     vueActive = v; document.body.dataset.vue = v;
     if (v !== 'plan') edition = null;
@@ -164,6 +181,8 @@
     if (v === 'plan') { rendrePlanVue(); requestAnimationFrame(ajusterPlan); }
     if (v === 'historique') { if (ongletHisto === 'stats') rendreStats(); else rendreHisto(); }
     if (v === 'reglages') rendreReglages();
+    if (v === 'equipe') rendreEquipe();
+    if (v === 'profil') rendreProfil();
     majRetour();
   }
   $$('.onglet').forEach(function (b) { b.addEventListener('click', function () {
@@ -415,7 +434,7 @@
     $('#accStats').innerHTML = '<div class="stat"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></div><button type="button" class="stat stat-go" data-camions="1"><small>Camions aujourd\'hui</small><b>' + jour.length + '</b><i>Voir les derniers</i></button>';
     $('#accNbJour').textContent = 'Tous les camions';
     $('#accSous').textContent = jour.length ? jour.length + ' camion' + (jour.length > 1 ? 's' : '') + ' chargé' + (jour.length > 1 ? 's' : '') + ' aujourd\'hui' : 'Bonne journée au chantier';
-    var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
+    var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && estAMoi(c); }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
     $('#accEnCours').innerHTML = cours.length ? '<p class="titre-sec">En cours</p><div class="carte liste-cours">' + cours.map(function (c) {
       return glisse(c.id, '<button type="button" class="en-cours-l" data-reprendre="' + esc(c.id) + '"><span><b>' + esc(c.client || 'Sans client') + '</b><small>' + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + f2(c.total_m3) + ' m³</small></span><span class="go">Reprendre</span></button>');
     }).join('') + '</div><p class="astuce">Glisse à gauche pour supprimer, à droite pour ouvrir.</p>' : '';
@@ -594,6 +613,7 @@
 
   // Un autre bon plan, calculé instantanément sur le téléphone
   $('#btnAutre').addEventListener('click', function () {
+    if (!estAMoi(courant())) return;
     if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
     var c = courant(), b = $('#btnAutre');
     if (!c.lignes.length || b.disabled) return;
@@ -635,6 +655,7 @@
   }
 
   $('#btnVider').addEventListener('click', function () {
+    if (!estAMoi(courant())) return;
     if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
     var c = courant(); if (!c.lignes.length) return;
     var avant = { plan: c.plan, ordre: c.ordre, man: c.planManuel };
@@ -646,6 +667,7 @@
   });
 
   $('#btnTerminer').addEventListener('click', function () {
+    if (!estAMoi(courant())) return;
     if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
     var c = courant();
     if (!c.lignes.length) { toast('Aucun colis à enregistrer.'); return; }
@@ -797,8 +819,10 @@
         h = h.replace('@LG@', fm(Math.round(lgAff * 100) / 100) + ' m');
         h += '</div></div>';
       });
-      h += '<div class="sens"><span class="c">Cabine</span>' + (v.rows['C' + N].colis.length ? '<span class="leg-mil"><span>MILIEU</span> = à cheval sur les 2 côtés</span>' : '') + '<span>Arrière</span></div></div></section>';
+      h += '<div class="sens"><span class="c">Cabine</span><span>Arrière</span></div></div></section>';
     });
+    var legMil = v.rows['C' + N].colis.length ? '<span class="leg-mil"><span>MILIEU</span> = colis à cheval sur les 2 côtés</span>' : '';
+    if (!edit && legMil) h += '<p class="aide-l">' + legMil + '</p>';
     if (edit) {
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
       var auMil = sel && (c.plan || {})[sel.id] === 'C' + N, dejaMil = v.rows['C' + N].colis.length > 0;
@@ -808,7 +832,7 @@
                : '<button type="button" class="btn petit btn-mil" data-milieu="1">' + (dejaMil ? 'Échanger avec le milieu' : 'Milieu') + '</button><button type="button" class="btn sec petit" data-decote="1">De côté</button>') +
         '<button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else h += '<div class="aide-l"><span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer.</span>' +
+      else h += '<div class="aide-l">' + (legMil || '<span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer.</span>') +
         ((c.planManuel || c.planVariante) ? '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>' : '') + '</div>';
       if (sel && (c.planManuel || c.planVariante)) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>';
     }
@@ -816,7 +840,10 @@
   }
 
   function rendrePlanVue() {
-    var c = courant();
+    var c = courant(), ro = !estAMoi(c);
+    document.body.classList.toggle('plan-ro', ro);
+    $('#piedRo').hidden = !ro; $('#piedPlan').hidden = ro;
+    if (ro) { assurerPlan(c); $('#planZone').innerHTML = '<p class="verrou">🔒 Plan de ' + esc(prenomDe(c)) + ' : lecture seule.</p>' + htmlPlan(c, { lecture: true }); ajusterPlan(); return; }
     // le plan doit toujours être bon : on le refait s'il est faux ou incomplet (sauf modification à la main)
     var v = vplan(c);
     var besoin = c.lignes.length && (v.nonPlaces.length || (!c.planCalcule && !c.planManuel && (P.noteVerif(v) >= 1000 || (!c.planVariante && P.deseq(v) > reg().ecartMax + 0.005))));
@@ -934,8 +961,10 @@
     else { c.plan = apercu.avant.plan; c.ordre = apercu.avant.ordre; c.planManuel = apercu.avant.man; }
     apercu = null;
   }
+  $('#btnRecupPlan').addEventListener('click', function () { var c = courant(); if (!estAMoi(c)) copierCamion(c, true); });
   $('#planZone').addEventListener('click', function (e) {
     var c = courant();
+    if (!estAMoi(c)) return; // camion d'un collègue : lecture seule
     if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
     var pq = e.target.closest('[data-pourquoi]');
     if (pq) { var sd = pq.closest('.statut-detail'); sd.classList.toggle('ouvert'); pq.textContent = sd.classList.contains('ouvert') ? 'Masquer' : 'Pourquoi ?'; ajusterPlan(); return; }
@@ -1265,7 +1294,7 @@
   function ligneCam(c, enCours) {
     var qui = c.client || 'Sans client';
     return glisse(c.id, '<button class="cam" type="button" data-id="' + esc(c.id) + '"><span class="h">' + heure(enCours ? c.maj_le : c.termine_le) + '</span>' +
-      '<span class="qui"><b>' + esc(qui) + '</b><small>' + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small></span>' +
+      '<span class="qui"><b>' + esc(qui) + '</b><small>' + (enEquipe() ? '<i class="qui-p' + (estAMoi(c) ? ' moi' : '') + '">' + esc(prenomDe(c)) + '</i>' : '') + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small></span>' +
       '<span class="m3 ' + (enCours ? 'cours' : c.etat) + '" title="' + (enCours ? 'En cours' : LIB[c.etat]) + '">' + f2(c.total_m3) + '</span></button>');
   }
   // ---------- Glisser une ligne : à gauche supprimer, à droite ouvrir ----------
@@ -1310,18 +1339,27 @@
   }
   function supprimerCamion(id, rendre) {
     var c = db.camions[id]; if (!c) return;
+    if (!peutSupprimer(c)) { rendre(); toast('Camion de ' + prenomDe(c) + ' : seul ' + prenomDe(c) + ' peut le supprimer.'); return; }
     c.supprime = true; toucher(c); rendre();
     toast('Camion supprimé', function () { c.supprime = false; toucher(c); rendre(); }, 'Annuler');
   }
   function ouvrirCamion(id) {
     var c = db.camions[id]; if (!c) return;
-    if (c.statut === 'en_cours') { db.courant = id; sauver(true); viderForm(); aller('camion'); }
+    if (c.statut === 'en_cours' && estAMoi(c)) { db.courant = id; sauver(true); viderForm(); aller('camion'); }
     else detail(c);
   }
+  var filtreQui = 'tous';
+  function personnes() { // prénoms de l'équipe (membres actifs + auteurs des camions)
+    var l = [], vu = {}, moi = Sync.moi();
+    Sync.membres().forEach(function (m) { if (m.actif && m.user_id !== moi.uid && !vu[m.user_id]) { vu[m.user_id] = 1; l.push({ uid: m.user_id, prenom: m.prenom }); } });
+    Object.keys(db.camions).forEach(function (k) { var c = db.camions[k]; if (c.auteur && c.auteur !== moi.uid && !vu[c.auteur] && !c.supprime) { vu[c.auteur] = 1; l.push({ uid: c.auteur, prenom: c.auteur_prenom || '?' }); } });
+    return l;
+  }
   function rendreHisto() {
-    var q = ($('#recherche').value || '').trim().toUpperCase();
+    var q = ($('#recherche').value || '').trim().toUpperCase(), moi = Sync.moi().uid;
     var tous = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) {
       if (c.supprime) return false;
+      if (enEquipe() && filtreQui !== 'tous' && (filtreQui === 'moi' ? !estAMoi(c) : c.auteur !== filtreQui)) return false;
       if (q && (c.client || '').toUpperCase().indexOf(q) < 0 && (c.reference || '').toUpperCase().indexOf(q) < 0) return false;
       return true;
     });
@@ -1330,6 +1368,9 @@
     var h = '';
     if (cours.length) h += '<div class="jour"><div class="jour-tete"><h2>Non terminés</h2><span>' + cours.length + '</span></div><div class="carte">' + cours.map(function (c) { return ligneCam(c, true); }).join('') + '</div></div>';
     if (cours.length || fini.length) h = '<p class="astuce">Glisse à gauche pour supprimer, à droite pour ouvrir.</p>' + h;
+    if (enEquipe()) h = '<div class="seg seg-qui" id="segQui">' + [{ uid: 'tous', prenom: 'Tous' }, { uid: 'moi', prenom: 'Moi' }].concat(personnes()).map(function (x) {
+      return '<button type="button" data-qui="' + esc(x.uid) + '" class="' + (filtreQui === x.uid ? 'actif' : '') + '">' + esc(x.prenom) + '</button>';
+    }).join('') + '</div>' + h;
     var jours = {}, ordre = [];
     fini.forEach(function (c) { var k = jourCle(c.termine_le); if (!jours[k]) { jours[k] = []; ordre.push(k); } jours[k].push(c); });
     ordre.forEach(function (k) {
@@ -1357,46 +1398,67 @@
     var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     if (per === 'semaine') x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
     else if (per === 'mois') x.setDate(1);
-    else { x.setMonth(0); x.setDate(1); }
+    else if (per === 'annee') { x.setMonth(0); x.setDate(1); }
+    return x;
+  }
+  function decaler(d, per, n) {
+    var x = new Date(d);
+    if (per === 'jour') x.setDate(x.getDate() + n);
+    else if (per === 'semaine') x.setDate(x.getDate() + 7 * n);
+    else if (per === 'mois') x.setMonth(x.getMonth() + n);
+    else x.setFullYear(x.getFullYear() + n);
     return x;
   }
   function rendreStats() {
-    var maint = new Date(), deb = debutPeriode(periodeStats, maint), fin, prevDeb = new Date(deb);
-    if (periodeStats === 'semaine') { fin = new Date(deb); fin.setDate(fin.getDate() + 7); prevDeb.setDate(prevDeb.getDate() - 7); }
-    else if (periodeStats === 'mois') { fin = new Date(deb); fin.setMonth(fin.getMonth() + 1); prevDeb.setMonth(prevDeb.getMonth() - 1); }
-    else { fin = new Date(deb); fin.setFullYear(fin.getFullYear() + 1); prevDeb.setFullYear(prevDeb.getFullYear() - 1); }
+    var per = periodeStats, maint = new Date(), deb = debutPeriode(per, maint), fin = decaler(deb, per, 1), prevDeb = decaler(deb, per, -1);
     var finis = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime && c.statut === 'termine' && c.termine_le; });
     var dans = finis.filter(function (c) { var t = new Date(c.termine_le); return t >= deb && t < fin; });
     var avant = finis.filter(function (c) { var t = new Date(c.termine_le); return t >= prevDeb && t < deb; });
-    var tot = dans.reduce(function (a, c) { return a + c.total_m3; }, 0), totAv = avant.reduce(function (a, c) { return a + c.total_m3; }, 0);
-    // bâtons : jours de la semaine, semaines du mois, mois de l'année
+    function som(l) { return l.reduce(function (a, c) { return a + c.total_m3; }, 0); }
+    var tot = som(dans), totAv = som(avant), evol = totAv > 0 ? Math.round((tot - totAv) / totAv * 100) : null, dn = dans.length - avant.length;
+    var okP = dans.length ? Math.round(dans.filter(function (c) { return c.etat === 'ok'; }).length / dans.length * 100) : 0;
+    // bâtons
     var cases = [], idx;
-    if (periodeStats === 'semaine') { ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].forEach(function (n) { cases.push({ n: n, v: 0 }); }); idx = function (t) { return (t.getDay() + 6) % 7; }; }
-    else if (periodeStats === 'mois') { for (var w = 0; w < 5; w++) cases.push({ n: 'S' + (w + 1), v: 0 }); idx = function (t) { return Math.min(4, Math.floor((t.getDate() - 1) / 7)); }; }
+    if (per === 'jour') { for (var hh = 6; hh < 20; hh += 2) cases.push({ n: hh + 'h', v: 0 }); idx = function (t) { return Math.max(0, Math.min(cases.length - 1, Math.floor((t.getHours() - 6) / 2))); }; }
+    else if (per === 'semaine') { ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach(function (n) { cases.push({ n: n, v: 0 }); }); idx = function (t) { return (t.getDay() + 6) % 7; }; }
+    else if (per === 'mois') { for (var w = 0; w < 5; w++) cases.push({ n: 'S' + (w + 1), v: 0 }); idx = function (t) { return Math.min(4, Math.floor((t.getDate() - 1) / 7)); }; }
     else { 'JFMAMJJASOND'.split('').forEach(function (n) { cases.push({ n: n, v: 0 }); }); idx = function (t) { return t.getMonth(); }; }
     dans.forEach(function (c) { cases[idx(new Date(c.termine_le))].v += c.total_m3; });
     var actuel = idx(maint), max = Math.max.apply(null, cases.map(function (x) { return x.v; }).concat([1]));
-    var parClient = {};
-    dans.forEach(function (c) { var k = c.client || 'Sans client'; (parClient[k] = parClient[k] || { m: 0, n: 0 }); parClient[k].m += c.total_m3; parClient[k].n++; });
-    var clients = Object.keys(parClient).sort(function (a, b) { return parClient[b].m - parClient[a].m; });
-    var maxC = clients.length ? parClient[clients[0]].m : 1;
-    var nomPer = { semaine: 'Cette semaine', mois: 'Ce mois-ci', annee: 'Cette année' }[periodeStats];
-    var evol = totAv > 0 ? Math.round((tot - totAv) / totAv * 100) : null;
-    var h = '<div class="seg" id="segPer">' + [['semaine', 'Semaine'], ['mois', 'Mois'], ['annee', 'Année']].map(function (p) { return '<button type="button" data-per="' + p[0] + '" class="' + (periodeStats === p[0] ? 'actif' : '') + '">' + p[1] + '</button>'; }).join('') + '</div>' +
-      '<div class="carte st-tot"><small>' + nomPer + '</small><b>' + f2(tot) + ' m³</b><p>' + dans.length + ' camion' + (dans.length > 1 ? 's' : '') +
-      (evol !== null ? ' · <i class="' + (evol >= 0 ? 'plus' : 'moins') + '">' + (evol >= 0 ? '+' : '') + evol + ' %</i> par rapport à la période d\'avant' : '') + '</p>' +
-      '<div class="st-ch' + (cases.length > 7 ? ' serre' : '') + '">' + cases.map(function (x, k) {
+    function groupe(cle) {
+      var g = {};
+      dans.forEach(function (c) { var k = cle(c); (g[k] = g[k] || { m: 0, n: 0 }); g[k].m += c.total_m3; g[k].n++; });
+      return Object.keys(g).map(function (k) { return { k: k, m: g[k].m, n: g[k].n }; }).sort(function (a, b) { return b.m - a.m; });
+    }
+    var gens = enEquipe() ? groupe(function (c) { return prenomDe(c); }) : [];
+    var clients = groupe(function (c) { return c.client || 'Sans client'; }).slice(0, 5);
+    var nomBar = { jour: 'm³ par heure', semaine: 'm³ par jour', mois: 'm³ par semaine', annee: 'm³ par mois' }[per];
+    function lignesBarres(l, cl) {
+      var mx = l.length ? l[0].m : 1;
+      return l.map(function (x, i) { return '<div class="st-r"><b>' + (cl ? (i + 1) + '. ' : '') + esc(x.k) + '<em>' + x.n + ' camion' + (x.n > 1 ? 's' : '') + '</em></b><span>' + f2(x.m) + ' m³</span><small><i style="width:' + Math.round(x.m / mx * 100) + '%"></i></small></div>'; }).join('');
+    }
+    var h = '<div class="seg seg4" id="segPer">' + [['jour', 'Jour'], ['semaine', 'Semaine'], ['mois', 'Mois'], ['annee', 'Année']].map(function (p) { return '<button type="button" data-per="' + p[0] + '" class="' + (per === p[0] ? 'actif' : '') + '">' + p[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="kpi st-kpi">' +
+      '<div><small>Volume</small><b>' + f2(tot) + '</b><em>m³</em>' + (evol !== null ? '<i class="' + (evol >= 0 ? 'plus' : 'moins') + '">' + (evol >= 0 ? '+' : '') + evol + ' %</i>' : '') + '</div>' +
+      '<div><small>Camions</small><b>' + dans.length + '</b>' + (avant.length || dans.length ? '<i class="' + (dn >= 0 ? 'plus' : 'moins') + '">' + (dn >= 0 ? '+' : '') + dn + '</i>' : '') + '</div>' +
+      '<div><small>Moyenne</small><b>' + (dans.length ? f2(tot / dans.length) : '–') + '</b><em>m³</em></div>' +
+      '<div><small>Volume OK</small><b>' + (dans.length ? okP + ' %' : '–') + '</b></div></div>';
+    if (!dans.length) h += '<div class="carte vide">Aucun camion terminé sur cette période.</div>';
+    else {
+      h += '<div class="carte st-tot"><small>' + nomBar + '</small><div class="st-ch' + (cases.length > 7 ? ' serre' : '') + '">' + cases.map(function (x, k) {
         return '<div class="' + (k === actuel ? 'auj' : '') + '"><b>' + (x.v ? Math.round(x.v) : '') + '</b><em style="height:' + Math.max(2, Math.round(x.v / max * 100)) + '%"></em><span>' + x.n + '</span></div>';
-      }).join('') + '</div></div>' +
-      (clients.length ? '<div class="carte st-cl"><h3>Par client</h3>' + clients.map(function (k) {
-        var x = parClient[k];
-        return '<div class="st-r"><b>' + esc(k) + '<em>' + x.n + ' camion' + (x.n > 1 ? 's' : '') + '</em></b><span>' + f2(x.m) + ' m³</span><small><i style="width:' + Math.round(x.m / maxC * 100) + '%"></i></small></div>';
-      }).join('') + '</div>' : '<div class="carte vide">Aucun camion terminé sur cette période.</div>');
+      }).join('') + '</div></div>';
+      if (gens.length) h += '<div class="carte st-cl"><h3>Par personne</h3>' + lignesBarres(gens, false) + '</div>';
+      h += '<div class="carte st-cl"><h3>Top clients</h3>' + lignesBarres(clients, true) + '</div>';
+    }
     $('#stats').innerHTML = h;
   }
   activerGlisser($('#histo'), ouvrirCamion, function (id) { supprimerCamion(id, rendreHisto); });
   activerGlisser($('#accEnCours'), ouvrirCamion, function (id) { supprimerCamion(id, rendreAccueil); });
-  $('#histo').addEventListener('click', function (e) { var b = e.target.closest('.cam'); if (b) detail(db.camions[b.dataset.id]); });
+  $('#histo').addEventListener('click', function (e) {
+    var f = e.target.closest('[data-qui]'); if (f) { filtreQui = f.dataset.qui; rendreHisto(); return; }
+    var b = e.target.closest('.cam'); if (b) detail(db.camions[b.dataset.id]);
+  });
 
   // Les 20 derniers camions terminés, par jour
   function derniersCamions() {
@@ -1418,6 +1480,13 @@
     };
   }
 
+  // Copie à mon nom (Dupliquer un de mes camions, ou Récupérer celui d'un collègue)
+  function copierCamion(c, recup) {
+    var copie = JSON.parse(JSON.stringify({ client: c.client, reference: c.reference, lignes: c.lignes, plan: c.plan, ordre: c.ordre || null, planManuel: !!c.planManuel, lgMax: c.lgMax || null, volMode: c.volMode || 'plage', volExact: c.volExact || null }));
+    var n = nouveauCamion(copie); toucher(n); edition = null;
+    viderForm(); setTimeout(function () { aller('camion'); }, 60);
+    toast(recup ? 'Copie à ton nom : elle est ouverte.' : 'Camion dupliqué : il est ouvert.');
+  }
   function detail(c) {
     if (!c) return;
     assurerPlan(c);
@@ -1435,16 +1504,19 @@
         '</span><em>' + f3(g.v) + '</em></div>';
     }).join('');
     var date = enCours ? 'En cours · modifié à ' + heure(c.maj_le) : new Date(c.termine_le).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + heure(c.termine_le);
-    var sel = selection; selection = null;
+    var sel = selection, aMoi = estAMoi(c); selection = null;
     var f = ouvrirFeuille(
       '<h2>' + esc(c.client || 'Sans client') + (c.reference ? ' · Réf. ' + esc(c.reference) : '') + '</h2>' +
       '<p class="petit-txt" style="margin-top:-6px">' + date + ' · <b>' + f2(c.total_m3) + ' m³</b> ' + (enCours ? '' : '<span class="pastille ' + c.etat + '">' + LIB[c.etat] + '</span>') + '</p>' +
+      (enEquipe() ? '<p class="charge-par">Chargé par <b>' + esc(prenomDe(c)) + '</b></p>' : '') +
       '<div class="grille-btns">' +
-      (enCours ? '<button class="btn" data-a="reprendre" type="button">Reprendre</button>' : '<button class="btn" data-a="dupliquer" type="button">Dupliquer</button>') +
-      '<button class="btn sec" data-a="image" type="button">Partager</button></div>' +
+      (!aMoi ? '<button class="btn sec" data-a="image" type="button">Partager</button><button class="btn" data-a="recuperer" type="button">Récupérer</button>'
+        : (enCours ? '<button class="btn" data-a="reprendre" type="button">Reprendre</button>' : '<button class="btn" data-a="dupliquer" type="button">Dupliquer</button>') +
+          '<button class="btn sec" data-a="image" type="button">Partager</button>') + '</div>' +
+      (!aMoi ? '<p class="verrou">🔒 Camion de ' + esc(prenomDe(c)) + ' : tu peux le voir et le partager, pas le modifier. « Récupérer » en fait une copie à ton nom.</p>' : '') +
       (c.lignes.length ? '<div class="plan-histo">' + htmlPlan(c, { lecture: true }) + '<button class="btn-lien plan-grand" data-a="plan" type="button">Ouvrir le plan en grand ›</button></div>' : '') +
       (c.lignes.length ? '<details class="pli carte"><summary><span>Colis</span><small>' + nbColis + ' colis · ' + gl.length + ' section' + (gl.length > 1 ? 's' : '') + '</small></summary>' + lignes + '</details>' : '<div class="carte"><div class="vide">Aucun colis</div></div>') +
-      '<div class="grille-btns"><button class="btn danger" data-a="suppr" type="button">Supprimer</button><button class="btn sec" data-a="fermer" type="button">Fermer</button></div>');
+      '<div class="grille-btns' + (peutSupprimer(c) ? '' : ' un') + '">' + (peutSupprimer(c) ? '<button class="btn danger" data-a="suppr" type="button">Supprimer</button>' : '') + '<button class="btn sec" data-a="fermer" type="button">Fermer</button></div>');
     selection = sel;
     $('#feuilleFond').onclick = null;
     $$('[data-a]', f).forEach(function (b) {
@@ -1453,23 +1525,132 @@
         if (a === 'fermer') fermerFeuille();
         if (a === 'plan') {
           selection = null;
-          var ouvrirPlan = function () { if (enCours) db.courant = c.id; else edition = c.id; aller('plan'); };
+          var ouvrirPlan = function () { if (enCours && aMoi) db.courant = c.id; else edition = c.id; aller('plan'); };
           if (history.state && history.state.f) { apresRetour = ouvrirPlan; fermerFeuille(); } else { fermerFeuille(); ouvrirPlan(); }
-          if (!enCours) toast('Plan de ' + (c.client || 'ce camion') + ' : tu peux le modifier');
+          if (!aMoi) toast('Plan de ' + prenomDe(c) + ' : lecture seule');
+          else if (!enCours) toast('Plan de ' + (c.client || 'ce camion') + ' : tu peux le modifier');
         }
         if (a === 'image') { fermerFeuille(); setTimeout(function () { choixPartage(c); }, 260); }
         if (a === 'reprendre') { db.courant = c.id; sauver(true); fermerFeuille(); viderForm(); setTimeout(function () { aller('camion'); }, 60); }
-        if (a === 'dupliquer') {
-          var copie = JSON.parse(JSON.stringify({ client: c.client, reference: c.reference, lignes: c.lignes, plan: c.plan, lgMax: c.lgMax || null, volMode: c.volMode || 'plage', volExact: c.volExact || null }));
-          var n = nouveauCamion(copie); toucher(n);
-          fermerFeuille(); viderForm(); setTimeout(function () { aller('camion'); }, 60); toast('Camion dupliqué : il est ouvert.');
-        }
+        if (a === 'dupliquer' || a === 'recuperer') { fermerFeuille(); copierCamion(c, a === 'recuperer'); }
         if (a === 'suppr') {
+          if (!peutSupprimer(c)) return;
           c.supprime = true; toucher(c); fermerFeuille(); rendreHisto();
           toast('Camion supprimé', function () { c.supprime = false; toucher(c); rendreHisto(); });
         }
       };
     });
+  }
+
+  // ---------- Équipe ----------
+  function initiale(p) { return esc(String(p || '?').trim().charAt(0).toUpperCase() || '?'); }
+  function formRejoindre(dansFeuille) {
+    return '<div class="carte rejoindre"><h2>Rejoindre l\'équipe</h2><p class="petit-txt">Demande le code à ton responsable. Pas de compte, pas de mot de passe.</p>' +
+      '<label class="champ"><span>Code de l\'équipe</span><input id="rjCode" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ex. SDC2026"></label>' +
+      '<label class="champ"><span>Ton prénom</span><input id="rjPrenom" autocomplete="given-name" value="' + esc(Sync.moi().prenom || '') + '" placeholder="ex. Sylvano"></label>' +
+      '<button class="btn" id="rjOk" type="button">Rejoindre</button>' +
+      '<p class="petit-txt rj-info">Tes camions déjà dans ce téléphone sont envoyés à l\'équipe : rien n\'est effacé.<br>Nouveau téléphone ? Retape le même prénom : tu retrouves ton compte.</p>' +
+      '<button class="btn sec" id="rjSauv" type="button">Sauvegarder mes données d\'abord</button>' +
+      (dansFeuille ? '<button class="lien rj-plus-tard" id="rjTard" type="button">Plus tard</button>' : '') + '</div>';
+  }
+  function lierRejoindre(apres) {
+    $('#rjSauv').onclick = sauvegarderFichier;
+    if ($('#rjTard')) $('#rjTard').onclick = function () { db.equipePlusTard = true; sauver(true); fermerFeuille(); };
+    $('#rjOk').onclick = function () {
+      var code = $('#rjCode').value.trim(), pr = $('#rjPrenom').value.trim(), b = this;
+      if (!code) { toast('Écris le code de l\'équipe.'); return; }
+      if (!pr) { toast('Écris ton prénom.'); return; }
+      b.disabled = true; b.textContent = 'Connexion…';
+      Sync.rejoindre(code, pr).then(function (j) {
+        delete db.equipePlusTard; sauver(true);
+        if (apres) apres();
+        if (Sync.secretAVoir()) setTimeout(montrerSecret, 300);
+        else toast(j.admin && j.recup ? 'Bon retour, ' + pr + ' ✔' : 'Bienvenue dans l\'équipe, ' + pr + ' ✔');
+        rafraichirVue();
+      }).catch(function (e) { b.disabled = false; b.textContent = 'Rejoindre'; toast(e.message); });
+    };
+  }
+  function proposerRejoindre() {
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=39" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=39" alt=""></span></div>' + formRejoindre(true));
+    $('#feuilleFond').onclick = null;
+    lierRejoindre(function () { fermerFeuille(); });
+  }
+  // Code secret : montré une seule fois, sur le seul téléphone qui gère l'équipe
+  function montrerSecret(code) {
+    var s = code || Sync.secretAVoir(); if (!s) return;
+    var f = ouvrirFeuille('<h2>Ton code secret</h2><p class="petit-txt">Garde-le pour toi. Il sert à retrouver tes accès si tu changes de téléphone : tape-le à la place du code d\'équipe.</p>' +
+      '<div class="code-secret">' + esc(s) + '</div><p class="verrou">🔒 Personne d\'autre ne voit cet écran.</p><button class="btn" id="secOk" type="button">J\'ai noté le code</button>');
+    $('#feuilleFond').onclick = null;
+    $('#secOk').onclick = function () { Sync.oublierSecret(); fermerFeuille(); };
+  }
+  function rafraichirVue() {
+    if (vueActive === 'equipe') rendreEquipe();
+    else if (vueActive === 'profil') rendreProfil();
+    else if (vueActive === 'reglages') rendreReglages();
+    else if (vueActive === 'historique') { if (ongletHisto === 'stats') rendreStats(); else rendreHisto(); }
+    else if (vueActive === 'accueil') rendreAccueil();
+  }
+  function camionsDe(uidP) {
+    return Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) {
+      return !c.supprime && (uidP === Sync.moi().uid ? estAMoi(c) : c.auteur === uidP);
+    });
+  }
+  function rendreEquipe() {
+    var z = $('#equipeZone');
+    if (!Sync.actif()) { z.innerHTML = '<div class="carte vide">L\'équipe n\'est pas encore branchée.<br><small>Tout fonctionne sur ce téléphone en attendant.</small></div>'; return; }
+    if (!enEquipe()) {
+      z.innerHTML = (Sync.etat().erreur ? '<p class="verrou">' + esc(Sync.etat().erreur) + '</p>' : '') + formRejoindre(false);
+      lierRejoindre(); return;
+    }
+    var moi = Sync.moi(), auj = jourCle(new Date().toISOString());
+    var gens = [{ uid: moi.uid, prenom: moi.prenom, moi: true }].concat(personnes());
+    var tous = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime; });
+    var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj; });
+    var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; });
+    z.innerHTML = '<div class="carte eq-liste">' + gens.map(function (g) {
+      var n = camionsDe(g.uid).filter(function (c) { return c.statut === 'termine'; }).length;
+      return '<button type="button" class="eq-p" data-p="' + esc(g.uid) + '"><span class="av' + (g.moi ? '' : ' b') + '">' + initiale(g.prenom) + '</span><span class="eq-n"><b>' + esc(g.prenom) + '</b>' + (g.moi ? '<small>toi</small>' : '') + '</span><span class="eq-c">' + n + ' camion' + (n > 1 ? 's' : '') + '</span><i>›</i></button>';
+    }).join('') + '</div><p class="astuce">Touche un prénom pour voir son profil.</p>' +
+      '<div class="carte eq-jour"><h2>Aujourd\'hui · équipe</h2><div class="eq-k"><div><small>Camions</small><b>' + jour.length + '</b></div><div><small>Volume</small><b>' + f2(jour.reduce(function (a, c) { return a + c.total_m3; }, 0)) + '<em> m³</em></b></div><div><small>En cours</small><b>' + cours.length + '</b></div></div></div>' +
+      '<p class="petit-txt eq-sync">' + etatSyncTxt() + '</p>';
+    z.onclick = function (e) { var b = e.target.closest('[data-p]'); if (b) { profilUid = b.dataset.p; aller('profil'); } };
+  }
+  var profilUid = null;
+  function rendreProfil() {
+    var moi = Sync.moi(), estMoi = profilUid === moi.uid;
+    var p = estMoi ? { prenom: moi.prenom } : personnes().filter(function (x) { return x.uid === profilUid; })[0] || { prenom: '?' };
+    $('#profilNom').textContent = p.prenom;
+    var liste = camionsDe(profilUid), maint = new Date(), debM = new Date(maint.getFullYear(), maint.getMonth(), 1);
+    var fin = liste.filter(function (c) { return c.statut === 'termine'; }).sort(function (a, b) { return b.termine_le < a.termine_le ? -1 : 1; });
+    var mois = fin.filter(function (c) { return new Date(c.termine_le) >= debM; });
+    var cours = liste.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; });
+    var h = '<div class="kpi"><div><small>Ce mois</small><b>' + mois.length + '</b><em>camions</em></div><div><small>Volume ce mois</small><b>' + f2(mois.reduce(function (a, c) { return a + c.total_m3; }, 0)) + '</b><em>m³</em></div></div>';
+    if (cours.length) h += '<div class="jour"><div class="jour-tete"><h2>En cours</h2><span>' + cours.length + '</span></div><div class="carte">' + cours.map(function (c) { return ligneCam(c, true); }).join('') + '</div></div>';
+    var jours = {}, ordre = [];
+    fin.slice(0, 40).forEach(function (c) { var k = jourCle(c.termine_le); if (!jours[k]) { jours[k] = []; ordre.push(k); } jours[k].push(c); });
+    ordre.forEach(function (k) {
+      var tot = jours[k].reduce(function (a, c) { return a + c.total_m3; }, 0);
+      h += '<div class="jour"><div class="jour-tete"><h2>' + jourNom(k) + '</h2><span>' + jours[k].length + ' · ' + f2(tot) + ' m³</span></div><div class="carte">' + jours[k].map(function (c) { return ligneCam(c, false); }).join('') + '</div></div>';
+    });
+    if (!fin.length && !cours.length) h += '<div class="carte vide">Aucun camion pour l\'instant.</div>';
+    $('#profilZone').innerHTML = h;
+  }
+  $('#profilZone').addEventListener('click', function (e) { var b = e.target.closest('.cam'); if (b && Date.now() - glisseFini > 350) detail(db.camions[b.dataset.id]); });
+  function etatSyncTxt() {
+    var st = Sync.etat(), att = Sync.attente(db);
+    if (!navigator.onLine) return 'Hors ligne · ' + att + ' en attente';
+    if (st.erreur) return '⚠ ' + esc(st.erreur);
+    if (att) return att + ' en attente d\'envoi…';
+    return '<span class="dot-ok"></span>À jour' + (st.derniere ? ' · ' + heure(st.derniere.toISOString()) : '');
+  }
+  function sauvegarderFichier() {
+    var nom = 'camions-sdc-' + jourCle(maintenant()) + '.json';
+    var blob = new Blob([JSON.stringify({ app: 'camions-sdc', version: 2, exporte_le: maintenant(), camions: db.camions, reglages: db.reglages, clients: db.clients }, null, 1)], { type: 'application/json' });
+    var fi = null; try { fi = new File([blob], nom, { type: 'application/json' }); } catch (e) {}
+    if (fi && navigator.canShare && navigator.canShare({ files: [fi] })) { navigator.share({ files: [fi], title: nom }).catch(function () {}); return; }
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom;
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast('Sauvegarde enregistrée : ' + nom);
   }
 
   // ---------- Apparence ----------
@@ -1499,14 +1680,7 @@
   // ---------- Réglages ----------
   function champNum(id, label, val) { return '<label class="champ"><span>' + label + '</span><input id="' + id + '" inputmode="decimal" value="' + fm(val) + '"></label>'; }
   function rendreReglages() {
-    var r = reg(), cfg = Sync.cfg(), st = Sync.etat(), att = Sync.attente(db);
-    var etatTxt, etatCl = '';
-    if (!cfg.url) etatTxt = 'Pas de sauvegarde en ligne : les données restent sur cet appareil.';
-    else if (!st.connecte) etatTxt = st.erreur ? 'Non connecté · ' + st.erreur : 'Non connecté';
-    else if (!navigator.onLine) { etatTxt = 'Hors ligne · ' + att + ' en attente de synchro'; etatCl = 'att'; }
-    else if (st.erreur) { etatTxt = 'Erreur : ' + st.erreur; etatCl = 'att'; }
-    else if (att) { etatTxt = att + ' camion' + (att > 1 ? 's' : '') + ' en attente de synchro'; etatCl = 'att'; }
-    else { etatTxt = 'Tout est synchronisé ✔' + (st.derniere ? ' (' + heure(st.derniere.toISOString()) + ')' : ''); etatCl = 'ok'; }
+    var r = reg(), verrou = enEquipe() && !Sync.moi().admin, adm = enEquipe() && Sync.moi().admin;
     var coul = Object.keys(PRESETS).map(function (k) {
       var cur = (r.couleurs || {})[k];
       return '<div class="couleur" data-k="' + k + '"><span class="nom">' + NOMS_COUL[k] + '</span><div class="pastilles">' +
@@ -1515,44 +1689,57 @@
         '<input type="color" value="' + (cur || PRESETS[k][0]) + '" aria-label="Couleur libre"></div></div>';
     }).join('');
     $('#reglagesZone').innerHTML =
-      '<div class="carte reg"><h2>Limites du camion</h2>' +
+      '<div class="carte reg' + (verrou ? ' verrouille' : '') + '"><h2>Limites du camion</h2>' + (verrou ? '<p class="petit-txt">Réglages communs à toute l\'équipe.</p>' : '') +
       '<div class="g2">' + champNum('rMin', 'Volume mini (m³)', r.m3Min) + champNum('rMax', 'Volume maxi (m³)', r.m3Max) + '</div>' +
       '<div class="g3">' + champNum('rE1Min', 'Étage 1 mini (m)', r.e1Min) + champNum('rE1Max', 'Étage 1 maxi (m)', r.e1Max) + champNum('rEcart', 'Écart G/D max (m³)', r.ecartMax) + '</div>' +
       '</div>' +
 
-      '<button class="carte reg-ouvrir" id="ouvrirSections" type="button"><span><b>Sections et quantités</b><small>' + r.sections.length + ' sections · quantité remplie toute seule</small></span><i>›</i></button>' +
+      '<button class="carte reg-ouvrir" id="ouvrirSections" type="button"><span><b>Sections et quantités</b><small>' + r.sections.length + ' sections · ' + (verrou ? 'communes à l\'équipe' : 'quantité remplie toute seule') + '</small></span><i>›</i></button>' +
 
       '<div class="carte reg"><h2>Apparence</h2><div class="seg" id="segTheme">' +
       [['auto', 'Auto'], ['clair', 'Clair'], ['sombre', 'Sombre']].map(function (t) { return '<button type="button" data-t="' + t[0] + '" class="' + (r.theme === t[0] ? 'actif' : '') + '">' + t[1] + '</button>'; }).join('') +
       '</div><div id="couleurs">' + coul + '</div><button class="btn sec" id="resetCoul" type="button">Remettre les couleurs d\'origine</button></div>' +
 
-      '<div class="carte reg"><h2>Sauvegarde en ligne</h2><div class="etat-sync ' + etatCl + '">' + esc(etatTxt) + '</div>' +
-      (st.connecte
-        ? '<p class="petit-txt">Connecté : ' + esc(st.email) + '</p><div class="g2"><button class="btn" id="sbSync" type="button">Synchroniser</button><button class="btn sec" id="sbOut" type="button">Se déconnecter</button></div>'
-        : '<label class="champ"><span>Adresse du projet Supabase</span><input id="sbUrl" placeholder="https://xxxx.supabase.co" value="' + esc(cfg.url || '') + '" autocapitalize="off" spellcheck="false"></label>' +
-          '<label class="champ"><span>Clé publique (anon)</span><input id="sbKey" value="' + esc(cfg.key || '') + '" autocapitalize="off" spellcheck="false"></label>' +
-          '<div class="g2"><label class="champ"><span>E-mail</span><input id="sbMail" type="email" autocapitalize="off" autocomplete="username"></label>' +
-          '<label class="champ"><span>Mot de passe</span><input id="sbMdp" type="password" autocomplete="current-password"></label></div>' +
-          '<div class="g2"><button class="btn" id="sbIn" type="button">Se connecter</button><button class="btn sec" id="sbCreer" type="button">Créer le compte</button></div>' +
-          '<p class="petit-txt">À faire une fois : coller le fichier supabase.sql dans Supabase › SQL Editor.</p>') +
-      '</div>' +
-
-      '<div class="carte reg"><h2>Données</h2><div class="g2"><button class="btn sec" id="exp" type="button">Exporter</button><button class="btn sec" id="imp" type="button">Importer</button></div>' +
+      blocEquipe() + (adm ? blocAdmin() : '') +
+      '<div class="carte reg"><h2>Mes données</h2><div class="g2"><button class="btn sec" id="exp" type="button">Sauvegarder mes données</button><button class="btn sec" id="imp" type="button">Restaurer</button></div>' +
       '<input type="file" id="impFichier" accept="application/json,.json" hidden>' +
       '<p class="petit-txt">' + Object.keys(db.camions).filter(function (k) { return !db.camions[k].supprime && db.camions[k].statut === 'termine'; }).length + ' camions enregistrés · version ' + VERSION_APP + '</p></div>';
+    if (verrou) $$('#reglagesZone .verrouille input').forEach(function (x) { x.disabled = true; });
     lierReglages();
+  }
+
+  function blocEquipe() {
+    if (!Sync.actif()) return '';
+    if (!enEquipe()) return '<div class="carte reg"><h2>Équipe</h2><p class="petit-txt">Ce téléphone n\'est pas encore dans l\'équipe.</p><button class="btn" id="regRejoindre" type="button">Rejoindre l\'équipe</button></div>';
+    var m = Sync.moi();
+    return '<div class="carte reg"><h2>Équipe</h2><div class="reg-l"><span>Ton prénom</span><button class="lien" id="regPrenom" type="button">' + esc(m.prenom) + ' ›</button></div>' +
+      '<div class="reg-l"><span>Synchronisation</span><span class="petit-txt">' + etatSyncTxt() + '</span></div>' +
+      '<button class="btn sec" id="regSync" type="button">Synchroniser maintenant</button></div>';
+  }
+  // Partie visible seulement sur le téléphone qui gère l'équipe
+  function blocAdmin() {
+    var moi = Sync.moi().uid, ms = Sync.membres();
+    return '<div class="carte reg reg-admin"><h2>Gestion de l\'équipe</h2>' +
+      '<div class="reg-l"><span>Code de l\'équipe</span><button class="lien" id="admCode" type="button">Changer ›</button></div>' +
+      '<div class="reg-l"><span>Mon code secret</span><button class="lien" id="admSecret" type="button">Nouveau code ›</button></div>' +
+      '<p class="reg-st">Téléphones (' + ms.filter(function (x) { return x.actif; }).length + ')</p>' +
+      ms.map(function (x) {
+        return '<div class="reg-l' + (x.actif ? '' : ' retire') + '"><span>' + esc(x.prenom) + (x.user_id === moi ? ' <small>· ce téléphone</small>' : '') + (x.actif ? '' : ' <small>· retiré</small>') + '</span>' +
+          (x.user_id === moi ? '' : '<button class="lien ' + (x.actif ? 'rouge' : '') + '" data-retirer="' + esc(x.user_id) + '" data-actif="' + (x.actif ? 1 : 0) + '" type="button">' + (x.actif ? 'Retirer' : 'Remettre') + '</button>') + '</div>';
+      }).join('') + '<p class="petit-txt">Les sections et limites que tu modifies ici s\'appliquent à toute l\'équipe.</p></div>';
   }
 
   // ---------- Sections et quantités ----------
   function txtLg(lg) { return (lg || []).map(fm).join(' · '); }
+  function sectionsVerrou() { return enEquipe() && !Sync.moi().admin; }
   function ouvrirSections() {
     var f = ouvrirFeuille(
       '<div class="sec-tete"><h2>Sections et quantités</h2><button class="lien" data-s="fermer" type="button">Fermer</button></div>' +
       '<div id="secEdit" hidden></div>' +
       '<input id="secCherche" class="sec-cherche" type="search" inputmode="decimal" placeholder="Chercher (ex. 75x225)" autocomplete="off">' +
       '<div id="secListe"></div>' +
-      '<button class="btn" data-s="ajout" type="button">+ Ajouter une section</button>' +
-      '<button class="lien sec-reset" data-s="reset" type="button">Remettre la liste d\'origine</button>');
+      (sectionsVerrou() ? '<p class="verrou">Liste commune à toute l\'équipe.</p>' : '<button class="btn" data-s="ajout" type="button">+ Ajouter une section</button>' +
+      '<button class="lien sec-reset" data-s="reset" type="button">Remettre la liste d\'origine</button>'));
     $('#feuilleFond').onclick = null;
     $('#secCherche').addEventListener('input', rendreSections);
     f.onclick = function (e) {
@@ -1560,7 +1747,7 @@
       var a = b.dataset.s;
       if (a === 'fermer') fermerFeuille();
       if (a === 'ajout') editerSection(-1);
-      if (a === 'edit') editerSection(+b.dataset.i);
+      if (a === 'edit') { if (sectionsVerrou()) { toast('Liste commune à l\'équipe : non modifiable ici.'); return; } editerSection(+b.dataset.i); }
       if (a === 'reset') {
         if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Touche encore pour confirmer'; return; }
         reg().sections = copieSections(); db.sync.reglagesSales = true; sauver();
@@ -1646,23 +1833,23 @@
     });
     $('#resetCoul').onclick = function () { r.couleurs = {}; db.sync.reglagesSales = true; sauver(); appliquerTheme(); rendreReglages(); toast('Couleurs d\'origine remises'); };
 
-    function connecter(creer) {
-      var url = $('#sbUrl').value.trim(), key = $('#sbKey').value.trim();
-      if (!/^https:\/\/.+/.test(url) || key.length < 20) { toast('Adresse ou clé Supabase incorrecte.'); return; }
-      Sync.setCfg({ url: url, key: key });
-      Sync.connexion($('#sbMail').value.trim(), $('#sbMdp').value, creer)
-        .then(function (m) { toast(m); rendreReglages(); })
-        .catch(function (e) { toast(e.message || 'Connexion impossible'); rendreReglages(); });
-    }
-    if ($('#sbIn')) { $('#sbIn').onclick = function () { connecter(false); }; $('#sbCreer').onclick = function () { connecter(true); }; }
-    if ($('#sbSync')) $('#sbSync').onclick = function () { Sync.lancer().then(function () { rendreReglages(); toast('Synchro terminée'); }); };
-    if ($('#sbOut')) $('#sbOut').onclick = function () { Sync.deconnexion().then(rendreReglages); };
-
-    $('#exp').onclick = function () {
-      var blob = new Blob([JSON.stringify({ app: 'camions-sdc', version: 1, exporte_le: maintenant(), camions: db.camions, reglages: db.reglages, clients: db.clients }, null, 1)], { type: 'application/json' });
-      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'camions-sdc-' + jourCle(maintenant()) + '.json';
-      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    if ($('#regRejoindre')) $('#regRejoindre').onclick = proposerRejoindre;
+    if ($('#regSync')) $('#regSync').onclick = function () { Sync.lancer().then(function () { rendreReglages(); toast(Sync.etat().erreur || 'Synchro terminée ✔'); }); };
+    if ($('#regPrenom')) $('#regPrenom').onclick = function () {
+      demanderTexte('Ton prénom', Sync.moi().prenom).then(function (v) { if (v) Sync.changerPrenom(v).then(function () { toast('Prénom changé'); rendreReglages(); }).catch(function (e) { toast(e.message); }); });
     };
+    if ($('#admCode')) $('#admCode').onclick = function () {
+      demanderTexte('Nouveau code d\'équipe', '', 'Les téléphones déjà dans l\'équipe ne sont pas déconnectés.').then(function (v) { if (v) Sync.changerCode(v).then(function () { toast('Code d\'équipe changé ✔'); }).catch(function (e) { toast(e.message); }); });
+    };
+    if ($('#admSecret')) $('#admSecret').onclick = function () { Sync.nouveauSecret().then(function (code) { montrerSecret(code); }).catch(function (e) { toast(e.message); }); };
+    $$('[data-retirer]').forEach(function (b) {
+      b.onclick = function () {
+        var remettre = b.dataset.actif === '0';
+        if (!remettre && !b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Confirmer'; return; }
+        Sync.retirer(b.dataset.retirer, remettre).then(function () { toast(remettre ? 'Téléphone remis' : 'Téléphone retiré'); rendreReglages(); }).catch(function (e) { toast(e.message); });
+      };
+    });
+    $('#exp').onclick = sauvegarderFichier;
     $('#imp').onclick = function () { $('#impFichier').click(); };
     $('#impFichier').onchange = function () {
       var fi = this.files[0]; if (!fi) return;
@@ -1683,12 +1870,11 @@
   Sync.init({
     lire: function () { return db; },
     ecrire: function (d) { db = d; sauver(true); },
-    changement: function () {
-      if (vueActive === 'reglages') rendreReglages();
-      else if (vueActive === 'historique') rendreHisto();
-      else if (vueActive === 'camion' && !document.activeElement.matches('input')) rendreCamion();
-      else if (vueActive === 'client' && !document.activeElement.matches('input')) rendreClient();
-      else if (vueActive === 'accueil') rendreAccueil();
+    changement: function (st, change) {
+      if (document.activeElement && document.activeElement.matches('input')) return; // on ne dérange pas une saisie
+      if (vueActive === 'plan') { if (change && !apercu && !selection) rendrePlanVue(); return; }
+      if (vueActive === 'camion' || vueActive === 'client' || vueActive === 'calcul') return;
+      rafraichirVue();
     }
   });
   appliquerTheme();
@@ -1699,6 +1885,8 @@
   } catch (e) {}
   history.replaceState({ v: 'accueil', d: 0 }, '');
   montrer('accueil');
+  if (Sync.actif() && !Sync.rejoint() && !db.equipePlusTard) setTimeout(proposerRejoindre, 500);
+  else if (Sync.secretAVoir()) setTimeout(montrerSecret, 500);
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
