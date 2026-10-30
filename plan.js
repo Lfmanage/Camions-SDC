@@ -37,6 +37,37 @@
     return { code: 'ok' };
   }
 
+  // Sections connues : quantité de pièces par paquet, longueurs proposées (lg)
+  var SECTIONS_TXT = '75x225=40 75x200=40 75x175=48 75x150=56 75x100=88 75x110=80 75x250=32 ' +
+    '63x175=54 63x150=63 63x200=45 63x225=45 63x250=36 63x76=117 65x160=30 ' +
+    '50x50=252 50x100=132 50x125=108 50x150=84 50x200=60 50x175=72 50x225=60 ' +
+    '45x95=132 45x120=108 45x145=84 45x195=60 45x220=60 45x300=48 ' +
+    '38x60=221 38x100=143 38x110=130 38x125=117 38x150=91 38x175=78 38x200=65 38x225=65 ' +
+    '32x153=98 30x40=576 38x38=379 40x40=379 27x27=840 27x38=576 27x40=576 25x40=576 25x38=576 ' +
+    '20x38=720 20x40=720 18x38=720 18x40=720 ' +
+    '51x128=108 51x108=132 51x153=84 51x208=60 51x228=60 51x308=36 ' +
+    '27x100=220 27x125=180 27x150=150 27x200=100 27x250=80 27x300=60 27x75=260 25x150=140 27x1000=20 27x1100=20 ' +
+    '18x100=250:2/2.4/3 18x150=189:3/4 18x200=135:3/4/5 18x1000=30:2/2.5/3 18x1100=30:2/2.5/3 ' +
+    '100x100=66 100x150=42 100x200=30 100x225=30 100x300=18 100x250=24 100x240=24 ' +
+    '150x150=28 145x145=28 153x153=28 200x200=15 195x195=15 37x177=102:3/4 46x200=65:3/4';
+  var SECTIONS = SECTIONS_TXT.split(' ').map(function (t) {
+    var m = t.match(/^(\d+)x(\d+)=(\d+)(?::(.+))?$/);
+    var o = { ep: +m[1], la: +m[2], pi: +m[3] };
+    if (m[4]) o.lg = m[4].split('/').map(Number);
+    return o;
+  });
+  function trouverSection(liste, ep, la) { // reconnaît aussi la section à l'envers (225 × 75)
+    ep = num(ep); la = num(la);
+    if (!(ep > 0 && la > 0)) return null;
+    return (liste || SECTIONS).filter(function (s) { return (s.ep === ep && s.la === la) || (s.ep === la && s.la === ep); })[0] || null;
+  }
+  // Longueur prise en compte dans le plan : 18 × 100 en 2,40 m compte 2,50 m (le volume reste en 2,40 m)
+  function lgPlan(l) {
+    var ep = num(l.ep), la = num(l.la), lo = num(l.lo);
+    if (((ep === 18 && la === 100) || (ep === 100 && la === 18)) && Math.abs(lo - 2.4) < 1e-9) return 2.5;
+    return lo;
+  }
+
   // Une ligne avec nb colis -> nb colis séparés (id "ligneId#k")
   function colisDe(lignes) {
     var out = [];
@@ -46,7 +77,7 @@
         out.push({
           id: l.id + '#' + k, ligneId: l.id,
           ep: num(l.ep), la: num(l.la), pi: num(l.pi), lo: num(l.lo),
-          cm: Math.round(num(l.lo) * 100), vol: volLigne(l), aire: num(l.ep) * num(l.la)
+          cm: Math.round(lgPlan(l) * 100), vol: volLigne(l), aire: num(l.ep) * num(l.la)
         });
       }
     });
@@ -64,20 +95,22 @@
   }
 
   // Coût d'un plan (longueurs en cm, volumes en m³, nombre de colis par rangée)
+  var DUR = 1000;
   function cout(len, vol, cnt, pref, cfg) {
     var c = 0, mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     for (var s = 0; s < 2; s++) {
       var b = s * 3, l1 = len[b], l2 = len[b + 1], l3 = len[b + 2];
-      if (l1 < mn) { var d0 = mn - l1; c += 10 * d0 + d0 * d0 / 40 + 100; }
-      if (l1 > mx) { var d1 = l1 - mx; c += 10 * d1 + d1 * d1 / 40 + 100; }
-      if (l2 > l1) { var d2 = l2 - l1; c += 10 * d2 + d2 * d2 / 40 + 100; }
-      if (l3 > l2) { var d3 = l3 - l2; c += 10 * d3 + d3 * d3 / 40 + 100; }
+      // règles de longueur : priorité absolue (une infraction coûte plus que tout le reste)
+      if (l1 < mn) { var d0 = mn - l1; c += DUR + 50 * d0 + d0 * d0 / 10; }
+      if (l1 > mx) { var d1 = l1 - mx; c += DUR + 50 * d1 + d1 * d1 / 10; }
+      if (l2 > l1) { var d2 = l2 - l1; c += DUR + 50 * d2 + d2 * d2 / 10; }
+      if (l3 > l2) { var d3 = l3 - l2; c += DUR + 50 * d3 + d3 * d3 / 10; }
       // étage 2 le plus plein possible (aussi long que l'étage 1)
       var g = Math.max(0, l1 - l2); c += g + g * g / 300;
     }
     // étage 3 : paires gauche/droite puis le centre ; le tout doit tenir sur l'étage 2
     var E = Math.max(len[2], len[5]) + len[6], sup = Math.min(len[1], len[4]);
-    if (E > sup) { var de = E - sup; c += 10 * de + de * de / 40 + 100; }
+    if (E > sup) { var de = E - sup; c += DUR + 50 * de + de * de / 10; }
     if (cnt[6] > 1) c += 300 * (cnt[6] - 1);
     c += 4 * cnt[6] + 0.05 * Math.abs(len[2] - len[5]);
     // équilibre : le centre pèse à moitié de chaque côté
@@ -129,11 +162,13 @@
     return aff;
   }
 
-  function optimiser(colis, cfg, aff, r, iters) {
+  function optimiser(colis, cfg, aff, r, iters, biais) {
     var n = colis.length;
     var a = agreger(colis, aff), len = a.len, vol = a.vol, cnt = a.cnt, pref = a.pref;
-    var cur = cout(len, vol, cnt, pref, cfg), best = cur, bestAff = aff.slice();
-    var T0 = 30, T1 = 0.01;
+    var bs = 0, B = biais || null;
+    if (B) for (var q = 0; q < n; q++) bs += B[q][aff[q]];
+    var cur = cout(len, vol, cnt, pref, cfg) + bs, best = cur, bestAff = aff.slice();
+    var T0 = 150, T1 = 0.01;
     for (var it = 0; it < iters; it++) {
       var T = T0 * Math.pow(T1 / T0, it / iters);
       var i = Math.floor(r() * n), ri = aff[i], ci = colis[i];
@@ -141,8 +176,9 @@
         var to = Math.floor(r() * (NR - 1)); if (to >= ri) to++;
         len[ri] -= ci.cm; vol[ri] -= ci.vol; cnt[ri]--; len[to] += ci.cm; vol[to] += ci.vol; cnt[to]++;
         var p2 = pref + ci.aire * (etageDe(to) - etageDe(ri));
-        var c2 = cout(len, vol, cnt, p2, cfg);
-        if (c2 <= cur || r() < Math.exp((cur - c2) / T)) { aff[i] = to; cur = c2; pref = p2; }
+        var b2 = B ? bs + B[i][to] - B[i][ri] : 0;
+        var c2 = cout(len, vol, cnt, p2, cfg) + b2;
+        if (c2 <= cur || r() < Math.exp((cur - c2) / T)) { aff[i] = to; cur = c2; pref = p2; bs = b2; }
         else { len[to] -= ci.cm; vol[to] -= ci.vol; cnt[to]--; len[ri] += ci.cm; vol[ri] += ci.vol; cnt[ri]++; }
       } else {
         var j = Math.floor(r() * n), rj = aff[j];
@@ -151,8 +187,9 @@
         len[ri] += cj.cm - ci.cm; vol[ri] += cj.vol - ci.vol;
         len[rj] += ci.cm - cj.cm; vol[rj] += ci.vol - cj.vol;
         var p3 = pref + (ci.aire - cj.aire) * (etageDe(rj) - etageDe(ri));
-        var c3 = cout(len, vol, cnt, p3, cfg);
-        if (c3 <= cur || r() < Math.exp((cur - c3) / T)) { aff[i] = rj; aff[j] = ri; cur = c3; pref = p3; }
+        var b3 = B ? bs + B[i][rj] - B[i][ri] + B[j][ri] - B[j][rj] : 0;
+        var c3 = cout(len, vol, cnt, p3, cfg) + b3;
+        if (c3 <= cur || r() < Math.exp((cur - c3) / T)) { aff[i] = rj; aff[j] = ri; cur = c3; pref = p3; bs = b3; }
         else { len[ri] -= cj.cm - ci.cm; vol[ri] -= cj.vol - ci.vol; len[rj] -= ci.cm - cj.cm; vol[rj] -= ci.vol - cj.vol; }
       }
       if (cur < best - 1e-12) { best = cur; bestAff = aff.slice(); }
@@ -161,7 +198,7 @@
   }
 
   // Calcule un plan. Renvoie { plan: {colisId: 'G1'...}, verif }
-  function proposer(lignes, cfg, rapide, graine) {
+  function proposer(lignes, cfg, rapide, graine, varier) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var colis = colisDe(lignes).filter(function (c) { return c.cm > 0 && c.vol > 0; });
     var plan = {};
@@ -169,15 +206,17 @@
     var r = rng(colis.length * 7919 + 17 + (graine || 0) * 104729);
     var iters = Math.min(120000, 4000 + colis.length * 3000);
     if (rapide) iters = Math.round(iters / 3);
-    var essais = [depart(colis, cfg, null)];
+    var biais = null;
+    if (varier) { biais = colis.map(function () { var t = []; for (var q = 0; q < NR; q++) t.push(r() * varier); return t; }); }
+    var essais = [depart(colis, cfg, varier ? r : null)];
     for (var e = 0; e < (rapide ? 1 : 5); e++) essais.push(depart(colis, cfg, r));
     var best = null;
     essais.forEach(function (aff) {
-      var res = optimiser(colis, cfg, aff, r, iters);
+      var res = optimiser(colis, cfg, aff, r, iters, biais);
       if (!best || res.cout < best.cout) best = res;
     });
     // finition : descente stricte depuis le meilleur
-    var fin = optimiser(colis, cfg, best.aff.slice(), r, iters);
+    var fin = optimiser(colis, cfg, best.aff.slice(), r, iters, biais);
     if (fin.cout < best.cout) best = fin;
     colis.forEach(function (c, i) { plan[c.id] = ROWS[best.aff[i]]; });
     return { plan: plan, verif: verifier(lignes, plan, cfg) };
@@ -196,6 +235,30 @@
       if (note < 1000 && res.verif.ecart >= -0.005 && res.verif.ecart <= (Object.assign({}, DEFAUT, cfg || {})).ecartMax + 0.005) break;
     }
     return best;
+  }
+
+  // Signature d'un plan (contenu de chaque rangée) pour savoir si deux plans sont différents
+  function signature(lignes, plan) {
+    var rows = {};
+    colisDe(lignes).forEach(function (c) { var k = plan[c.id] || '-'; (rows[k] = rows[k] || []).push(c.lo + 'x' + c.ep + 'x' + c.la); });
+    return Object.keys(rows).sort().map(function (k) { return k + ':' + rows[k].sort().join(','); }).join('|');
+  }
+  // Un autre bon plan, différent de l'actuel (et des précédents déjà vus)
+  function autre(lignes, cfg, dejaVus, graine) {
+    cfg = Object.assign({}, DEFAUT, cfg || {});
+    var vus = {}; (dejaVus || []).forEach(function (x) { vus[x] = 1; });
+    var ref = meilleur(lignes, cfg), refOk = noteVerif(ref.verif) < 1000;
+    var seuil = Math.max(cfg.ecartMax, deseq(ref.verif)) + 0.005;
+    var g0 = graine || 1, t0 = Date.now();
+    for (var g = g0; g < g0 + 30 && Date.now() - t0 < 2500; g++) {
+      var res = proposer(lignes, cfg, false, 1000 + g, 4 + (g % 4) * 3), v = res.verif;
+      if (refOk && noteVerif(v) >= 1000) continue;
+      if (deseq(v) > seuil) continue;
+      var sig = signature(lignes, res.plan);
+      if (vus[sig]) continue;
+      return { plan: res.plan, verif: v, signature: sig, graine: g + 1 };
+    }
+    return null;
   }
 
   function deseq(v) {
@@ -270,7 +333,7 @@
     };
   }
 
-  var Plan = { ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, verifier: verifier, f2: f2 };
+  var Plan = { SECTIONS: SECTIONS, trouverSection: trouverSection, lgPlan: lgPlan, ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, autre: autre, signature: signature, verifier: verifier, f2: f2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = Plan;
   else root.Plan = Plan;
 })(typeof window !== 'undefined' ? window : this);

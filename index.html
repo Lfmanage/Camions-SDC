@@ -10,13 +10,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=16">
-<link rel="icon" href="favicon-32.png?v=16" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=16">
+<link rel="manifest" href="manifest.webmanifest?v=18">
+<link rel="icon" href="favicon-32.png?v=18" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=18">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
 <main id="app">
@@ -108,6 +108,7 @@
         <label class="champ"><span>Pièces</span><input id="fPi" inputmode="numeric" enterkeyhint="next"></label>
         <label class="champ"><span>Long.</span><input id="fLo" inputmode="decimal" enterkeyhint="done" placeholder="m"></label>
       </div>
+      <div class="lo-rapides" id="loRapides" hidden></div>
       <div class="apercu" id="apercu">Ce colis : <b>—</b></div>
       <div class="ligne-btns">
         <div class="pas"><button type="button" id="nbMoins" aria-label="Moins">−</button><span><b id="nbVal">1</b> colis</span><button type="button" id="nbPlus" aria-label="Plus">+</button></div>
@@ -126,7 +127,7 @@
     <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Plan de chargement</h1><button class="lien" id="btnPartager" type="button">Partager</button></header>
     <div class="etapes"><span class="on"><i></i>Client</span><span class="on"><i></i>Colis</span><span class="on"><i></i>Plan</span></div>
     <div id="planZone"></div>
-    <div class="pied"><button class="btn gros noir" id="btnTerminer" type="button">Terminer le camion</button></div>
+    <div class="pied deux"><button class="btn gros sec" id="btnAutre" type="button">↻ Autre plan</button><button class="btn gros noir" id="btnTerminer" type="button">Terminer ✓</button></div>
   </section>
 
   <!-- ============ HISTORIQUE ============ -->
@@ -155,8 +156,8 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=16"></script>
-<script src="sync.js?v=16"></script>
-<script src="app.js?v=16"></script>
+<script src="plan.js?v=18"></script>
+<script src="sync.js?v=18"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

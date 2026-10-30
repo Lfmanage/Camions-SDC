@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '16';
+  var VERSION_APP = '18';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -17,6 +17,7 @@
   function petitId() { return Math.random().toString(36).slice(2, 8); }
 
   // ---------- Données ----------
+  function copieSections() { return P.SECTIONS.map(function (x) { var o = { ep: x.ep, la: x.la, pi: x.pi }; if (x.lg) o.lg = x.lg.slice(); return o; }); }
   function charger() {
     var d = null;
     try { d = JSON.parse(localStorage.getItem(CLE)); } catch (e) { d = null; }
@@ -24,6 +25,7 @@
     d.camions = d.camions || {};
     d.reglages = Object.assign({}, REG_DEF, d.reglages || {});
     d.reglages.couleurs = d.reglages.couleurs || {};
+    if (!Array.isArray(d.reglages.sections)) d.reglages.sections = copieSections();
     d.clients = d.clients || [];
     d.sync = d.sync || {};
     return d;
@@ -58,7 +60,7 @@
   }
   function majPlan(c) { // le camion se remplit tout seul au fil de la saisie
     c.plan = c.lignes.length ? P.meilleur(c.lignes, cfgC(c)).plan : null;
-    c.planManuel = false;
+    c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
   }
   function toucher(c) {
     c.total_m3 = Math.round(P.totalM3(c.lignes) * 1000) / 1000;
@@ -93,7 +95,7 @@
   }
   function fermerFeuille(parRetour) {
     if ($('#feuille').hidden) return;
-    $('#feuille').hidden = true; $('#feuilleFond').hidden = true; $('#feuille').innerHTML = '';
+    $('#feuille').hidden = true; $('#feuilleFond').hidden = true; $('#feuille').innerHTML = ''; $('#feuille').onclick = null;
     if (parRetour !== true && history.state && history.state.f) history.back();
   }
   // Navigation : chaque écran se met dans l'historique, le bouton ‹ Retour (et celui du téléphone) revient en arrière
@@ -150,7 +152,7 @@
   }); });
 
   // ---------- Écran Camion ----------
-  var nb = 1, editId = null;
+  var nb = 1, editId = null, piAuto = false;
   var champs = ['#fEp', '#fLa', '#fPi', '#fLo'];
 
   function messageEtat(total, c) {
@@ -208,6 +210,27 @@
     el.innerHTML = h;
   }
 
+  // Section connue : quantité remplie toute seule + longueurs proposées
+  function majSection() {
+    var s = P.trouverSection(reg().sections, $('#fEp').value, $('#fLa').value), pi = $('#fPi');
+    if (s) { if (pi.value === '' || piAuto) { pi.value = s.pi; piAuto = true; pi.classList.remove('erreur'); } }
+    else if (piAuto) { pi.value = ''; piAuto = false; }
+    pi.classList.toggle('auto', piAuto);
+    majLongueurs(s);
+  }
+  function majLongueurs(s) {
+    if (s === undefined) s = P.trouverSection(reg().sections, $('#fEp').value, $('#fLa').value);
+    var z = $('#loRapides'), lo = P.num($('#fLo').value);
+    if (!s || !s.lg || !s.lg.length) { z.hidden = true; z.innerHTML = ''; return; }
+    z.hidden = false;
+    z.innerHTML = s.lg.map(function (x) { return '<button type="button" data-lo="' + x + '" class="' + (Math.abs(lo - x) < 1e-9 ? 'actif' : '') + '">' + fm(x) + ' m</button>'; }).join('');
+  }
+  $('#loRapides').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-lo]'); if (!b) return;
+    $('#fLo').value = fm(+b.dataset.lo); $('#fLo').classList.remove('erreur');
+    majLongueurs(); rendreApercu();
+  });
+
   function rendreApercu() {
     var v = champs.map(function (sel) { return P.num($(sel).value); });
     var ok = v.every(function (x) { return isFinite(x) && x > 0; });
@@ -237,7 +260,7 @@
 
   function viderForm() {
     champs.forEach(function (s) { $(s).value = ''; $(s).classList.remove('erreur'); });
-    nb = 1; editId = null;
+    nb = 1; editId = null; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs(null);
   }
 
   function ajouter() {
@@ -270,9 +293,16 @@
     $(s).addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
-      if (i < champs.length - 1) $(champs[i + 1]).focus(); else ajouter();
+      if (i === 1 && piAuto) $('#fLo').focus(); // quantité déjà remplie : on passe à la longueur
+      else if (i < champs.length - 1) $(champs[i + 1]).focus(); else ajouter();
     });
-    $(s).addEventListener('input', function () { $(s).classList.remove('erreur'); rendreApercu(); });
+    $(s).addEventListener('input', function () {
+      $(s).classList.remove('erreur');
+      if (i < 2) majSection();
+      else if (i === 2) { piAuto = false; $('#fPi').classList.remove('auto'); }
+      else majLongueurs();
+      rendreApercu();
+    });
   });
   $('#client').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#reference').focus(); } });
   $('#reference').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#btnEtape2').click(); } });
@@ -303,7 +333,7 @@
     if (b.dataset.act === 'edit') {
       editId = id;
       $('#fEp').value = fm(l.ep); $('#fLa').value = fm(l.la); $('#fPi').value = fm(l.pi); $('#fLo').value = fLong(l.lo);
-      nb = l.nb || 1;
+      nb = l.nb || 1; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs();
       rendreCamion();
     } else {
       c.lignes.splice(idx, 1);
@@ -365,9 +395,15 @@
     var t = e.target.closest('[data-t]'); if (!t) return;
     var k = calc.actif, val = calc[k], key = t.dataset.t;
     if (key === 'del') calc[k] = val.slice(0, -1);
-    else if (key === 'next') calc.actif = ORDRE[(ORDRE.indexOf(k) + 1) % 4];
+    else if (key === 'next') calc.actif = (k === 'la' && calc.piAuto) ? 'lo' : ORDRE[(ORDRE.indexOf(k) + 1) % 4];
     else if (key === ',') { if (k !== 'pi' && val.indexOf(',') < 0) calc[k] = (val || '0') + ','; }
     else if (val.replace(',', '').length < 6) calc[k] = (val === '0' ? '' : val) + key;
+    if (k === 'pi' && key !== 'next') calc.piAuto = false;
+    if (k === 'ep' || k === 'la') {
+      var sc = P.trouverSection(reg().sections, calc.ep, calc.la);
+      if (sc && (!calc.pi || calc.piAuto)) { calc.pi = String(sc.pi); calc.piAuto = true; }
+      else if (!sc && calc.piAuto) { calc.pi = ''; calc.piAuto = false; }
+    }
     rendreCalc();
   });
   $('#calcEffacer').addEventListener('click', function () { calc = { ep: '', la: '', pi: '', lo: '', nb: 1, actif: 'ep' }; rendreCalc(); });
@@ -379,7 +415,7 @@
     var c = courant();
     c.lignes.push({ id: petitId(), ep: P.num(calc.ep), la: P.num(calc.la), pi: P.num(calc.pi), lo: P.num(calc.lo), nb: calc.nb });
     majPlan(c); toucher(c);
-    calc.pi = ''; calc.lo = ''; calc.nb = 1; calc.actif = 'pi'; rendreCalc();
+    calc.lo = ''; calc.nb = 1; calc.actif = 'lo'; rendreCalc();
     toast('Ajouté au camion · ' + f2(c.total_m3) + ' m³', function () { aller('camion'); }, 'Voir');
   });
 
@@ -423,6 +459,27 @@
     setTimeout(function () { $('#fEp').focus(); }, 80);
   });
 
+  // Un autre bon plan, calculé instantanément sur le téléphone
+  $('#btnAutre').addEventListener('click', function () {
+    var c = courant(), b = $('#btnAutre');
+    if (!c.lignes.length || b.disabled) return;
+    b.disabled = true; b.classList.add('calcul'); b.innerHTML = '<span class="spin"></span>Calcul…';
+    setTimeout(function () {
+      if (!c.plansVus) c.plansVus = [P.signature(c.lignes, c.plan || {})];
+      var res = P.autre(c.lignes, cfgC(c), c.plansVus, c.graineAutre || 1);
+      if (!res && c.plansVus.length > 1) { // on a fait le tour : on recommence la série
+        c.plansVus = [P.signature(c.lignes, c.plan || {})];
+        res = P.autre(c.lignes, cfgC(c), c.plansVus, (c.graineAutre || 1) + 50);
+      }
+      b.disabled = false; b.classList.remove('calcul'); b.innerHTML = '↻ Autre plan';
+      if (!res) { toast('C\'est le seul bon plan avec ces colis.'); return; }
+      c.plan = res.plan; c.planManuel = false; c.planVariante = true; c.graineAutre = res.graine;
+      c.plansVus.push(res.signature); selection = null; toucher(c);
+      rendrePlanVue(); window.scrollTo({ top: 0, behavior: 'smooth' });
+      toast('Nouveau plan · ' + (c.plansVus.length) + 'e proposition');
+    }, 30);
+  });
+
   $('#btnTerminer').addEventListener('click', function () {
     var c = courant();
     if (!c.lignes.length) { toast('Aucun colis à enregistrer.'); return; }
@@ -455,7 +512,7 @@
   var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
   // ---------- Camion en photo ----------
   var nSvg = 0, detailsOuverts = false;
-  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=16', bois: 'bois.jpg?v=16' };
+  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=17', bois: 'bois.jpg?v=17' };
   PH.k = (PH.xd - PH.x0) / 13.6;
   var PIQUETS = [105, 238, 370, 578, 722, 960, 1082];
   function cielDefs(u) {
@@ -544,7 +601,7 @@
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
       if (sel) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Touche un autre colis pour les échanger.</span><button type="button" class="btn-lien" data-annuler="1">Annuler</button></div>';
       else h += '<p class="aide">Plan calculé et équilibré automatiquement. En haut : paires gauche/droite, le colis seul <span class="centre-mini">au centre</span>.<br>Pour échanger deux colis : touche l\'un puis l\'autre.</p>';
-      if (c.planManuel) h += '<button type="button" class="btn-lien recalc" data-recalc="1">↺ Revenir au plan automatique</button>';
+      if (c.planManuel || c.planVariante) h += '<button type="button" class="btn-lien recalc" data-recalc="1">↺ Revenir au plan de départ</button>';
     }
     return h;
   }
@@ -553,7 +610,7 @@
     var c = courant();
     // le plan doit toujours être bon : on le refait s'il est faux ou incomplet (sauf échange manuel valide)
     var v = P.verifier(c.lignes, c.plan || {}, cfgC(c));
-    if (c.lignes.length && (v.nonPlaces.length || (!c.planManuel && (P.noteVerif(v) >= 1000 || P.deseq(v) > reg().ecartMax + 0.005)))) { majPlan(c); toucher(c); }
+    if (c.lignes.length && (v.nonPlaces.length || (!c.planManuel && (P.noteVerif(v) >= 1000 || (!c.planVariante && P.deseq(v) > reg().ecartMax + 0.005))))) { majPlan(c); toucher(c); }
     $('#planZone').innerHTML = htmlPlan(c, {});
   }
 
@@ -573,7 +630,7 @@
   $('#planZone').addEventListener('click', function (e) {
     var c = courant();
     if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
-    if (e.target.closest('[data-recalc]')) { majPlan(c); toucher(c); selection = null; rendrePlanVue(); toast('Plan automatique remis'); return; }
+    if (e.target.closest('[data-recalc]')) { majPlan(c); toucher(c); selection = null; rendrePlanVue(); toast('Plan de départ remis'); return; }
     var ch = e.target.closest('.chip'); if (!ch) return;
     var id = ch.dataset.c;
     if (!selection) selection = id;
@@ -812,6 +869,8 @@
       '<div class="g3">' + champNum('rE1Min', 'Étage 1 mini (m)', r.e1Min) + champNum('rE1Max', 'Étage 1 maxi (m)', r.e1Max) + champNum('rEcart', 'Écart G/D max (m³)', r.ecartMax) + '</div>' +
       '</div>' +
 
+      '<button class="carte reg-ouvrir" id="ouvrirSections" type="button"><span><b>Sections et quantités</b><small>' + r.sections.length + ' sections · quantité remplie toute seule</small></span><i>›</i></button>' +
+
       '<div class="carte reg"><h2>Apparence</h2><div class="seg" id="segTheme">' +
       [['auto', 'Auto'], ['clair', 'Clair'], ['sombre', 'Sombre']].map(function (t) { return '<button type="button" data-t="' + t[0] + '" class="' + (r.theme === t[0] ? 'actif' : '') + '">' + t[1] + '</button>'; }).join('') +
       '</div><div id="couleurs">' + coul + '</div><button class="btn sec" id="resetCoul" type="button">Remettre les couleurs d\'origine</button></div>' +
@@ -833,7 +892,87 @@
     lierReglages();
   }
 
+  // ---------- Sections et quantités ----------
+  function txtLg(lg) { return (lg || []).map(fm).join(' · '); }
+  function ouvrirSections() {
+    var f = ouvrirFeuille(
+      '<div class="sec-tete"><h2>Sections et quantités</h2><button class="lien" data-s="fermer" type="button">Fermer</button></div>' +
+      '<div id="secEdit" hidden></div>' +
+      '<input id="secCherche" class="sec-cherche" type="search" inputmode="decimal" placeholder="Chercher (ex. 75x225)" autocomplete="off">' +
+      '<div id="secListe"></div>' +
+      '<button class="btn" data-s="ajout" type="button">+ Ajouter une section</button>' +
+      '<button class="lien sec-reset" data-s="reset" type="button">Remettre la liste d\'origine</button>');
+    $('#feuilleFond').onclick = null;
+    $('#secCherche').addEventListener('input', rendreSections);
+    f.onclick = function (e) {
+      var b = e.target.closest('[data-s]'); if (!b) return;
+      var a = b.dataset.s;
+      if (a === 'fermer') fermerFeuille();
+      if (a === 'ajout') editerSection(-1);
+      if (a === 'edit') editerSection(+b.dataset.i);
+      if (a === 'reset') {
+        if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Touche encore pour confirmer'; return; }
+        reg().sections = copieSections(); db.sync.reglagesSales = true; sauver();
+        delete b.dataset.ok; b.textContent = 'Remettre la liste d\'origine'; rendreSections(); toast('Liste d\'origine remise');
+      }
+    };
+    rendreSections();
+  }
+  function rendreSections() {
+    var liste = reg().sections, q = ($('#secCherche').value || '').replace(/\s/g, '').replace(/[×*X]/g, 'x').replace(',', '.');
+    var groupes = {}, ordre = [];
+    liste.forEach(function (x, i) {
+      if (q && (x.ep + 'x' + x.la).indexOf(q) !== 0 && (x.la + 'x' + x.ep).indexOf(q) !== 0) return;
+      if (!groupes[x.ep]) { groupes[x.ep] = []; ordre.push(x.ep); }
+      groupes[x.ep].push(i);
+    });
+    ordre.sort(function (a, b) { return b - a; });
+    var h = ordre.map(function (ep) {
+      var ids = groupes[ep].sort(function (a, b) { return liste[a].la - liste[b].la; });
+      return '<details class="sec-groupe"' + (q ? ' open' : '') + '><summary><b>' + fm(ep) + ' mm</b><span>' + ids.length + '</span></summary><div class="sec-grille">' +
+        ids.map(function (i) {
+          var x = liste[i];
+          return '<button type="button" class="sec-t" data-s="edit" data-i="' + i + '"><span>' + fm(x.ep) + ' × ' + fm(x.la) + (x.lg && x.lg.length ? '<small>' + txtLg(x.lg) + ' m</small>' : '') + '</span><b>' + x.pi + '</b></button>';
+        }).join('') + '</div></details>';
+    }).join('');
+    $('#secListe').innerHTML = h || '<p class="petit-txt">Aucune section trouvée.</p>';
+  }
+  function editerSection(i) {
+    var liste = reg().sections, x = i >= 0 ? liste[i] : { ep: '', la: '', pi: '', lg: [] }, z = $('#secEdit');
+    z.hidden = false;
+    z.innerHTML = '<div class="carte sec-edit"><b>' + (i >= 0 ? 'Modifier ' + fm(x.ep) + ' × ' + fm(x.la) : 'Nouvelle section') + '</b>' +
+      '<div class="sec-champs"><label class="champ"><span>Épaiss.</span><input id="seEp" inputmode="decimal" value="' + (x.ep === '' ? '' : fm(x.ep)) + '" placeholder="mm"></label>' +
+      '<label class="champ"><span>Largeur</span><input id="seLa" inputmode="decimal" value="' + (x.la === '' ? '' : fm(x.la)) + '" placeholder="mm"></label>' +
+      '<label class="champ"><span>Pièces</span><input id="sePi" inputmode="numeric" value="' + x.pi + '"></label></div>' +
+      '<label class="champ"><span>Longueurs proposées (facultatif)</span><input id="seLg" inputmode="decimal" value="' + (x.lg || []).map(fm).join(' ; ') + '" placeholder="ex. 3 ; 4 ; 5"></label>' +
+      '<div class="sec-btns">' + (i >= 0 ? '<button class="btn danger" id="seSuppr" type="button">Supprimer</button>' : '') +
+      '<button class="btn sec" id="seAnnuler" type="button">Annuler</button><button class="btn" id="seOk" type="button">Enregistrer</button></div></div>';
+    $('#feuille').scrollTop = 0;
+    if (i < 0) setTimeout(function () { var e = $('#seEp'); if (e) e.focus(); }, 60);
+    $('#seAnnuler').onclick = function () { z.hidden = true; z.innerHTML = ''; };
+    if ($('#seSuppr')) $('#seSuppr').onclick = function () {
+      var old = liste.splice(i, 1)[0]; db.sync.reglagesSales = true; sauver();
+      z.hidden = true; z.innerHTML = ''; rendreSections();
+      toast('Section supprimée', function () { liste.splice(i, 0, old); db.sync.reglagesSales = true; sauver(); rendreSections(); });
+    };
+    $('#seOk').onclick = function () {
+      var ep = P.num($('#seEp').value), la = P.num($('#seLa').value), pi = P.num($('#sePi').value);
+      var lg = $('#seLg').value.split(/[;\s\/]+/).filter(Boolean).map(P.num);
+      if (!(ep > 0 && la > 0)) { toast('Épaisseur et largeur obligatoires.'); return; }
+      if (!(pi > 0) || Math.round(pi) !== pi) { toast('Nombre de pièces invalide.'); return; }
+      if (lg.some(function (v) { return !(v > 0 && v <= 20); })) { toast('Longueurs invalides (ex. 3 ; 4).'); return; }
+      var dbl = liste.findIndex(function (y, j) { return j !== i && ((y.ep === ep && y.la === la) || (y.ep === la && y.la === ep)); });
+      if (dbl >= 0) { toast('Cette section existe déjà.'); return; }
+      var o = { ep: ep, la: la, pi: pi }; if (lg.length) o.lg = lg;
+      if (i >= 0) liste[i] = o; else liste.push(o);
+      db.sync.reglagesSales = true; sauver();
+      z.hidden = true; z.innerHTML = ''; rendreSections();
+      toast(fm(ep) + ' × ' + fm(la) + ' = ' + pi + ' pièces');
+    };
+  }
+
   function lierReglages() {
+    $('#ouvrirSections').onclick = ouvrirSections;
     var r = reg();
     function numChamp(id, cle, verif) {
       $('#' + id).addEventListener('change', function () {
@@ -907,7 +1046,7 @@
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
-    navigator.serviceWorker.register('sw.js?v=16').catch(function () {});
+    navigator.serviceWorker.register('sw.js?v=17').catch(function () {});
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (avaitCtrl && !recharge) { recharge = true; location.reload(); }
     });
