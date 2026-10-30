@@ -406,3 +406,56 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 .sec-btns { display: flex; gap: 6px; }
 .sec-btns .btn { flex: 1; }
 .sec-reset { align-self: center; color: var(--muted); font-size: 13px; }
+
+/* v19 — écrans compacts + suivi du calcul */
+.etapes { gap: 5px; }
+.etapes span { font-size: 0; }
+.etapes i { height: 3px; margin: 0; }
+.compteur { position: relative; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.cpt-l1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cpt-l1 .cpt-gros b { font-size: 24px; }
+.cpt-l1 .cpt-pill { margin: 0; }
+.cpt-barre { height: 7px; border-radius: 7px; background: var(--field); overflow: hidden; }
+.cpt-barre i { display: block; height: 100%; width: 0; border-radius: 7px; background: var(--orange); transition: width .5s cubic-bezier(.3, .8, .3, 1); }
+.compteur.ok .cpt-barre i, .suivi.ok .cpt-barre i { background: var(--vert); }
+.compteur.trop .cpt-barre i, .suivi.trop .cpt-barre i { background: var(--rouge); }
+.cpt-sub { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cpt-sub .cfg-resume { margin: 0; }
+.compteur .pluie { inset: -60px 0 0; }
+.saisie { gap: 7px; padding: 10px; }
+.saisie input { min-height: 40px; border-radius: 11px; }
+.saisie .champ > span { font-size: 10.5px; }
+.saisie .btn, .saisie .pas { min-height: 40px; border-radius: 12px; }
+.saisie .pas button { height: 40px; width: 34px; }
+.lo-rapides button { min-height: 36px; }
+.lig { min-height: 40px; padding: 4px 0; }
+.btn.gros { min-height: 48px; }
+/* Calcul m³ */
+#v-calcul { gap: 8px; }
+.calc-res { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-radius: 18px; padding: 10px 14px; }
+.calc-res p { font-size: 11.5px; }
+.calc-v b { font-size: 30px; }
+.calc-v span { font-size: 14px; }
+.calc-champs { grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.fd { padding: 5px 8px; border-radius: 12px; }
+.fd small { font-size: 10px; }
+.fd b { font-size: 17px; min-height: 22px; white-space: nowrap; overflow: hidden; }
+.fd.on b span::after { height: 17px; }
+.fd b span.vide { font-size: 15px; }
+.pave { gap: 5px; }
+.pave button { height: 44px; border-radius: 12px; font-size: 20px; }
+.calc-bas .btn, .calc-bas .pas { min-height: 44px; }
+.suivi { padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+.sv-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sv-h small { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sv-h b { font-size: 22px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sv-h b span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.suivi.trop .sv-h b { color: var(--rouge); }
+.sv-liste { display: flex; flex-direction: column; margin-top: 2px; }
+.sv-liste div { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; padding: 5px 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.sv-liste div:last-child { border-bottom: 0; }
+.sv-liste div.dernier { background: var(--accent-soft); border-radius: 8px; border-bottom-color: transparent; }
+.sv-liste em { font-style: normal; color: var(--muted); }
+.sv-liste i { font-style: normal; font-weight: 700; }
+.sv-vide { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+@media (max-height: 720px) { .calc-v b { font-size: 26px; } .pave button { height: 40px; } }

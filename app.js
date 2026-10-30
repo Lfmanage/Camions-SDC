@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '18';
+  var VERSION_APP = '19';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -152,7 +152,7 @@
   }); });
 
   // ---------- Écran Camion ----------
-  var nb = 1, editId = null, piAuto = false;
+  var nb = 1, editId = null, piAuto = false, sautAuto = false;
   var champs = ['#fEp', '#fLa', '#fPi', '#fLo'];
 
   function messageEtat(total, c) {
@@ -165,19 +165,18 @@
   function rendreCompteur(c) {
     var r = cfgC(c), tot = c.total_m3, e = P.etat(tot, r);
     var reste = Math.round((r.cible - tot) * 100) / 100;
-    $('#lblReste').textContent = reste < 0 ? 'Dépassé de' : (e.code === 'ok' ? 'Camion OK · reste' : 'Reste à charger');
-    $('#reste').textContent = f2(Math.abs(reste));
+    $('#msgEtat').textContent = reste < 0 ? 'Dépassé de ' + f2(-reste) + ' m³' : (e.code === 'ok' ? 'OK ✓ · reste ' + f2(reste) + ' m³' : 'Reste ' + f2(reste) + ' m³');
     $('#total').textContent = f2(tot);
     $('#totMax').textContent = fm(r.cible);
     var pct = Math.max(0, Math.min(100, tot / r.cible * 100));
-    $('#anneauVal').setAttribute('stroke-dasharray', pct.toFixed(1) + ' 100');
-    $('#anneauPct').textContent = Math.round(tot / r.cible * 100) + '%';
+    $('#barreVal').style.width = pct.toFixed(1) + '%';
+    var nbc = c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0);
+    $('#cptInfo').textContent = Math.round(tot / r.cible * 100) + ' % · ' + nbc + ' colis';
     var cpt = $('#compteur');
     var avant = cpt.dataset.etat;
     cpt.classList.remove('peu', 'ok', 'trop'); cpt.classList.add(e.code);
     if (avant && avant !== 'ok' && e.code === 'ok' && cpt.dataset.camion === c.id) pluieFeuilles();
     cpt.dataset.etat = e.code; cpt.dataset.camion = c.id;
-    heroPhoto(c, r, e.code === 'trop');
   }
 
   function pluieFeuilles() {
@@ -208,6 +207,25 @@
         '<button class="suppr" type="button" data-act="del" aria-label="Supprimer">×</button></div>';
     }
     el.innerHTML = h;
+  }
+
+  // Passage automatique : la valeur tapée est complète si elle est dans la liste et qu'aucune autre ne commence pareil
+  function estComplet(t, candidats) {
+    t = String(t || '').trim().replace(',', '.');
+    if (!t || candidats.indexOf(t) < 0) return false;
+    return !candidats.some(function (x) { return x !== t && x.indexOf(t) === 0; });
+  }
+  function epComplete(t) {
+    var c = []; reg().sections.forEach(function (s) { var k = String(s.ep); if (c.indexOf(k) < 0) c.push(k); });
+    return estComplet(t, c);
+  }
+  function laComplete(ep, t) {
+    ep = P.num(ep); var c = [];
+    reg().sections.forEach(function (s) {
+      var k = s.ep === ep ? String(s.la) : (s.la === ep ? String(s.ep) : null);
+      if (k && c.indexOf(k) < 0) c.push(k);
+    });
+    return estComplet(t, c);
   }
 
   // Section connue : quantité remplie toute seule + longueurs proposées
@@ -293,6 +311,8 @@
     $(s).addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
+      if (sautAuto && !$(s).value) { sautAuto = false; return; } // Entrée juste après un passage automatique : on reste
+      sautAuto = false;
       if (i === 1 && piAuto) $('#fLo').focus(); // quantité déjà remplie : on passe à la longueur
       else if (i < champs.length - 1) $(champs[i + 1]).focus(); else ajouter();
     });
@@ -302,6 +322,9 @@
       else if (i === 2) { piAuto = false; $('#fPi').classList.remove('auto'); }
       else majLongueurs();
       rendreApercu();
+      sautAuto = false;
+      if (i === 0 && epComplete($(s).value)) { $('#fLa').focus(); sautAuto = true; }
+      if (i === 1 && laComplete($('#fEp').value, $(s).value)) { $(piAuto ? '#fLo' : '#fPi').focus(); sautAuto = true; }
     });
   });
   $('#client').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#reference').focus(); } });
@@ -386,23 +409,46 @@
     });
     var vol = calcVol();
     $('#calcVol').textContent = vol == null ? '0,000' : f3(vol * calc.nb);
-    $('#calcFormule').textContent = vol == null ? 'Épaisseur × largeur × pièces × longueur' :
+    $('#calcFormule').textContent = vol == null ? 'Tape les 4 valeurs' :
       calc.ep + ' × ' + calc.la + ' mm × ' + calc.pi + ' pièces × ' + fLong(P.num(calc.lo)) + ' m' + (calc.nb > 1 ? '  ·  × ' + calc.nb + ' colis' : '');
     $('#cNb').textContent = calc.nb;
+    rendreSuivi();
+  }
+  // Suivi du camion en cours dans le calcul m³ : total après chaque paquet
+  function rendreSuivi() {
+    var c = courant(), r = cfgC(c), tot = c.total_m3 || 0, e = P.etat(tot, r);
+    var nbp = c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0);
+    var reste = Math.round((r.cible - tot) * 100) / 100, pct = Math.max(0, Math.min(100, tot / r.cible * 100));
+    var qui = c.client ? esc(c.client) + (c.reference ? ' · ' + esc(c.reference) : '') : (c.reference ? 'Commande ' + esc(c.reference) : 'Camion en cours');
+    var der = c.lignes.slice(-4).reverse().map(function (l, j) {
+      var n = l.nb || 1;
+      return '<div class="' + (j === 0 ? 'dernier' : '') + '"><em>' + (c.lignes.length - j) + ' · ' + fm(l.ep) + ' × ' + fm(l.la) + ' · ' + fLong(l.lo) + ' m' + (n > 1 ? ' ×' + n : '') + '</em><i>+' + f3(P.volTotalLigne(l)) + '</i></div>';
+    }).join('');
+    $('#calcSuivi').className = 'carte suivi ' + e.code;
+    $('#calcSuivi').innerHTML =
+      '<div class="sv-h"><small>' + qui + ' · ' + nbp + ' paquet' + (nbp > 1 ? 's' : '') + '</small><b>' + f3(tot) + ' <span>m³</span></b></div>' +
+      '<div class="cpt-barre"><i style="width:' + pct.toFixed(1) + '%"></i></div>' +
+      '<div class="cpt-sub"><span>' + (reste < 0 ? 'Dépassé de ' + f2(-reste) + ' m³' : (e.code === 'ok' ? 'Camion OK ✓ · reste ' : 'Reste ') + f2(reste) + ' m³ pour ' + fm(r.cible)) + '</span><span>' + Math.round(tot / r.cible * 100) + ' %</span></div>' +
+      (der ? '<div class="sv-liste">' + der + '</div>' : '<p class="sv-vide">Ajoute un paquet : le total se met à jour ici.</p>');
   }
   $$('#v-calcul .fd').forEach(function (b) { b.addEventListener('click', function () { calc.actif = b.dataset.k; rendreCalc(); }); });
   $('#pave').addEventListener('click', function (e) {
     var t = e.target.closest('[data-t]'); if (!t) return;
     var k = calc.actif, val = calc[k], key = t.dataset.t;
     if (key === 'del') calc[k] = val.slice(0, -1);
-    else if (key === 'next') calc.actif = (k === 'la' && calc.piAuto) ? 'lo' : ORDRE[(ORDRE.indexOf(k) + 1) % 4];
+    else if (key === 'next') { if (!(calc.saut && !val)) calc.actif = (k === 'la' && calc.piAuto) ? 'lo' : ORDRE[(ORDRE.indexOf(k) + 1) % 4]; }
     else if (key === ',') { if (k !== 'pi' && val.indexOf(',') < 0) calc[k] = (val || '0') + ','; }
     else if (val.replace(',', '').length < 6) calc[k] = (val === '0' ? '' : val) + key;
+    calc.saut = false; // « Suivant » juste après un passage automatique ne saute pas une case vide
     if (k === 'pi' && key !== 'next') calc.piAuto = false;
     if (k === 'ep' || k === 'la') {
       var sc = P.trouverSection(reg().sections, calc.ep, calc.la);
       if (sc && (!calc.pi || calc.piAuto)) { calc.pi = String(sc.pi); calc.piAuto = true; }
       else if (!sc && calc.piAuto) { calc.pi = ''; calc.piAuto = false; }
+      if (/\d/.test(key)) {
+        if (k === 'ep' && epComplete(calc.ep)) { calc.actif = 'la'; calc.saut = true; }
+        if (k === 'la' && laComplete(calc.ep, calc.la)) { calc.actif = calc.piAuto ? 'lo' : 'pi'; calc.saut = true; }
+      }
     }
     rendreCalc();
   });
@@ -416,7 +462,7 @@
     c.lignes.push({ id: petitId(), ep: P.num(calc.ep), la: P.num(calc.la), pi: P.num(calc.pi), lo: P.num(calc.lo), nb: calc.nb });
     majPlan(c); toucher(c);
     calc.lo = ''; calc.nb = 1; calc.actif = 'lo'; rendreCalc();
-    toast('Ajouté au camion · ' + f2(c.total_m3) + ' m³', function () { aller('camion'); }, 'Voir');
+    toast('Paquet ajouté · total ' + f2(c.total_m3) + ' m³', function () { aller('camion'); }, 'Voir');
   });
 
   // ---------- Étape 1 : client ----------

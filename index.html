@@ -10,13 +10,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=18">
-<link rel="icon" href="favicon-32.png?v=18" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=18">
+<link rel="manifest" href="manifest.webmanifest?v=19">
+<link rel="icon" href="favicon-32.png?v=19" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=19">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
 <main id="app">
@@ -39,12 +39,12 @@
   <!-- ============ CALCUL M³ ============ -->
   <section class="vue" id="v-calcul">
     <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Calcul m³</h1><button class="lien" id="calcEffacer" type="button">Effacer</button></header>
-    <div class="calc-res"><small>Volume</small><div class="calc-v"><b id="calcVol">0,000</b><span>m³</span></div><p id="calcFormule">Saisis les 4 valeurs</p></div>
+    <div class="calc-res"><div><small>Ce paquet</small><p id="calcFormule">Tape les 4 valeurs</p></div><div class="calc-v"><b id="calcVol">0,000</b><span>m³</span></div></div>
     <div class="calc-champs">
-      <button class="fd" data-k="ep" type="button"><small>Épaisseur</small><b><span>—</span><i>mm</i></b></button>
-      <button class="fd" data-k="la" type="button"><small>Largeur</small><b><span>—</span><i>mm</i></b></button>
-      <button class="fd" data-k="pi" type="button"><small>Pièces</small><b><span>—</span><i></i></b></button>
-      <button class="fd" data-k="lo" type="button"><small>Longueur</small><b><span>—</span><i>m</i></b></button>
+      <button class="fd" data-k="ep" type="button"><small>Épaiss.</small><b><span>—</span></b></button>
+      <button class="fd" data-k="la" type="button"><small>Largeur</small><b><span>—</span></b></button>
+      <button class="fd" data-k="pi" type="button"><small>Pièces</small><b><span>—</span></b></button>
+      <button class="fd" data-k="lo" type="button"><small>Long.</small><b><span>—</span></b></button>
     </div>
     <div class="pave" id="pave">
       <button type="button" data-t="1">1</button><button type="button" data-t="2">2</button><button type="button" data-t="3">3</button><button type="button" data-t="del" class="gris" aria-label="Effacer">⌫</button>
@@ -54,8 +54,9 @@
     </div>
     <div class="calc-bas">
       <div class="pas"><button type="button" id="cMoins">−</button><span><b id="cNb">1</b> colis</span><button type="button" id="cPlus">+</button></div>
-      <button class="btn" id="calcAjout" type="button">+ Ajouter au camion</button>
+      <button class="btn" id="calcAjout" type="button">+ Ajouter le paquet</button>
     </div>
+    <div class="carte suivi" id="calcSuivi"></div>
   </section>
 
   <!-- ============ ÉTAPE 1 : CLIENT ============ -->
@@ -90,15 +91,10 @@
     <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1 id="titreColis">Colis</h1><span></span></header>
     <div class="etapes"><span class="on"><i></i>Client</span><span class="on"><i></i>Colis</span><span class=""><i></i>Plan</span></div>
     <div class="carte compteur" id="compteur">
-      <div class="cpt-haut">
-        <div class="anneau"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" class="a-fond"/><circle cx="18" cy="18" r="15" class="a-val" id="anneauVal" pathLength="100" stroke-dasharray="0 100"/></svg><b id="anneauPct">0%</b></div>
-        <div class="cpt-txt">
-          <small id="lblReste">Reste à charger</small>
-          <div class="cpt-gros"><b id="reste">41,00</b><span>m³</span></div>
-          <span class="cpt-pill" id="msgEtat"><b id="total">0,00</b> / <span id="totMax">41</span> m³</span><span class="cfg-resume" id="cfgResume"></span>
-        </div>
-      </div>
-      <div class="scene"><div id="heroCamion"></div><div class="pluie" id="pluie" aria-hidden="true"></div></div>
+      <div class="cpt-l1"><div class="cpt-gros"><b id="total">0,00</b><span>/ <span id="totMax">41</span> m³</span></div><span class="cpt-pill" id="msgEtat">Reste 41,00 m³</span></div>
+      <div class="cpt-barre"><i id="barreVal"></i></div>
+      <div class="cpt-sub"><span id="cptInfo">0 % · 0 colis</span><span class="cfg-resume" id="cfgResume"></span></div>
+      <div class="pluie" id="pluie" aria-hidden="true"></div>
     </div>
 
     <form class="carte saisie" id="formLigne" autocomplete="off" novalidate>
@@ -156,8 +152,8 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=18"></script>
-<script src="sync.js?v=18"></script>
-<script src="app.js?v=18"></script>
+<script src="plan.js?v=19"></script>
+<script src="sync.js?v=19"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
