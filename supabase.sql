@@ -237,6 +237,16 @@ begin
   return s;
 end $$;
 
+create or replace function public.definir_secret(p_code text) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not est_admin() then raise exception 'ADMIN'; end if;
+  if length(regexp_replace(coalesce(p_code, ''), '\s', '', 'g')) < 6 then raise exception 'SECRET_COURT'; end if;
+  if exists (select 1 from equipes where code_hash = _h(p_code)) or exists (select 1 from equipes where recup_hash = _h(p_code) and id <> mon_equipe()) then raise exception 'CODE_PRIS'; end if;
+  update equipes set recup_hash = _h(p_code) where id = mon_equipe();
+  return true;
+end $$;
+
 create or replace function public.retirer_membre(p_user uuid, p_actif boolean default false) returns boolean
 language plpgsql security definer set search_path = public as $$
 begin
@@ -258,8 +268,8 @@ begin
 end $$;
 
 revoke all on function public.rejoindre(text, text), public.envoyer_camions(jsonb, boolean), public.lire_reglages(),
-  public.ecrire_reglages(jsonb), public.changer_code(text), public.nouveau_secret(), public.retirer_membre(uuid, boolean),
+  public.ecrire_reglages(jsonb), public.changer_code(text), public.nouveau_secret(), public.definir_secret(text), public.retirer_membre(uuid, boolean),
   public.changer_prenom(text), public.mon_equipe(), public.est_admin() from public, anon;
 grant execute on function public.rejoindre(text, text), public.envoyer_camions(jsonb, boolean), public.lire_reglages(),
-  public.ecrire_reglages(jsonb), public.changer_code(text), public.nouveau_secret(), public.retirer_membre(uuid, boolean),
+  public.ecrire_reglages(jsonb), public.changer_code(text), public.nouveau_secret(), public.definir_secret(text), public.retirer_membre(uuid, boolean),
   public.changer_prenom(text), public.mon_equipe(), public.est_admin() to authenticated;

@@ -174,7 +174,7 @@
 
   // ---------- Rejoindre ----------
   var MSG = {
-    CODE: 'Code d\'équipe incorrect.', CODE_COURT: 'Code trop court (4 caractères minimum).', PRENOM: 'Écris ton prénom.',
+    CODE: 'Code d\'équipe incorrect.', CODE_COURT: 'Code trop court (4 caractères minimum).', SECRET_COURT: 'Code secret trop court (6 caractères minimum).', PRENOM: 'Écris ton prénom.',
     RETIRE: 'Ce téléphone a été retiré de l\'équipe.', PRENOM_PRIS: 'Ce prénom est déjà utilisé dans l\'équipe.', CODE_PRIS: 'Ce code ne peut pas être utilisé.', ADMIN: 'Action non autorisée.',
     SOI_MEME: 'Impossible sur ce téléphone.'
   };
@@ -222,6 +222,7 @@
     secretAVoir: function () { return st.secretAVoir || null; },
     oublierSecret: function () { delete st.secretAVoir; garder(); },
     changerCode: function (code) { return rpc('changer_code', { p_code: code }).catch(function (e) { throw new Error(message(e)); }); },
+    definirSecret: function (c) { return rpc('definir_secret', { p_code: c }).catch(function (e) { throw new Error(message(e)); }); },
     nouveauSecret: function () { return rpc('nouveau_secret').catch(function (e) { throw new Error(message(e)); }); },
     retirer: function (uid, remettre) { return rpc('retirer_membre', { p_user: uid, p_actif: !!remettre }).then(membres).then(function () { notifier(true); }).catch(function (e) { throw new Error(message(e)); }); },
     changerPrenom: function (p) {

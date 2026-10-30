@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '40';
+  var VERSION_APP = '41';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -121,6 +121,7 @@
   }
   function fermerFeuille(parRetour) {
     if ($('#feuille').hidden) return;
+    if (verrouEquipe && !Sync.rejoint()) { if (parRetour === true) history.pushState({ f: 1, v: vueActive, d: profondeur() }, ''); return; }
     $('#feuille').hidden = true; $('#feuilleFond').hidden = true; $('#feuille').innerHTML = ''; $('#feuille').onclick = null;
     if (parRetour !== true && history.state && history.state.f) history.back();
   }
@@ -1551,18 +1552,17 @@
       '<button class="btn" id="rjOk" type="button">Rejoindre</button>' +
       '<p class="petit-txt rj-info">Tes camions déjà dans ce téléphone sont envoyés à l\'équipe : rien n\'est effacé.<br>Nouveau téléphone ? Retape le même prénom : tu retrouves ton compte.</p>' +
       '<button class="btn sec" id="rjSauv" type="button">Sauvegarder mes données d\'abord</button>' +
-      (dansFeuille ? '<button class="lien rj-plus-tard" id="rjTard" type="button">Plus tard</button>' : '') + '</div>';
+      '</div>';
   }
   function lierRejoindre(apres) {
     $('#rjSauv').onclick = sauvegarderFichier;
-    if ($('#rjTard')) $('#rjTard').onclick = function () { db.equipePlusTard = true; sauver(true); fermerFeuille(); };
     $('#rjOk').onclick = function () {
       var code = $('#rjCode').value.trim(), pr = $('#rjPrenom').value.trim(), b = this;
       if (!code) { toast('Écris le code de l\'équipe.'); return; }
       if (!pr) { toast('Écris ton prénom.'); return; }
       b.disabled = true; b.textContent = 'Connexion…';
       Sync.rejoindre(code, pr).then(function (j) {
-        delete db.equipePlusTard; sauver(true);
+        verrouEquipe = false; delete db.equipePlusTard; sauver(true);
         if (apres) apres();
         if (Sync.secretAVoir()) setTimeout(montrerSecret, 300);
         else toast(j.admin && j.recup ? 'Bon retour, ' + pr + ' ✔' : 'Bienvenue dans l\'équipe, ' + pr + ' ✔');
@@ -1570,8 +1570,10 @@
       }).catch(function (e) { b.disabled = false; b.textContent = 'Rejoindre'; toast(e.message); });
     };
   }
+  var verrouEquipe = false;
   function proposerRejoindre() {
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=39" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=39" alt=""></span></div>' + formRejoindre(true));
+    verrouEquipe = !Sync.rejoint();
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=41" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=41" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -1721,7 +1723,7 @@
     var moi = Sync.moi().uid, ms = Sync.membres();
     return '<div class="carte reg reg-admin"><h2>Gestion de l\'équipe</h2>' +
       '<div class="reg-l"><span>Code de l\'équipe</span><button class="lien" id="admCode" type="button">Changer ›</button></div>' +
-      '<div class="reg-l"><span>Mon code secret</span><button class="lien" id="admSecret" type="button">Nouveau code ›</button></div>' +
+      '<div class="reg-l"><span>Mon code secret</span><button class="lien" id="admSecret" type="button">Définir mon code ›</button></div>' +
       '<p class="reg-st">Téléphones (' + ms.filter(function (x) { return x.actif; }).length + ')</p>' +
       ms.map(function (x) {
         return '<div class="reg-l' + (x.actif ? '' : ' retire') + '"><span>' + esc(x.prenom) + (x.user_id === moi ? ' <small>· ce téléphone</small>' : '') + (x.actif ? '' : ' <small>· retiré</small>') + '</span>' +
@@ -1841,7 +1843,9 @@
     if ($('#admCode')) $('#admCode').onclick = function () {
       demanderTexte('Nouveau code d\'équipe', '', 'Les téléphones déjà dans l\'équipe ne sont pas déconnectés.').then(function (v) { if (v) Sync.changerCode(v).then(function () { toast('Code d\'équipe changé ✔'); }).catch(function (e) { toast(e.message); }); });
     };
-    if ($('#admSecret')) $('#admSecret').onclick = function () { Sync.nouveauSecret().then(function (code) { montrerSecret(code); }).catch(function (e) { toast(e.message); }); };
+    if ($('#admSecret')) $('#admSecret').onclick = function () {
+      demanderTexte('Mon code secret', '', 'Tu le choisis, il ne change plus. 6 caractères minimum. Il sert à retrouver ton compte admin sur un nouveau téléphone.').then(function (v) { if (v) Sync.definirSecret(v).then(function () { toast('Code secret enregistré ✔'); }).catch(function (e) { toast(e.message); }); });
+    };
     $$('[data-retirer]').forEach(function (b) {
       b.onclick = function () {
         var remettre = b.dataset.actif === '0';
@@ -1885,7 +1889,7 @@
   } catch (e) {}
   history.replaceState({ v: 'accueil', d: 0 }, '');
   montrer('accueil');
-  if (Sync.actif() && !Sync.rejoint() && !db.equipePlusTard) setTimeout(proposerRejoindre, 500);
+  if (Sync.actif() && !Sync.rejoint()) setTimeout(proposerRejoindre, 500);
   else if (Sync.secretAVoir()) setTimeout(montrerSecret, 500);
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
