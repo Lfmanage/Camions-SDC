@@ -681,8 +681,8 @@
     var totCm = 0;
     Object.keys(v.rows).forEach(function (k) { totCm += v.rows[k].len; });
     v.nonPlaces.forEach(function (k) { totCm += k.cm; });
-    var maxCm = 6 * Math.round(r.e1Max * 100);
-    if (totCm > maxCm) return { cls: 'e', etq: '⚠ Trop long', detail: 'Les colis font ' + fm(totCm / 100) + ' m bout à bout : ' + fm((totCm - maxCm) / 100) + ' m de trop pour 3 étages de ' + fm(r.e1Max) + ' m. Retire des colis.' };
+    var N = v.N || 3, maxCm = 2 * N * Math.round(r.e1Max * 100);
+    if (totCm > maxCm) return { cls: 'e', etq: '⚠ Trop long', detail: 'Les colis font ' + fm(totCm / 100) + ' m bout à bout : ' + fm((totCm - maxCm) / 100) + ' m de trop pour ' + N + ' étages de ' + fm(r.e1Max) + ' m. Retire des colis.' };
     if (v.etat.code === 'peu') return { cls: 'a', etq: 'Il manque ' + f2(v.etat.manque) + ' m³' };
     var lg = v.erreurs.filter(function (m) { return /^Étage/.test(m); });
     if (lg.length) return { cls: 'e', etq: '⚠ À revoir', detail: lg[0] };
@@ -697,14 +697,15 @@
   // ordre d'affichage complet (cabine → arrière) tiré du plan actuel
   function fixerOrdre(c) {
     var v = vplan(c), o = [];
-    P.ROWS.forEach(function (k) { v.rows[k].colis.forEach(function (x) { o.push(x.id); }); });
+    v.ROWS.forEach(function (k) { v.rows[k].colis.forEach(function (x) { o.push(x.id); }); });
     v.cote.forEach(function (x) { o.push(x.id); });
     c.ordre = o; return v;
   }
   function htmlPlan(c, opts) {
     var r = cfgC(c), v = vplan(c), st = statutPlan(v, r);
     var maxLen = r.e1Max * 100;
-    P.ROWS.forEach(function (k) { maxLen = Math.max(maxLen, v.rows[k].len); });
+    v.ROWS.forEach(function (k) { maxLen = Math.max(maxLen, v.rows[k].len); });
+    var N = v.N, ETG = []; for (var e0 = N; e0 >= 1; e0--) ETG.push(e0);
     var edit = !opts.lecture, selCote = edit && selection && v.cote.some(function (k) { return k.id === selection; });
     var place = edit && selection ? 36 : 0; // place gardée pour le bouton « + » en bout d'étage
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
@@ -721,12 +722,12 @@
     }
     ['G', 'D'].forEach(function (s) {
       h += '<section class="cote"><div class="cote-t"><span class="hl ' + (s === 'G' ? 'rose' : 'bleu') + '">' + NOMS[s] + '</span><small>' + f2(s === 'G' ? v.volG : v.volD) + ' m³</small></div><div class="rangs">';
-      [3, 2, 1].forEach(function (f) {
+      ETG.forEach(function (f) {
         var ro = v.rows[s + f], lgAff = ro.m;
         h += '<div class="rang' + (ro.alerte ? ' ko' : '') + '"><div class="tag">É' + f + '<b>@LG@</b></div><div class="trk"><i class="lim" style="left:calc(2px + (100% - ' + (4 + place) + 'px) * ' + (r.e1Max * 100 / maxLen).toFixed(4) + ')"></i>';
-        if (f === 3) {
-          var c3 = v.rows.C3, maxPaire = Math.max(v.rows.G3.len, v.rows.D3.len);
-          var E = maxPaire + c3.len, sup = Math.min(v.rows.G2.len, v.rows.D2.len);
+        if (f === N) {
+          var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len);
+          var E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
           if (sup - E > 2) h += '<i class="esp" style="' + w((sup - E) / 2) + '"></i>';
           ro.colis.forEach(function (k) { h += chip(k, false); });
           if (c3.colis.length) { if (maxPaire - ro.len > 1) h += '<i class="esp" style="' + w(maxPaire - ro.len) + '"></i>'; c3.colis.forEach(function (k) { h += chip(k, true); }); }
@@ -742,7 +743,7 @@
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
       if (sel && !selCote) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Touche un autre colis pour échanger, ou + pour le déplacer.</span><button type="button" class="btn sec petit" data-decote="1">Mettre de côté</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else if (sel) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Choisis où le poser.</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else h += '<p class="aide">Touche un colis pour l\'échanger, le déplacer ou le mettre de côté. Le colis hachuré est au centre de l\'étage 3.</p>';
+      else h += '<p class="aide">Touche un colis pour l\'échanger, le déplacer ou le mettre de côté. Le colis hachuré est au centre de l\'étage ' + N + '.' + (N === 4 ? ' Camion surtout en 18×100 : plan sur 4 étages (seuls les 18×100 montent au 4e).' : '') + '</p>';
       if (c.planManuel || c.planVariante) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Revenir au plan de départ</button>';
     }
     return h;
@@ -806,7 +807,7 @@
   $('#btnPartager').addEventListener('click', function () { partagerImage(courant()); });
 
   // ---------- Image du plan (partage) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=22';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=23';
   function imagePlan(c) {
     var r = cfgC(c), v = vplan(c);
     var W = 1080, pad = 56, larg = W - 2 * pad, rowH = 92, tagW = 120;
@@ -822,7 +823,8 @@
       if (cur) out.push(cur); return out;
     }
     var lignesMsg = []; msgs.forEach(function (m) { couper(m[1], larg - 30).forEach(function (l, i) { lignesMsg.push([m[0], l, i === 0]); }); });
-    var hCote = 70 + 3 * (rowH + 14) + 50;
+    var N = v.N, ETG = []; for (var e0 = N; e0 >= 1; e0--) ETG.push(e0);
+    var hCote = 70 + N * (rowH + 14) + 50;
     var H = 250 + 2 * (hCote + 30) + (v.cote.length ? rowH + 80 : 0) + lignesMsg.length * 38 + 110;
     cv.width = W; cv.height = H;
     x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, W, H);
@@ -839,7 +841,7 @@
     x.fillStyle = LINE; x.fillRect(pad, 168, larg, 2);
     var meta = [['Gauche', f2(v.volG)], ['Droite', f2(v.volD)], ['Écart', f2(Math.abs(v.ecart))]], mx = pad;
     meta.forEach(function (m) { x.font = F(500, 26); x.fillStyle = MU; x.fillText(m[0] + ' ', mx, 216); mx += x.measureText(m[0] + ' ').width; x.font = F(600, 28); x.fillStyle = INK; x.fillText(m[1], mx, 216); mx += x.measureText(m[1]).width + 40; });
-    var maxLen = Math.max.apply(null, P.ROWS.map(function (k) { return v.rows[k].len; }).concat([r.e1Max * 100]));
+    var maxLen = Math.max.apply(null, v.ROWS.map(function (k) { return v.rows[k].len; }).concat([r.e1Max * 100]));
     var trkX = pad + tagW, trkW = larg - tagW;
     function rond(a, b, w, h, rr) { x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
     function colis(k, xx, yy, w, centre) {
@@ -870,12 +872,12 @@
     ['G', 'D'].forEach(function (s) {
       surligne(NOMS[s], s === 'G' ? 'rgba(255,92,170,.45)' : 'rgba(64,150,255,.38)', y + 40);
       x.textAlign = 'right'; x.font = F(500, 26); x.fillStyle = MU; x.fillText(f2(s === 'G' ? v.volG : v.volD) + ' m³', W - pad, y + 40); x.textAlign = 'left';
-      x.fillStyle = '#F5F6F3'; rond(pad - 14, y + 62, larg + 28, 3 * (rowH + 14) + 60, 22); x.fill();
+      x.fillStyle = '#F5F6F3'; rond(pad - 14, y + 62, larg + 28, N * (rowH + 14) + 60, 22); x.fill();
       var yy = y + 80;
-      [3, 2, 1].forEach(function (f) {
+      ETG.forEach(function (f) {
         var ro = v.rows[s + f], items = [], lgAff = ro.m;
-        if (f === 3) {
-          var c3 = v.rows.C3, maxPaire = Math.max(v.rows.G3.len, v.rows.D3.len), E = maxPaire + c3.len, sup = Math.min(v.rows.G2.len, v.rows.D2.len);
+        if (f === N) {
+          var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len), E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
           if (sup - E > 2) items.push({ esp: 1, cm: (sup - E) / 2 });
           ro.colis.forEach(function (k) { items.push({ k: k, cm: k.cm }); });
           if (c3.colis.length) { if (maxPaire - ro.len > 1) items.push({ esp: 1, cm: maxPaire - ro.len }); c3.colis.forEach(function (k) { items.push({ k: k, cm: k.cm, centre: 1 }); }); }
