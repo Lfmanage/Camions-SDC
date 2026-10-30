@@ -20,6 +20,7 @@
   }
   function actif() { var c = conf(); return !!(c.url && c.cle); }
   function rejoint() { return actif() && !!st.equipe && !!(st.session && st.session.uid); }
+  function nom(p) { return String(p || '').trim().toLowerCase().replace(/(^|[\s\-'])(\S)/g, function (m, a, b) { return a + b.toUpperCase(); }); }
   function t(x) { return x ? new Date(x).getTime() : 0; }
   function notifier(change) { if (hooks.changement) hooks.changement(etat, change); }
 
@@ -108,7 +109,7 @@
         var d = hooks.lire();
         rows.forEach(function (r) {
           var c = r.data || {}, l = d.camions[r.id];
-          c.id = r.id; c.auteur = r.auteur; c.auteur_prenom = r.auteur_prenom; c.supprime = !!r.supprime;
+          c.id = r.id; c.auteur = r.auteur; c.auteur_prenom = nom(r.auteur_prenom); c.supprime = !!r.supprime;
           c.maj_le = new Date(r.maj_le).toISOString(); delete c._sale;
           if (!l || !l._sale || t(c.maj_le) >= t(l.maj_le)) { d.camions[r.id] = c; change = true; }
           st.depuis = r.serveur_le;
@@ -143,7 +144,7 @@
   }
 
   function membres() {
-    return http('/rest/v1/membres?select=user_id,prenom,actif,rejoint_le,vu_le&order=rejoint_le.asc').then(function (l) { st.membres = l || []; garder(); });
+    return http('/rest/v1/membres?select=user_id,prenom,actif,rejoint_le,vu_le&order=rejoint_le.asc').then(function (l) { st.membres = (l || []).map(function (x) { x.prenom = nom(x.prenom); return x; }); garder(); });
   }
 
   function quitter(raison) {
@@ -189,8 +190,8 @@
   function rejoindre(code, prenom) {
     if (!actif()) return Promise.reject(new Error('Supabase n\'est pas encore branché.'));
     var ancien = st.session && st.session.uid;
-    return rpc('rejoindre', { p_code: code, p_prenom: prenom }).then(function (j) {
-      st.equipe = j.equipe; st.prenom = String(prenom).trim(); st.admin = !!j.admin; st.depuis = null; st.regLe = null;
+    return rpc('rejoindre', { p_code: code, p_prenom: nom(prenom) }).then(function (j) {
+      st.equipe = j.equipe; st.prenom = nom(prenom); st.admin = !!j.admin; st.depuis = null; st.regLe = null;
       if (j.secret) st.secretAVoir = j.secret;
       garder();
       // mes camions déjà dans le téléphone partent dans l'équipe (rien n'est effacé)
@@ -214,9 +215,9 @@
       setInterval(function () { if (!document.hidden) lancer(); }, 20000);
       if (rejoint()) setTimeout(lancer, 300);
     },
-    actif: actif, rejoint: rejoint, lancer: lancer, bientot: bientot, rejoindre: rejoindre, message: message,
-    moi: function () { return { uid: st.session && st.session.uid, prenom: st.prenom || '', admin: !!st.admin }; },
-    membres: function () { return (st.membres || []).slice(); },
+    nom: nom, actif: actif, rejoint: rejoint, lancer: lancer, bientot: bientot, rejoindre: rejoindre, message: message,
+    moi: function () { return { uid: st.session && st.session.uid, prenom: nom(st.prenom), admin: !!st.admin }; },
+    membres: function () { return (st.membres || []).map(function (x) { var o = {}; for (var k in x) o[k] = x[k]; o.prenom = nom(x.prenom); return o; }); },
     etat: function () { return etat; },
     attente: function (db) { return Object.keys(db.camions).filter(function (k) { return db.camions[k]._sale; }).length; },
     secretAVoir: function () { return st.secretAVoir || null; },
@@ -226,7 +227,7 @@
     nouveauSecret: function () { return rpc('nouveau_secret').catch(function (e) { throw new Error(message(e)); }); },
     retirer: function (uid, remettre) { return rpc('retirer_membre', { p_user: uid, p_actif: !!remettre }).then(membres).then(function () { notifier(true); }).catch(function (e) { throw new Error(message(e)); }); },
     changerPrenom: function (p) {
-      return rpc('changer_prenom', { p_prenom: p }).then(function () { st.prenom = String(p).trim(); st.depuis = null; garder(); return lancer(); })
+      return rpc('changer_prenom', { p_prenom: nom(p) }).then(function () { st.prenom = nom(p); st.depuis = null; garder(); return lancer(); })
         .catch(function (e) { throw new Error(message(e)); });
     }
   };

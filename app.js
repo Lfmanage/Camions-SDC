@@ -1,8 +1,11 @@
 /* Camions SDC — application */
 (function () {
   'use strict';
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (e) { document.addEventListener(e, function (x) { x.preventDefault(); }, { passive: false }); });
+  document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
+  var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '41';
+  var VERSION_APP = '42';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -93,7 +96,7 @@
   function enEquipe() { return window.Sync && Sync.rejoint(); }
   function estAMoi(c) { return !c || !c.auteur || !enEquipe() || c.auteur === Sync.moi().uid; }
   function peutSupprimer(c) { return estAMoi(c) || (enEquipe() && Sync.moi().admin); }
-  function prenomDe(c) { return c.auteur_prenom || (estAMoi(c) ? (Sync.moi().prenom || 'Moi') : '?'); }
+  function prenomDe(c) { return Sync.nom(c.auteur_prenom) || (estAMoi(c) ? (Sync.moi().prenom || 'Moi') : '?'); }
   function tousClients() {
     var s = {};
     db.clients.forEach(function (x) { if (x) s[x] = 1; });
@@ -1573,7 +1576,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=41" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=41" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=42" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=42" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -1690,7 +1693,8 @@
         PRESETS[k].map(function (p) { return '<button type="button" data-v="' + p + '" style="background:' + p + '" class="' + (cur && cur.toLowerCase() === p.toLowerCase() ? 'actif' : '') + '" aria-label="' + p + '"></button>'; }).join('') +
         '<input type="color" value="' + (cur || PRESETS[k][0]) + '" aria-label="Couleur libre"></div></div>';
     }).join('');
-    $('#reglagesZone').innerHTML =
+    if (r.couleurs && Object.keys(r.couleurs).length) { r.couleurs = {}; appliquerTheme(); }
+    $('#reglagesZone').innerHTML = blocEquipe() + (adm ? blocAdmin() : '') +
       '<div class="carte reg' + (verrou ? ' verrouille' : '') + '"><h2>Limites du camion</h2>' + (verrou ? '<p class="petit-txt">Réglages communs à toute l\'équipe.</p>' : '') +
       '<div class="g2">' + champNum('rMin', 'Volume mini (m³)', r.m3Min) + champNum('rMax', 'Volume maxi (m³)', r.m3Max) + '</div>' +
       '<div class="g3">' + champNum('rE1Min', 'Étage 1 mini (m)', r.e1Min) + champNum('rE1Max', 'Étage 1 maxi (m)', r.e1Max) + champNum('rEcart', 'Écart G/D max (m³)', r.ecartMax) + '</div>' +
@@ -1700,10 +1704,9 @@
 
       '<div class="carte reg"><h2>Apparence</h2><div class="seg" id="segTheme">' +
       [['auto', 'Auto'], ['clair', 'Clair'], ['sombre', 'Sombre']].map(function (t) { return '<button type="button" data-t="' + t[0] + '" class="' + (r.theme === t[0] ? 'actif' : '') + '">' + t[1] + '</button>'; }).join('') +
-      '</div><div id="couleurs">' + coul + '</div><button class="btn sec" id="resetCoul" type="button">Remettre les couleurs d\'origine</button></div>' +
+      '</div></div>' +
 
-      blocEquipe() + (adm ? blocAdmin() : '') +
-      '<div class="carte reg"><h2>Mes données</h2><div class="g2"><button class="btn sec" id="exp" type="button">Sauvegarder mes données</button><button class="btn sec" id="imp" type="button">Restaurer</button></div>' +
+      '<div class="carte reg"><h2>Mes données</h2><div class="g1"><button class="btn sec" id="exp" type="button">Sauvegarder mes données</button><button class="btn sec" id="imp" type="button">Restaurer</button></div>' +
       '<input type="file" id="impFichier" accept="application/json,.json" hidden>' +
       '<p class="petit-txt">' + Object.keys(db.camions).filter(function (k) { return !db.camions[k].supprime && db.camions[k].statut === 'termine'; }).length + ' camions enregistrés · version ' + VERSION_APP + '</p></div>';
     if (verrou) $$('#reglagesZone .verrouille input').forEach(function (x) { x.disabled = true; });
@@ -1828,12 +1831,6 @@
     numChamp('rE1Max', 'e1Max', function (v) { return v > r.e1Min; });
     numChamp('rEcart', 'ecartMax');
     $$('#segTheme button').forEach(function (b) { b.onclick = function () { r.theme = b.dataset.t; db.sync.reglagesSales = true; sauver(); appliquerTheme(); rendreReglages(); }; });
-    $$('.couleur').forEach(function (bloc) {
-      var k = bloc.dataset.k;
-      $$('button', bloc).forEach(function (b) { b.onclick = function () { r.couleurs[k] = b.dataset.v || null; if (!b.dataset.v) delete r.couleurs[k]; db.sync.reglagesSales = true; sauver(); appliquerTheme(); rendreReglages(); }; });
-      $('input[type=color]', bloc).addEventListener('change', function () { r.couleurs[k] = this.value; db.sync.reglagesSales = true; sauver(); appliquerTheme(); rendreReglages(); });
-    });
-    $('#resetCoul').onclick = function () { r.couleurs = {}; db.sync.reglagesSales = true; sauver(); appliquerTheme(); rendreReglages(); toast('Couleurs d\'origine remises'); };
 
     if ($('#regRejoindre')) $('#regRejoindre').onclick = proposerRejoindre;
     if ($('#regSync')) $('#regSync').onclick = function () { Sync.lancer().then(function () { rendreReglages(); toast(Sync.etat().erreur || 'Synchro terminée ✔'); }); };
