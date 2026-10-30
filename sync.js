@@ -148,7 +148,7 @@
   }
 
   function quitter(raison) {
-    st.equipe = null; st.admin = false; st.depuis = null; st.membres = []; garder();
+    st.dernierUid = st.session && st.session.uid; st.equipe = null; st.admin = false; st.depuis = null; st.membres = []; garder();
     etat.erreur = raison === 'retire' ? 'Ce téléphone n\'est plus dans l\'équipe (retiré, ou compte repris sur un autre téléphone).' : 'Reconnecte-toi à l\'équipe';
     notifier(true);
   }
@@ -207,7 +207,7 @@
     }).catch(function (e) { throw new Error(message(e)); });
   }
 
-  function quitter() {
+  function deconnecter() {
     return lancer().then(function () {
       var n = hooks.lire ? Object.keys(hooks.lire().camions).filter(function (k) { return hooks.lire().camions[k]._sale; }).length : 0;
       if (n > 0) throw new Error('Des camions ne sont pas encore envoyés. Connecte-toi au réseau puis réessaie.');
@@ -218,7 +218,7 @@
   }
 
   window.Sync = {
-    quitter: quitter,
+    quitter: deconnecter,
     init: function (h) {
       hooks = h;
       window.addEventListener('online', bientot);
@@ -228,7 +228,7 @@
     },
     nom: nom, actif: actif, rejoint: rejoint, lancer: lancer, bientot: bientot, rejoindre: rejoindre, message: message,
     moi: function () { return { uid: st.session && st.session.uid, prenom: nom(st.prenom), admin: !!st.admin }; },
-    membres: function () { return (st.membres || []).map(function (x) { var o = {}; for (var k in x) o[k] = x[k]; o.prenom = nom(x.prenom); return o; }); },
+    membres: function () { return (st.membres || []).filter(function (x) { return x.actif !== false; }).map(function (x) { var o = {}; for (var k in x) o[k] = x[k]; o.prenom = nom(x.prenom); return o; }); },
     etat: function () { return etat; },
     attente: function (db) { return Object.keys(db.camions).filter(function (k) { return db.camions[k]._sale; }).length; },
     secretAVoir: function () { return st.secretAVoir || null; },

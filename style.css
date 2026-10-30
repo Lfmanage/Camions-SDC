@@ -842,3 +842,17 @@ html, body { max-width: 100vw; overflow-x: hidden; touch-action: pan-x pan-y; }
 .reg-admin[open] > summary { margin-bottom: 6px; }
 .reg .seg button { min-height: 34px; }
 input.maj { text-transform: uppercase; }
+
+/* v45 ultra-compact */
+.eq-compact { gap: 6px; }
+.eq-btns { display: flex; gap: 6px; }
+.eq-b { flex: 1; text-align: center; background: var(--field); border: 1px solid var(--line); border-radius: 10px; padding: 7px 4px; font-size: 13px; color: var(--accent); font-weight: 600; }
+.eq-b.rouge { color: var(--rouge); }
+.ligne-app { flex-direction: row; align-items: center; justify-content: space-between; }
+.ligne-app .seg { width: 210px; margin: 0; }
+.reg .g3 { grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.reg .g3 .champ > span { font-size: 9.5px; letter-spacing: -.2px; }
+.reg .g3 .champ input { padding: 5px 6px; font-size: 14px; min-height: 36px; text-align: center; }
+#reglagesZone .carte { padding: 8px 10px; }
+#reglagesZone { gap: 6px; }
+.reg-ouvrir b { font-size: 14px; }

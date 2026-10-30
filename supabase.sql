@@ -252,7 +252,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not est_admin() then raise exception 'ADMIN'; end if;
   if p_user = auth.uid() then raise exception 'SOI_MEME'; end if;
-  update membres set actif = p_actif where user_id = p_user and equipe_id = mon_equipe();
+  delete from membres where user_id = p_user and equipe_id = mon_equipe();
   return true;
 end $$;
 

@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '44';
+  var VERSION_APP = '45';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1576,7 +1576,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=44" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=44" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=45" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=45" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -1694,46 +1694,52 @@
         '<input type="color" value="' + (cur || PRESETS[k][0]) + '" aria-label="Couleur libre"></div></div>';
     }).join('');
     if (r.couleurs && Object.keys(r.couleurs).length) { r.couleurs = {}; appliquerTheme(); }
-    $('#reglagesZone').innerHTML = blocEquipe() + (adm ? blocAdmin() : '') +
+    $('#reglagesZone').innerHTML = blocEquipe() +
       '<div class="carte reg' + (verrou ? ' verrouille' : '') + '"><h2>Limites du camion</h2>' + (verrou ? '<p class="petit-txt">Réglages communs à toute l\'équipe.</p>' : '') +
-      '<div class="g3">' + champNum('rMin', 'Vol. mini m³', r.m3Min) + champNum('rMax', 'Vol. maxi m³', r.m3Max) + champNum('rEcart', 'Écart G/D m³', r.ecartMax) + champNum('rE1Min', 'Étage 1 mini m', r.e1Min) + champNum('rE1Max', 'Étage 1 maxi m', r.e1Max) + '</div>' +
+      '<div class="g3">' + champNum('rMin', 'Vol min', r.m3Min) + champNum('rMax', 'Vol max', r.m3Max) + champNum('rEcart', 'Écart G/D', r.ecartMax) + champNum('rE1Min', 'Ét.1 min', r.e1Min) + champNum('rE1Max', 'Ét.1 max', r.e1Max) + '</div>' +
       '</div>' +
 
       '<button class="carte reg-ouvrir" id="ouvrirSections" type="button"><span><b>Sections et quantités</b><small>' + r.sections.length + ' sections · ' + (verrou ? 'communes à l\'équipe' : 'quantité remplie toute seule') + '</small></span><i>›</i></button>' +
 
-      '<div class="carte reg"><h2>Apparence</h2><div class="seg" id="segTheme">' +
+      '<div class="carte reg ligne-app"><span>Apparence</span><div class="seg" id="segTheme">' +
       [['auto', 'Auto'], ['clair', 'Clair'], ['sombre', 'Sombre']].map(function (t) { return '<button type="button" data-t="' + t[0] + '" class="' + (r.theme === t[0] ? 'actif' : '') + '">' + t[1] + '</button>'; }).join('') +
       '</div></div>' +
 
-      '<div class="carte reg"><h2>Mes données</h2><div class="g2"><button class="btn sec petit" id="exp" type="button">Sauvegarder mes données</button><button class="btn sec petit" id="imp" type="button">Restaurer</button></div>' +
+      '<div class="carte reg"><div class="g2"><button class="btn sec petit" id="exp" type="button">Sauvegarder mes données</button><button class="btn sec petit" id="imp" type="button">Restaurer</button></div>' +
       '<input type="file" id="impFichier" accept="application/json,.json" hidden>' +
       '<p class="petit-txt">' + Object.keys(db.camions).filter(function (k) { return !db.camions[k].supprime && db.camions[k].statut === 'termine'; }).length + ' camions enregistrés · version ' + VERSION_APP + '</p></div>';
     if (verrou) $$('#reglagesZone .verrouille input').forEach(function (x) { x.disabled = true; });
-    if ($('#admDet')) $('#admDet').addEventListener('toggle', function () { adminOuvert = this.open; });
     lierReglages();
   }
 
   function blocEquipe() {
     if (!Sync.actif()) return '';
-    if (!enEquipe()) return '<div class="carte reg"><h2>Équipe</h2><p class="petit-txt">Ce téléphone n\'est pas encore dans l\'équipe.</p><button class="btn" id="regRejoindre" type="button">Rejoindre l\'équipe</button></div>';
+    if (!enEquipe()) return '<div class="carte reg"><div class="reg-l" style="border:0;padding:0"><span class="petit-txt">Ce téléphone n\'est pas dans l\'équipe.</span><button class="lien" id="regRejoindre" type="button">Rejoindre ›</button></div></div>';
     var m = Sync.moi();
-    return '<div class="carte reg"><h2>Équipe</h2><div class="reg-l"><span>Prénom</span><button class="lien" id="regPrenom" type="button">' + esc(m.prenom) + ' ›</button></div>' +
-      '<div class="reg-l"><span class="petit-txt">' + etatSyncTxt() + '</span><button class="lien" id="regSync" type="button">Synchroniser ›</button></div>' +
-      '<button class="lien rouge" id="regQuitter" type="button" style="align-self:flex-start">Se déconnecter</button></div>';
+    return '<div class="carte reg eq-compact"><div class="reg-l" style="border:0;padding:0"><span><button class="lien" id="regPrenom" type="button" style="font-weight:700">' + esc(m.prenom) + ' ✎</button> <span class="petit-txt">· ' + etatSyncTxt() + '</span></span><button class="lien" id="regSync" type="button">⟳ Synchro</button></div>' +
+      '<div class="eq-btns">' + (m.admin ? '<button class="eq-b" id="regGestion" type="button">Gestion ›</button>' : '') + '<button class="eq-b rouge" id="regQuitter" type="button">Se déconnecter</button></div></div>';
   }
-  // Partie visible seulement sur le téléphone qui gère l'équipe
-  function blocAdmin() {
+  function ouvrirGestion() {
     var moi = Sync.moi().uid, ms = Sync.membres();
-    return '<details class="carte reg reg-admin"' + (adminOuvert ? ' open' : '') + ' id="admDet"><summary>Gestion de l\'équipe</summary>' +
-      '<div class="reg-l"><span>Code de l\'équipe</span><button class="lien" id="admCode" type="button">Changer ›</button></div>' +
-      '<div class="reg-l"><span>Mon code secret</span><button class="lien" id="admSecret" type="button">Définir mon code ›</button></div>' +
-      '<p class="reg-st">Téléphones (' + ms.filter(function (x) { return x.actif; }).length + ')</p>' +
+    var f = ouvrirFeuille('<div class="sec-tete"><h2>Gestion de l\'équipe</h2><button class="lien" data-g="fermer" type="button">Fermer</button></div>' +
+      '<div class="reg-l"><span>Code de l\'équipe</span><button class="lien" data-g="code" type="button">Changer ›</button></div>' +
+      '<div class="reg-l"><span>Mon code secret</span><button class="lien" data-g="secret" type="button">Définir ›</button></div>' +
+      '<p class="reg-st">Membres (' + ms.length + ')</p>' +
       ms.map(function (x) {
-        return '<div class="reg-l' + (x.actif ? '' : ' retire') + '"><span>' + esc(x.prenom) + (x.user_id === moi ? ' <small>· ce téléphone</small>' : '') + (x.actif ? '' : ' <small>· retiré</small>') + '</span>' +
-          (x.user_id === moi ? '' : '<button class="lien ' + (x.actif ? 'rouge' : '') + '" data-retirer="' + esc(x.user_id) + '" data-actif="' + (x.actif ? 1 : 0) + '" type="button">' + (x.actif ? 'Retirer' : 'Remettre') + '</button>') + '</div>';
-      }).join('') + '<p class="petit-txt">Les sections et limites que tu modifies ici s\'appliquent à toute l\'équipe.</p></details>';
+        return '<div class="reg-l"><span>' + esc(x.prenom) + (x.user_id === moi ? ' <small>· toi</small>' : '') + '</span>' +
+          (x.user_id === moi ? '' : '<button class="lien rouge" data-retirer="' + esc(x.user_id) + '" type="button">Retirer</button>') + '</div>';
+      }).join('') + '<p class="petit-txt">Les sections et limites que tu modifies s\'appliquent à toute l\'équipe.</p>');
+    f.onclick = function (e) {
+      var b = e.target.closest('[data-g],[data-retirer]'); if (!b) return;
+      if (b.dataset.g === 'fermer') fermerFeuille();
+      if (b.dataset.g === 'code') { fermerFeuille(); setTimeout(function () { demanderTexte('Nouveau code d\'équipe', '', 'Les téléphones déjà dans l\'équipe ne sont pas déconnectés.').then(function (v) { if (v) Sync.changerCode(v).then(function () { toast('Code d\'équipe changé ✔'); }).catch(function (er) { toast(er.message); }); }); }, 120); }
+      if (b.dataset.g === 'secret') { fermerFeuille(); setTimeout(function () { demanderTexte('Mon code secret', '', 'Tu le choisis, il ne change plus. 6 caractères minimum. Il sert à retrouver ton compte admin sur un nouveau téléphone.').then(function (v) { if (v) Sync.definirSecret(v).then(function () { toast('Code secret enregistré ✔'); }).catch(function (er) { toast(er.message); }); }); }, 120); }
+      if (b.dataset.retirer) {
+        if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Confirmer'; return; }
+        Sync.retirer(b.dataset.retirer, false).then(function () { toast('Retiré de l\'équipe'); fermerFeuille(); setTimeout(ouvrirGestion, 150); }).catch(function (er) { toast(er.message); });
+      }
+    };
   }
-  var adminOuvert = false;
 
   // ---------- Sections et quantités ----------
   function txtLg(lg) { return (lg || []).map(fm).join(' · '); }
@@ -1848,19 +1854,7 @@
     if ($('#regPrenom')) $('#regPrenom').onclick = function () {
       demanderTexte('Ton prénom', Sync.moi().prenom, '', true).then(function (v) { if (v) Sync.changerPrenom(v).then(function () { toast('Prénom changé'); rendreReglages(); }).catch(function (e) { toast(e.message); }); });
     };
-    if ($('#admCode')) $('#admCode').onclick = function () {
-      demanderTexte('Nouveau code d\'équipe', '', 'Les téléphones déjà dans l\'équipe ne sont pas déconnectés.').then(function (v) { if (v) Sync.changerCode(v).then(function () { toast('Code d\'équipe changé ✔'); }).catch(function (e) { toast(e.message); }); });
-    };
-    if ($('#admSecret')) $('#admSecret').onclick = function () {
-      demanderTexte('Mon code secret', '', 'Tu le choisis, il ne change plus. 6 caractères minimum. Il sert à retrouver ton compte admin sur un nouveau téléphone.').then(function (v) { if (v) Sync.definirSecret(v).then(function () { toast('Code secret enregistré ✔'); }).catch(function (e) { toast(e.message); }); });
-    };
-    $$('[data-retirer]').forEach(function (b) {
-      b.onclick = function () {
-        var remettre = b.dataset.actif === '0';
-        if (!remettre && !b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Confirmer'; return; }
-        Sync.retirer(b.dataset.retirer, remettre).then(function () { toast(remettre ? 'Téléphone remis' : 'Téléphone retiré'); rendreReglages(); }).catch(function (e) { toast(e.message); });
-      };
-    });
+    if ($('#regGestion')) $('#regGestion').onclick = ouvrirGestion;
     $('#exp').onclick = sauvegarderFichier;
     $('#imp').onclick = function () { $('#impFichier').click(); };
     $('#impFichier').onchange = function () {
@@ -1883,6 +1877,7 @@
     lire: function () { return db; },
     ecrire: function (d) { db = d; sauver(true); },
     changement: function (st, change) {
+      if (Sync.actif() && !Sync.rejoint() && !verrouEquipe && !st.attente) { setTimeout(proposerRejoindre, 200); }
       if (document.activeElement && document.activeElement.matches('input')) return; // on ne dérange pas une saisie
       if (vueActive === 'plan') { if (change && !apercu && !selection) rendrePlanVue(); return; }
       if (vueActive === 'camion' || vueActive === 'client' || vueActive === 'calcul') return;
