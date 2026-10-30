@@ -735,3 +735,11 @@ input:focus { background: var(--card); }
 body:not([data-vue="accueil"]) .fe-plus { display: block; }
 body[data-vue="plan"] .fe:nth-child(n+4), body[data-vue="calcul"] .fe:nth-child(n+4) { display: none; }
 body[data-vue="plan"] .fe, body[data-vue="calcul"] .fe { scale: .65; opacity: .85; }
+
+/* v32 — colis du MILIEU : tout devant, bien visible */
+.chip.centre { position: relative; background-image: repeating-linear-gradient(135deg, rgba(209, 138, 14, .22) 0 6px, transparent 6px 12px), linear-gradient(#F6DC96, #EFCB72) !important; box-shadow: inset 0 0 0 2px #D18A0E; }
+.chip.centre::after { content: 'MILIEU'; position: absolute; top: 2px; right: 4px; font: 800 7.5px/1 Inter, system-ui, sans-serif; letter-spacing: .03em; color: #fff; background: #D18A0E; padding: 2px 3px; border-radius: 3px; }
+.leg-mil { margin: 2px 2px 0; font-size: 12px; line-height: 1.3; opacity: .9; }
+.leg-mil span { display: inline-block; font-weight: 800; font-size: 10px; color: #fff; background: #D18A0E; padding: 2px 5px; border-radius: 4px; margin-right: 2px; }
+.sens .leg-mil { margin: 0; font-size: 11px; white-space: nowrap; color: inherit; }
+.sens .leg-mil span { font-size: 9px; padding: 1px 4px; }

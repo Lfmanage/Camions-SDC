@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '31';
+  var VERSION_APP = '32';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -784,16 +784,16 @@
         if (f === N) {
           var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len);
           var E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
-          if (sup - E > 2) h += '<i class="esp" style="' + w((sup - E) / 2) + '"></i>';
+          if (c3.colis.length) c3.colis.forEach(function (k) { h += chip(k, true); }); // colis du milieu : tout devant, contre la cabine
+          else if (sup - E > 2) h += '<i class="esp" style="' + w((sup - E) / 2) + '"></i>';
           ro.colis.forEach(function (k) { h += chip(k, false); });
-          if (c3.colis.length) { if (maxPaire - ro.len > 1) h += '<i class="esp" style="' + w(maxPaire - ro.len) + '"></i>'; c3.colis.forEach(function (k) { h += chip(k, true); }); }
           lgAff = E / 100;
         } else ro.colis.forEach(function (k) { h += chip(k, false); });
         if (edit && selection) h += '<button type="button" class="poser" data-poser="' + s + f + '" aria-label="Poser ici">' + (selCote && !ro.colis.length ? 'Poser ici' : '+') + '</button>';
         h = h.replace('@LG@', fm(Math.round(lgAff * 100) / 100) + ' m');
         h += '</div></div>';
       });
-      h += '<div class="sens"><span class="c">Cabine</span><span>Arrière</span></div></div></section>';
+      h += '<div class="sens"><span class="c">Cabine</span>' + (v.rows['C' + N].colis.length ? '<span class="leg-mil"><span>MILIEU</span> = à cheval sur les 2 côtés</span>' : '') + '<span>Arrière</span></div></div></section>';
     });
     if (edit) {
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
@@ -1070,7 +1070,7 @@
     var lignesMsg = []; msgs.forEach(function (m) { couper(m[1], larg - 30).forEach(function (l, i) { lignesMsg.push([m[0], l, i === 0]); }); });
     var N = v.N, ETG = []; for (var e0 = N; e0 >= 1; e0--) ETG.push(e0);
     var hCote = 70 + N * (rowH + 14) + 50;
-    var H = 250 + 2 * (hCote + 30) + (v.cote.length ? rowH + 80 : 0) + lignesMsg.length * 38 + 110;
+    var H = 250 + 2 * (hCote + 30) + (v.rows['C' + N].colis.length ? 50 : 0) + (v.cote.length ? rowH + 80 : 0) + lignesMsg.length * 38 + 110;
     cv.width = W; cv.height = H;
     x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, W, H);
     // en-tête
@@ -1090,10 +1090,11 @@
     var trkX = pad + tagW, trkW = larg - tagW;
     function rond(a, b, w, h, rr) { x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
     function colis(k, xx, yy, w, centre) {
-      x.fillStyle = '#E7D6B8'; rond(xx, yy, w, rowH - 20, 8); x.fill();
-      if (centre) { x.save(); rond(xx, yy, w, rowH - 20, 8); x.clip(); x.strokeStyle = 'rgba(156,118,70,.35)'; x.lineWidth = 6; for (var t = -rowH; t < w; t += 18) { x.beginPath(); x.moveTo(xx + t, yy + rowH); x.lineTo(xx + t + rowH, yy - 20); x.stroke(); } x.restore(); }
+      x.fillStyle = centre ? '#F3D488' : '#E7D6B8'; rond(xx, yy, w, rowH - 20, 8); x.fill();
+      if (centre) { x.save(); rond(xx, yy, w, rowH - 20, 8); x.clip(); x.strokeStyle = 'rgba(190,130,20,.30)'; x.lineWidth = 6; for (var t = -rowH; t < w; t += 18) { x.beginPath(); x.moveTo(xx + t, yy + rowH); x.lineTo(xx + t + rowH, yy - 20); x.stroke(); } x.restore(); }
       x.fillStyle = '#C9AC7E'; x.fillRect(xx + w - 7, yy + 4, 5, rowH - 28);
-      x.strokeStyle = 'rgba(0,0,0,.10)'; x.lineWidth = 2; rond(xx, yy, w, rowH - 20, 8); x.stroke();
+      x.strokeStyle = centre ? '#D18A0E' : 'rgba(0,0,0,.10)'; x.lineWidth = centre ? 4 : 2; rond(xx, yy, w, rowH - 20, 8); x.stroke();
+      if (centre) { x.font = F(800, 17); var bw = x.measureText('MILIEU').width + 14; x.fillStyle = '#D18A0E'; rond(xx + w - bw - 10, yy - 12, bw, 24, 6); x.fill(); x.fillStyle = '#fff'; x.fillText('MILIEU', xx + w - bw - 3, yy + 6); }
       x.save(); x.beginPath(); x.rect(xx, yy, w - 8, rowH - 20); x.clip();
       x.fillStyle = '#2B2216'; x.font = F(700, 28); x.fillText(fm(k.lo) + ' m', xx + 14, yy + 34);
       x.fillStyle = '#6A5536'; x.font = F(500, 21); x.fillText(fm(k.ep) + '×' + fm(k.la), xx + 14, yy + 62);
@@ -1123,9 +1124,9 @@
         var ro = v.rows[s + f], items = [], lgAff = ro.m;
         if (f === N) {
           var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len), E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
-          if (sup - E > 2) items.push({ esp: 1, cm: (sup - E) / 2 });
+          if (c3.colis.length) c3.colis.forEach(function (k) { items.push({ k: k, cm: k.cm, centre: 1 }); });
+          else if (sup - E > 2) items.push({ esp: 1, cm: (sup - E) / 2 });
           ro.colis.forEach(function (k) { items.push({ k: k, cm: k.cm }); });
-          if (c3.colis.length) { if (maxPaire - ro.len > 1) items.push({ esp: 1, cm: maxPaire - ro.len }); c3.colis.forEach(function (k) { items.push({ k: k, cm: k.cm, centre: 1 }); }); }
           lgAff = E / 100;
         } else ro.colis.forEach(function (k) { items.push({ k: k, cm: k.cm }); });
         x.font = F(500, 22); x.fillStyle = MU; x.fillText('É' + f, pad, yy + 26);
@@ -1137,6 +1138,11 @@
       x.textAlign = 'right'; x.fillStyle = MU; x.font = F(500, 22); x.fillText('Arrière', W - pad, yy + 10); x.textAlign = 'left';
       y += hCote + 30;
     });
+    if (v.rows['C' + N].colis.length) {
+      x.font = F(800, 22); var mw = x.measureText('MILIEU').width + 16; x.fillStyle = '#D18A0E'; rond(pad, y - 8, mw, 32, 7); x.fill();
+      x.fillStyle = '#fff'; x.fillText('MILIEU', pad + 8, y + 16);
+      x.font = F(500, 24); x.fillStyle = INK; x.fillText('= colis à cheval sur les 2 côtés, posé tout devant contre la cabine', pad + mw + 10, y + 16); y += 50;
+    }
     if (v.cote.length) {
       x.font = F(700, 28); x.fillStyle = ROUGE; x.fillText('De côté (pas dans le camion)', pad, y + 20);
       piste(v.cote.map(function (k) { return { k: k, cm: k.cm }; }), y + 40); y += rowH + 80;
