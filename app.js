@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '27';
+  var VERSION_APP = '28';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -66,10 +66,19 @@
     if (!c || c.supprime || c.statut !== 'en_cours') { c = nouveauCamion(); sauver(true); }
     return c;
   }
-  function majPlan(c) { // le camion se remplit tout seul au fil de la saisie
-    c.plan = c.lignes.length ? P.meilleur(c.lignes, cfgC(c)).plan : null; c.ordre = null;
+  // Les colis ont changé : le plan sera recalculé (le meilleur possible) à l'ouverture du plan
+  function majPlan(c) {
+    c.plan = null; c.planDepart = null; c.planCalcule = false; c.ordre = null;
     c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
   }
+  // Cherche le meilleur plan (jusqu'à ~2 s) ; il devient le « plan de départ »
+  function calculerPlan(c) {
+    if (!c.lignes.length) { majPlan(c); return; }
+    var res = P.meilleur(c.lignes, cfgC(c));
+    c.plan = res.plan; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
+    c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
+  }
+  function assurerPlan(c) { if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); toucher(c); } }
   function toucher(c) {
     c.total_m3 = Math.round(P.totalM3(c.lignes) * 1000) / 1000;
     c.etat = P.etat(c.total_m3, cfgC(c)).code;
@@ -147,7 +156,7 @@
     if (v === 'client') rendreClient();
     if (v === 'camion') rendreCamion();
     if (v === 'plan') { rendrePlanVue(); requestAnimationFrame(ajusterPlan); }
-    if (v === 'historique') rendreHisto();
+    if (v === 'historique') { if (ongletHisto === 'stats') rendreStats(); else rendreHisto(); }
     if (v === 'reglages') rendreReglages();
     majRetour();
   }
@@ -584,17 +593,20 @@
     b.disabled = true; b.classList.add('calcul'); b.innerHTML = '<span class="spin"></span>Calcul…';
     setTimeout(function () {
       if (!c.plansVus) c.plansVus = [P.signature(c.lignes, c.plan || {})];
-      var res = P.autre(c.lignes, cfgC(c), c.plansVus, c.graineAutre || 1);
+      var refV = c.planDepart ? vplan(c, c.planDepart.plan) : null;
+      var res = P.autre(c.lignes, cfgC(c), c.plansVus, c.graineAutre || 1, refV);
       if (!res && c.plansVus.length > 1) { // on a fait le tour : on recommence la série
         c.plansVus = [P.signature(c.lignes, c.plan || {})];
-        res = P.autre(c.lignes, cfgC(c), c.plansVus, (c.graineAutre || 1) + 50);
+        res = P.autre(c.lignes, cfgC(c), c.plansVus, (c.graineAutre || 1) + 50, refV);
       }
       b.disabled = false; b.classList.remove('calcul'); b.innerHTML = 'Autre plan';
       if (!res) { toast('C\'est le seul bon plan avec ces colis.'); return; }
       c.plan = res.plan; c.ordre = null; c.planManuel = false; c.planVariante = true; c.graineAutre = res.graine;
+      var mieux = c.planDepart && res.note < c.planDepart.note - 0.01;
+      if (mieux) c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
       c.plansVus.push(res.signature); selection = null; toucher(c);
       rendrePlanVue(); window.scrollTo({ top: 0, behavior: 'smooth' });
-      toast('Nouveau plan · ' + (c.plansVus.length) + 'e proposition');
+      toast(mieux ? 'Meilleur plan trouvé : c\'est le nouveau plan de départ' : 'Nouveau plan · ' + (c.plansVus.length) + 'e proposition');
     }, 30);
   });
 
@@ -628,6 +640,7 @@
   $('#btnTerminer').addEventListener('click', function () {
     var c = courant();
     if (!c.lignes.length) { toast('Aucun colis à enregistrer.'); return; }
+    assurerPlan(c);
     var nCote = vplan(c).cote.length;
     if (nCote) {
       demander({
@@ -712,15 +725,15 @@
     Object.keys(v.rows).forEach(function (k) { totCm += v.rows[k].len; });
     v.nonPlaces.forEach(function (k) { totCm += k.cm; });
     var N = v.N || 3, maxCm = 2 * N * Math.round(r.e1Max * 100);
-    if (totCm > maxCm) return { cls: 'e', etq: '⚠ Trop long', detail: 'Les colis font ' + fm(totCm / 100) + ' m bout à bout : ' + fm((totCm - maxCm) / 100) + ' m de trop pour ' + N + ' étages de ' + fm(r.e1Max) + ' m. Retire des colis.' };
+    if (totCm > maxCm) return { cls: 'e', etq: '⚠ Trop long', court: fm((totCm - maxCm) / 100) + ' m de colis en trop : retire des colis.', detail: 'Les colis font ' + fm(totCm / 100) + ' m bout à bout : ' + fm((totCm - maxCm) / 100) + ' m de trop pour ' + N + ' étages de ' + fm(r.e1Max) + ' m. Retire des colis.' };
     if (v.etat.code === 'peu') return { cls: 'a', etq: 'Il manque ' + f2(v.etat.manque) + ' m³' };
     var lg = v.erreurs.filter(function (m) { return /^Étage/.test(m); });
     if (lg.length) return { cls: 'e', etq: '⚠ À revoir', detail: lg[0] };
     if (v.etat.code === 'trop') return { cls: 'e', etq: 'Dépassé ' + f2(v.etat.depasse) + ' m³' };
-    if (v.ecrase) return { cls: 'a', etq: '≈ Fait au mieux', detail: 'Avec ces colis, impossible de mettre toutes les sections fines au-dessus des plus épaisses : les étages en rouge ont un colis posé sur plus fin que lui.' };
-    if (P.deseq(v) > r.ecartMax + 0.005) return { cls: 'a', etq: '≈ Équilibré au mieux', detail: 'Avec ces colis, écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³ entre gauche et droite : le plus faible possible.' };
+    if (v.ecrase) return { cls: 'a', etq: '≈ Fait au mieux', court: 'Étages en rouge : épaisseurs mélangées.', detail: 'Avec ces colis, impossible de mettre toutes les sections fines au-dessus des plus épaisses : les étages en rouge ont un colis posé sur plus fin que lui.' };
+    if (P.deseq(v) > r.ecartMax + 0.005) return { cls: 'a', etq: '≈ Équilibré au mieux', court: 'Écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³, le plus faible possible.', detail: 'Avec ces colis, écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³ entre gauche et droite : le plus faible possible.' };
     var lgM = v.avis.filter(function (m) { return /cm/.test(m); });
-    if (lgM.length) return { cls: 'a', etq: '≈ Équilibré au mieux', detail: lgM[0].replace(/\.$/, '') + ' : le plus petit écart possible avec ces colis.' };
+    if (lgM.length) return { cls: 'a', etq: '≈ Équilibré au mieux', court: 'Longueurs gauche/droite : le plus proche possible.', detail: lgM[0].replace(/\.$/, '') + ' : le plus petit écart possible avec ces colis.' };
     return { cls: 'o', etq: '✓ Équilibré' };
   }
 
@@ -747,7 +760,9 @@
     }
     var h = '<div class="sum ' + st.cls + '"><span class="sum-g"><span class="tot">' + f2(v.total) + '<small>/ ' + fm(r.cible) + ' m³</small></span><span class="etq">' + esc(st.etq) + '</span></span>' +
       '<span class="gd">Gauche <b>' + f2(v.volG) + '</b><br>Droite <b>' + f2(v.volD) + '</b></span></div>';
-    if (st.detail) h += '<p class="statut-detail">' + esc(st.detail) + '</p>';
+    if (st.detail) h += (st.court && !opts.lecture)
+      ? '<p class="statut-detail"><span class="court">' + esc(st.court) + '</span> <button type="button" class="pourquoi" data-pourquoi="1">Pourquoi ?</button><span class="detail-long">' + esc(st.detail) + '</span></p>'
+      : '<p class="statut-detail ouvert"><span class="detail-long">' + esc(st.detail) + '</span></p>';
     if (v.cote.length) {
       h += '<div class="tray"><div class="tray-chips">' + v.cote.map(function (k) { return chip(k, false, true); }).join('') + '</div>' +
         '<p><b>' + v.cote.length + ' colis de côté.</b> ' + (selCote ? 'Touche + au bout d\'un étage, ou un colis pour le poser devant.' : 'Touche-en un pour le reposer.') + '</p></div>';
@@ -786,7 +801,12 @@
     var c = courant();
     // le plan doit toujours être bon : on le refait s'il est faux ou incomplet (sauf modification à la main)
     var v = vplan(c);
-    if (c.lignes.length && (v.nonPlaces.length || (!c.planManuel && (P.noteVerif(v) >= 1000 || (!c.planVariante && P.deseq(v) > reg().ecartMax + 0.005))))) { majPlan(c); toucher(c); }
+    var besoin = c.lignes.length && (v.nonPlaces.length || (!c.planCalcule && !c.planManuel && (P.noteVerif(v) >= 1000 || (!c.planVariante && P.deseq(v) > reg().ecartMax + 0.005))));
+    if (besoin) {
+      $('#planZone').innerHTML = '<div class="calcul-plan"><span class="spin"></span>Calcul du meilleur plan…</div>';
+      setTimeout(function () { calculerPlan(c); toucher(c); if (vueActive === 'plan') { $('#planZone').innerHTML = htmlPlan(c, {}); ajusterPlan(); } }, 40);
+      return;
+    }
     $('#planZone').innerHTML = htmlPlan(c, {});
     ajusterPlan();
   }
@@ -843,7 +863,13 @@
   $('#planZone').addEventListener('click', function (e) {
     var c = courant();
     if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
-    if (e.target.closest('[data-recalc]')) { majPlan(c); c.ordre = null; toucher(c); selection = null; rendrePlanVue(); toast('Plan de départ remis'); return; }
+    var pq = e.target.closest('[data-pourquoi]');
+    if (pq) { var sd = pq.closest('.statut-detail'); sd.classList.toggle('ouvert'); pq.textContent = sd.classList.contains('ouvert') ? 'Masquer' : 'Pourquoi ?'; ajusterPlan(); return; }
+    if (e.target.closest('[data-recalc]')) {
+      if (c.planDepart) { c.plan = JSON.parse(JSON.stringify(c.planDepart.plan)); c.ordre = null; c.planManuel = false; c.planVariante = false; c.planCalcule = true; }
+      else calculerPlan(c);
+      toucher(c); selection = null; rendrePlanVue(); toast('Meilleur plan remis'); return;
+    }
     if (e.target.closest('[data-decote]') && selection) {
       if (!c.ordre) fixerOrdre(c);
       c.plan = Object.assign({}, c.plan); c.plan[selection] = 'X'; c.planManuel = true; selection = null; toucher(c);
@@ -860,7 +886,50 @@
     else echanger(c, selection, id);
     rendrePlanVue();
   });
-  $('#btnPartager').addEventListener('click', function () { partagerImage(courant()); });
+  $('#btnPartager').addEventListener('click', function () { var c = courant(); if (!c.lignes.length) { toast('Aucun colis.'); return; } assurerPlan(c); choixPartage(c); });
+  // ---------- Partager : fiche chauffeur (texte + image), image seule, texte copié ----------
+  function texteChauffeur(c) {
+    var v = vplan(c), d = new Date(c.termine_le || c.maj_le || Date.now());
+    var dt = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
+    var nb = c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0);
+    var t = '🚛 ' + (c.client || 'Camion') + (c.reference ? ' · Réf. ' + c.reference : '') + '\n' +
+      dt.charAt(0).toUpperCase() + dt.slice(1) + ' · ' + heure(d.toISOString()) + '\n' +
+      'Total : ' + f2(v.total) + ' m³ · ' + nb + ' colis\n' +
+      'Gauche ' + f2(v.volG) + ' · Droite ' + f2(v.volD) + '\n\n';
+    c.lignes.forEach(function (l) { var n = l.nb || 1; t += '• ' + fm(l.ep) + '×' + fm(l.la) + ' · ' + fLong(l.lo) + ' m' + (n > 1 ? ' ×' + n : '') + ' — ' + f3(P.volTotalLigne(l)) + ' m³\n'; });
+    return t + '\nSDC – Les Scieries du Centre';
+  }
+  function fichierPlan(c) {
+    var url = imagePlan(c).toDataURL('image/png'), bin = atob(url.split(',')[1]), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    var nom = 'plan-camion' + (c.client ? '-' + c.client.replace(/[^A-Z0-9]+/gi, '-') : '') + (c.reference ? '-' + c.reference : '') + '.png';
+    return { url: url, fichier: new File([arr], nom, { type: 'image/png' }) };
+  }
+  function copier(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function () { toast('Texte copié'); }, function () { toast('Copie impossible'); });
+    var ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Texte copié'); } catch (e) { toast('Copie impossible'); }
+    ta.remove();
+  }
+  function choixPartage(c) {
+    var f = ouvrirFeuille('<h2>Partager le camion</h2>' +
+      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche chauffeur</b><small>Texte + image du plan, par WhatsApp, SMS…</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="image"><span class="op-ic">🖼</span><span><b>Image du plan seulement</b><small>Comme avant</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="texte"><span class="op-ic">📋</span><span><b>Copier le texte</b><small>Pour le coller où tu veux</small></span></button>');
+    f.onclick = function (e) {
+      var b = e.target.closest('[data-p]'); if (!b) return;
+      var p = b.dataset.p; f.onclick = null; fermerFeuille();
+      if (p === 'image') { setTimeout(function () { partagerImage(c); }, 120); return; }
+      var txt = texteChauffeur(c);
+      if (p === 'texte') { copier(txt); return; }
+      try {
+        var fp = fichierPlan(c);
+        if (navigator.canShare && navigator.canShare({ files: [fp.fichier], text: txt })) { navigator.share({ files: [fp.fichier], text: txt, title: 'Camion ' + (c.client || '') }).catch(function () {}); return; }
+        if (navigator.share) { navigator.share({ text: txt }).catch(function () {}); return; }
+      } catch (er) {}
+      copier(txt); setTimeout(function () { partagerImage(c); }, 200);
+    };
+  }
 
   // ---------- Image du plan (partage) ----------
   var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=26';
@@ -988,12 +1057,13 @@
     var p = cle.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]);
     var auj = jourCle(new Date().toISOString()), hier = jourCle(new Date(Date.now() - 864e5).toISOString());
     var txt = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    if (cle === auj) return 'Aujourd\'hui · ' + txt;
-    if (cle === hier) return 'Hier · ' + txt;
+    var court = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    if (cle === auj) return 'Aujourd\'hui <small>' + court + '</small>';
+    if (cle === hier) return 'Hier <small>' + court + '</small>';
     return txt.charAt(0).toUpperCase() + txt.slice(1);
   }
   function heure(iso) { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
-  var LIB = { ok: 'OK', peu: 'Pas assez', trop: 'Dépassé' };
+  var LIB = { ok: 'Volume OK', peu: 'Volume trop bas', trop: 'Volume dépassé' };
   function ligneCam(c, enCours) {
     var qui = c.client || 'Sans client';
     return glisse(c.id, '<button class="cam" type="button" data-id="' + esc(c.id) + '"><span class="h">' + heure(enCours ? c.maj_le : c.termine_le) + '</span>' +
@@ -1074,6 +1144,58 @@
     $('#histo').innerHTML = h;
   }
   $('#recherche').addEventListener('input', rendreHisto);
+  // ---------- Statistiques ----------
+  var ongletHisto = 'camions', periodeStats = 'semaine';
+  $('#histoOnglets').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-o]'); if (!b) return;
+    ongletHisto = b.dataset.o;
+    $$('#histoOnglets button').forEach(function (x) { x.classList.toggle('actif', x === b); });
+    $('#histoCamions').hidden = $('#histo').hidden = ongletHisto !== 'camions';
+    $('#stats').hidden = ongletHisto !== 'stats';
+    if (ongletHisto === 'stats') rendreStats(); else rendreHisto();
+  });
+  $('#stats').addEventListener('click', function (e) { var b = e.target.closest('[data-per]'); if (b) { periodeStats = b.dataset.per; rendreStats(); } });
+  function debutPeriode(per, d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if (per === 'semaine') x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    else if (per === 'mois') x.setDate(1);
+    else { x.setMonth(0); x.setDate(1); }
+    return x;
+  }
+  function rendreStats() {
+    var maint = new Date(), deb = debutPeriode(periodeStats, maint), fin, prevDeb = new Date(deb);
+    if (periodeStats === 'semaine') { fin = new Date(deb); fin.setDate(fin.getDate() + 7); prevDeb.setDate(prevDeb.getDate() - 7); }
+    else if (periodeStats === 'mois') { fin = new Date(deb); fin.setMonth(fin.getMonth() + 1); prevDeb.setMonth(prevDeb.getMonth() - 1); }
+    else { fin = new Date(deb); fin.setFullYear(fin.getFullYear() + 1); prevDeb.setFullYear(prevDeb.getFullYear() - 1); }
+    var finis = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime && c.statut === 'termine' && c.termine_le; });
+    var dans = finis.filter(function (c) { var t = new Date(c.termine_le); return t >= deb && t < fin; });
+    var avant = finis.filter(function (c) { var t = new Date(c.termine_le); return t >= prevDeb && t < deb; });
+    var tot = dans.reduce(function (a, c) { return a + c.total_m3; }, 0), totAv = avant.reduce(function (a, c) { return a + c.total_m3; }, 0);
+    // bâtons : jours de la semaine, semaines du mois, mois de l'année
+    var cases = [], idx;
+    if (periodeStats === 'semaine') { ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].forEach(function (n) { cases.push({ n: n, v: 0 }); }); idx = function (t) { return (t.getDay() + 6) % 7; }; }
+    else if (periodeStats === 'mois') { for (var w = 0; w < 5; w++) cases.push({ n: 'S' + (w + 1), v: 0 }); idx = function (t) { return Math.min(4, Math.floor((t.getDate() - 1) / 7)); }; }
+    else { 'JFMAMJJASOND'.split('').forEach(function (n) { cases.push({ n: n, v: 0 }); }); idx = function (t) { return t.getMonth(); }; }
+    dans.forEach(function (c) { cases[idx(new Date(c.termine_le))].v += c.total_m3; });
+    var actuel = idx(maint), max = Math.max.apply(null, cases.map(function (x) { return x.v; }).concat([1]));
+    var parClient = {};
+    dans.forEach(function (c) { var k = c.client || 'Sans client'; (parClient[k] = parClient[k] || { m: 0, n: 0 }); parClient[k].m += c.total_m3; parClient[k].n++; });
+    var clients = Object.keys(parClient).sort(function (a, b) { return parClient[b].m - parClient[a].m; });
+    var maxC = clients.length ? parClient[clients[0]].m : 1;
+    var nomPer = { semaine: 'Cette semaine', mois: 'Ce mois-ci', annee: 'Cette année' }[periodeStats];
+    var evol = totAv > 0 ? Math.round((tot - totAv) / totAv * 100) : null;
+    var h = '<div class="seg" id="segPer">' + [['semaine', 'Semaine'], ['mois', 'Mois'], ['annee', 'Année']].map(function (p) { return '<button type="button" data-per="' + p[0] + '" class="' + (periodeStats === p[0] ? 'actif' : '') + '">' + p[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="carte st-tot"><small>' + nomPer + '</small><b>' + f2(tot) + ' m³</b><p>' + dans.length + ' camion' + (dans.length > 1 ? 's' : '') +
+      (evol !== null ? ' · <i class="' + (evol >= 0 ? 'plus' : 'moins') + '">' + (evol >= 0 ? '+' : '') + evol + ' %</i> par rapport à la période d\'avant' : '') + '</p>' +
+      '<div class="st-ch' + (cases.length > 7 ? ' serre' : '') + '">' + cases.map(function (x, k) {
+        return '<div class="' + (k === actuel ? 'auj' : '') + '"><b>' + (x.v ? Math.round(x.v) : '') + '</b><em style="height:' + Math.max(2, Math.round(x.v / max * 100)) + '%"></em><span>' + x.n + '</span></div>';
+      }).join('') + '</div></div>' +
+      (clients.length ? '<div class="carte st-cl"><h3>Par client</h3>' + clients.map(function (k) {
+        var x = parClient[k];
+        return '<div class="st-r"><b>' + esc(k) + '<em>' + x.n + ' camion' + (x.n > 1 ? 's' : '') + '</em></b><span>' + f2(x.m) + ' m³</span><small><i style="width:' + Math.round(x.m / maxC * 100) + '%"></i></small></div>';
+      }).join('') + '</div>' : '<div class="carte vide">Aucun camion terminé sur cette période.</div>');
+    $('#stats').innerHTML = h;
+  }
   activerGlisser($('#histo'), ouvrirCamion, function (id) { supprimerCamion(id, rendreHisto); });
   activerGlisser($('#accEnCours'), ouvrirCamion, function (id) { supprimerCamion(id, rendreAccueil); });
   $('#histo').addEventListener('click', function (e) { var b = e.target.closest('.cam'); if (b) detail(db.camions[b.dataset.id]); });
@@ -1100,6 +1222,7 @@
 
   function detail(c) {
     if (!c) return;
+    assurerPlan(c);
     var enCours = c.statut === 'en_cours';
     var lignes = c.lignes.map(function (l) {
       return '<div class="lig"><div class="txt"><div class="sec">' + fm(l.ep) + ' × ' + fm(l.la) + ((l.nb || 1) > 1 ? '<span class="mult">×' + l.nb + '</span>' : '') + '</div><div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m</div></div><span class="vol">' + f3(P.volTotalLigne(l)) + '</span></div>';
@@ -1111,7 +1234,7 @@
       '<p class="petit-txt" style="margin-top:-6px">' + date + ' · <b>' + f2(c.total_m3) + ' m³</b> ' + (enCours ? '' : '<span class="pastille ' + c.etat + '">' + LIB[c.etat] + '</span>') + '</p>' +
       '<div class="grille-btns">' +
       (enCours ? '<button class="btn" data-a="reprendre" type="button">Reprendre</button>' : '<button class="btn" data-a="dupliquer" type="button">Dupliquer</button>') +
-      '<button class="btn sec" data-a="image" type="button">Partager l\'image</button></div>' +
+      '<button class="btn sec" data-a="image" type="button">Partager</button></div>' +
       '<div class="carte liste" style="flex:none;max-height:none">' + (lignes || '<div class="vide">Aucun colis</div>') + '</div>' +
       (c.lignes.length ? htmlPlan(c, { lecture: true }) : '') +
       '<div class="grille-btns"><button class="btn danger" data-a="suppr" type="button">Supprimer</button><button class="btn sec" data-a="fermer" type="button">Fermer</button></div>');
@@ -1121,7 +1244,7 @@
       b.onclick = function () {
         var a = b.dataset.a;
         if (a === 'fermer') fermerFeuille();
-        if (a === 'image') partagerImage(c);
+        if (a === 'image') { fermerFeuille(); setTimeout(function () { choixPartage(c); }, 260); }
         if (a === 'reprendre') { db.courant = c.id; sauver(true); fermerFeuille(); viderForm(); setTimeout(function () { aller('camion'); }, 60); }
         if (a === 'dupliquer') {
           var copie = JSON.parse(JSON.stringify({ client: c.client, reference: c.reference, lignes: c.lignes, plan: c.plan, lgMax: c.lgMax || null, volMode: c.volMode || 'plage', volExact: c.volExact || null }));

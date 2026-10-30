@@ -242,14 +242,62 @@
     return aff;
   }
 
-  function optimiser(colis, cfg, aff, r, iters, biais, INT) {
+  // Construction « comme le chargeur » : on remplit étage par étage, du bas vers le haut,
+  // en prenant d'abord les sections les plus épaisses, gauche puis droite à la même longueur si possible.
+  function sacADos(cand, colis, cible) { // meilleure somme de longueurs <= cible, en préférant les colis épais
+    var U = 5, T = Math.max(0, Math.floor(cible / U)), n = cand.length;
+    var sc = new Float64Array(T + 1).fill(-1), pris = []; sc[0] = 0;
+    for (var a = 0; a < n; a++) {
+      var c = colis[cand[a]], w = Math.round(c.cm / U), v = (NK - c.k) * 10 + c.vol * 0.01, tab = new Uint8Array(T + 1);
+      for (var t = T; t >= w; t--) if (sc[t - w] >= 0 && sc[t - w] + v > sc[t]) { sc[t] = sc[t - w] + v; tab[t] = 1; }
+      pris.push(tab);
+    }
+    var tBest = T; while (tBest > 0 && sc[tBest] < 0) tBest--;
+    var res = [], t2 = tBest;
+    for (var b = n - 1; b >= 0 && t2 > 0; b--) if (pris[b][t2]) { res.push(cand[b]); t2 -= Math.round(colis[cand[b]].cm / U); }
+    return res;
+  }
+  function construire(colis, cfg, L, INT, r) {
+    var N = L.N, aff = new Array(colis.length), reste = colis.map(function (_, i) { return i; });
+    var mx = Math.round(cfg.e1Max * 100), len = zeros(L.NR);
+    function remplir(row, cible) {
+      // on n'utilise une classe plus fine que si les plus épaisses ne suffisent pas à remplir
+      var classes = []; reste.forEach(function (i) { if (classes.indexOf(colis[i].k) < 0) classes.push(colis[i].k); });
+      classes.sort(function (a, b) { return a - b; });
+      var choix = [];
+      for (var q = 0; q < classes.length; q++) {
+        var cand = reste.filter(function (i) { return colis[i].k <= classes[q] && !INT[i][row]; });
+        if (r) cand.sort(function () { return r() - 0.5; });
+        choix = sacADos(cand, colis, cible);
+        var lg = choix.reduce(function (a, i) { return a + colis[i].cm; }, 0);
+        if (lg >= cible - 25) break;
+      }
+      choix.forEach(function (i) { aff[i] = row; len[row] += colis[i].cm; });
+      reste = reste.filter(function (i) { return choix.indexOf(i) < 0; });
+    }
+    for (var f = 0; f < N - 1; f++) {
+      var cG = f === 0 ? mx : Math.min(len[f - 1], len[N + f - 1]);
+      remplir(f, cG);
+      remplir(N + f, Math.min(len[f], f === 0 ? mx : len[N + f - 1]));
+    }
+    // dernier étage : en alternance, le plus court d'abord (l'optimisation place le centre)
+    reste.sort(function (a, b) { return colis[a].k - colis[b].k || colis[b].cm - colis[a].cm; });
+    reste.forEach(function (i) {
+      var g = N - 1, d = 2 * N - 1, row = len[g] <= len[d] ? g : d;
+      if (INT[i][row]) { row = N - 2; while (row > 0 && INT[i][row]) row--; if (len[row] > len[row + N]) row += N; }
+      aff[i] = row; len[row] += colis[i].cm;
+    });
+    return aff;
+  }
+
+  function optimiser(colis, cfg, aff, r, iters, biais, INT, t0) {
     var n = colis.length, L = cfg._L, NR = L.NR;
     var a = agreger(colis, aff, L), len = a.len, vol = a.vol, cnt = a.cnt, pref = a.pref, h = a.h;
     function mv(k, c, sg) { len[k] += sg * c.cm; vol[k] += sg * c.vol; cnt[k] += sg; h[k][c.k] += sg; }
     var bs = 0, B = biais || null;
     if (B) for (var q = 0; q < n; q++) bs += B[q][aff[q]];
     var cur = cout(len, vol, cnt, pref, cfg, h) + bs, best = cur, bestAff = aff.slice();
-    var T0 = 150, T1 = 0.01;
+    var T0 = t0 || 150, T1 = 0.01;
     for (var it = 0; it < iters; it++) {
       var T = T0 * Math.pow(T1 / T0, it / iters);
       var i = Math.floor(r() * n), ri = aff[i], ci = colis[i];
@@ -298,6 +346,11 @@
       var res = optimiser(colis, cfg, aff, r, iters, biais, INT);
       if (!best || res.cout < best.cout) best = res;
     });
+    // départ « chargeur » (sections épaisses en bas), affiné doucement pour ne pas le casser
+    for (var e2 = 0; e2 < (rapide ? 1 : 3); e2++) {
+      var res2 = optimiser(colis, cfg, construire(colis, cfg, L, INT, e2 || graine ? r : null), r, iters, biais, INT, 8);
+      if (res2.cout < best.cout) best = res2;
+    }
     // finition : descente stricte depuis le meilleur
     var fin = optimiser(colis, cfg, best.aff.slice(), r, iters, biais, INT);
     if (fin.cout < best.cout) best = fin;
@@ -311,12 +364,15 @@
     var lg = ecartLg(v); // écart de longueur gauche/droite : 0 visé, 75 cm toléré
     return e * 1000 + (v.ecrase || 0) * 300 + (v.ecart < -0.005 ? 100 + -v.ecart * 10 : 0) + Math.abs(v.ecart) + (lg > ECART_LG ? 200 + Math.min(lg - ECART_LG, 700) : 0) + lg * 0.01;
   }
-  function meilleur(lignes, cfg, essaisMax) {
-    var best = null, n = essaisMax || 8;
+  // Le meilleur plan trouvé en ~2 s au plus : on s'arrête dès qu'un plan est parfait (règles + équilibre + longueurs égales)
+  function meilleur(lignes, cfg, essaisMax, budgetMs) {
+    var best = null, n = essaisMax || 12, t0 = Date.now(), em = (Object.assign({}, DEFAUT, cfg || {})).ecartMax;
     for (var g = 0; g < n; g++) {
-      var res = proposer(lignes, cfg, false, g), note = noteVerif(res.verif);
-      if (!best || note < best.note) best = { plan: res.plan, verif: res.verif, note: note };
-      if (note < 1000 && !res.verif.ecrase && res.verif.ecart >= -0.005 && res.verif.ecart <= (Object.assign({}, DEFAUT, cfg || {})).ecartMax + 0.005 && ecartLg(res.verif) <= ECART_LG) break;
+      var res = proposer(lignes, cfg, false, g), v = res.verif, note = noteVerif(v);
+      if (!best || note < best.note) best = { plan: res.plan, verif: v, note: note };
+      var bon = note < 1000 && !v.ecrase && v.ecart >= -0.005 && v.ecart <= em + 0.005;
+      if (bon && ecartLg(v) === 0) break;
+      if (g >= 1 && Date.now() - t0 > (budgetMs || 2000)) break;
     }
     return best;
   }
@@ -328,10 +384,10 @@
     return Object.keys(rows).sort().map(function (k) { return k + ':' + rows[k].sort().join(','); }).join('|');
   }
   // Un autre bon plan, différent de l'actuel (et des précédents déjà vus)
-  function autre(lignes, cfg, dejaVus, graine) {
+  function autre(lignes, cfg, dejaVus, graine, refVerif) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var vus = {}; (dejaVus || []).forEach(function (x) { vus[x] = 1; });
-    var ref = meilleur(lignes, cfg), refOk = noteVerif(ref.verif) < 1000;
+    var ref = refVerif ? { verif: refVerif } : meilleur(lignes, cfg), refOk = noteVerif(ref.verif) < 1000;
     var seuil = Math.max(cfg.ecartMax, deseq(ref.verif)) + 0.005, seuilLg = Math.max(ECART_LG, ecartLg(ref.verif));
     var g0 = graine || 1, t0 = Date.now();
     for (var g = g0; g < g0 + 30 && Date.now() - t0 < 2500; g++) {
@@ -342,7 +398,7 @@
       if (ecartLg(v) > seuilLg) continue;
       var sig = signature(lignes, res.plan);
       if (vus[sig]) continue;
-      return { plan: res.plan, verif: v, signature: sig, graine: g + 1 };
+      return { plan: res.plan, verif: v, signature: sig, graine: g + 1, note: noteVerif(v) };
     }
     return null;
   }
