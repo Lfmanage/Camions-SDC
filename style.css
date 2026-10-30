@@ -728,3 +728,10 @@ input:focus { background: var(--card); }
 .pli-lg{display:flex;flex-wrap:wrap;gap:4px;flex:1}
 .pli-lg i{font-style:normal;font-weight:600;font-size:12px;padding:2px 6px;border-radius:6px;background:#EAD8B8;color:#3A2E1E}
 .pli-l em{font-style:normal;font-weight:700;white-space:nowrap}
+
+/* v31 — feuilles au premier plan, sur toutes les pages, jamais bloquantes */
+#feuillesZone { z-index: 45; }
+#feuillesZone, #feuillesZone * { pointer-events: none !important; }
+body:not([data-vue="accueil"]) .fe-plus { display: block; }
+body[data-vue="plan"] .fe:nth-child(n+4), body[data-vue="calcul"] .fe:nth-child(n+4) { display: none; }
+body[data-vue="plan"] .fe, body[data-vue="calcul"] .fe { scale: .65; opacity: .85; }
