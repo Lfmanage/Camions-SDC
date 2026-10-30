@@ -19,8 +19,11 @@
   var DEFAUT = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, seuil4: 0.7 };
   // 18 × 100 : petits colis, les seuls qui peuvent monter au 4e étage
   // Petites sections (planches fines) : toujours au-dessus des grosses pour ne pas les écraser
-  var FINES = [18, 20, 25, 27, 32, 38, 40];
-  function estFine(c) { return FINES.indexOf(Math.min(c.ep, c.la)) >= 0; }
+  // Classes d'épaisseur, de la plus épaisse à la plus fine : 0 = grosses sections, puis 40, 38… 15.
+  // De chaque côté, jamais un colis d'une classe plus épaisse posé au-dessus d'une classe plus fine.
+  var FINES = [40, 38, 32, 27, 25, 20, 18, 15], NK = FINES.length + 1;
+  function classeEp(c) { return FINES.indexOf(Math.min(c.ep, c.la)) + 1; } // 0 si grosse section
+  function estFine(c) { return classeEp(c) > 0; }
   function estPetit(c) { return (c.ep === 18 && c.la === 100) || (c.ep === 100 && c.la === 18); }
   // 4 étages quand au moins 70 % des colis (en nombre) sont des 18 × 100
   function nbEtages(lignes, cfg) {
@@ -70,7 +73,7 @@
     '20x38=720 20x40=720 18x38=720 18x40=720 ' +
     '51x128=108 51x108=132 51x153=84 51x208=60 51x228=60 51x308=36 ' +
     '27x100=220 27x125=180 27x150=150 27x200=100 27x250=80 27x300=60 27x75=260 25x150=140 27x1000=20 27x1100=20 ' +
-    '18x100=250:2/2.4/3 18x150=189:3/4 18x200=135:3/4/5 18x1000=30:2/2.5/3 18x1100=30:2/2.5/3 ' +
+    '15x200=180:2/3 15x150=252:3/4 18x100=250:2/2.4/3 18x150=189:3/4 18x200=135:3/4/5 18x1000=30:2/2.5/3 18x1100=30:2/2.5/3 ' +
     '100x100=66 100x150=42 100x200=30 100x225=30 100x300=18 100x250=24 100x240=24 ' +
     '150x150=28 145x145=28 153x153=28 200x200=15 195x195=15 37x177=102:3/4 46x200=65:3/4';
   var SECTIONS = SECTIONS_TXT.split(' ').map(function (t) {
@@ -102,7 +105,7 @@
           ep: num(l.ep), la: num(l.la), pi: num(l.pi), lo: num(l.lo),
           cm: Math.round(lgPlan(l) * 100), vol: volLigne(l), aire: num(l.ep) * num(l.la)
         });
-        out[out.length - 1].fine = estFine(out[out.length - 1]);
+        var o = out[out.length - 1]; o.k = classeEp(o); o.fine = o.k > 0;
       }
     });
     return out;
@@ -127,24 +130,30 @@
     etagesListe(v).forEach(function (f) { var d = v.rows['G' + f].len - v.rows['D' + f].len; m = Math.max(m, d < 0 ? 1000 - d : d); });
     return m;
   }
-  // Nombre de paires « gros colis posé au-dessus de planches fines » (par côté ; le centre compte des deux côtés)
-  function paireEcrase(th, bg, L) {
-    var N = L.N, C = L.C, p = 0;
+  // Nombre de paires « colis plus épais posé au-dessus d'un plus fin » (par côté ; le centre compte des deux côtés)
+  // h[r][k] : nombre de colis de classe k dans la rangée r
+  function paireEcrase(h, L) {
+    var N = L.N, C = L.C, p = 0, k;
     for (var s = 0; s < 2; s++) {
-      var b = s * N;
-      for (var g = 1; g < N; g++) {
-        var gros = bg[b + g] + (g === N - 1 ? bg[C] : 0);
-        if (!gros) continue;
-        for (var f = 0; f < g; f++) p += gros * th[b + f];
+      var b = s * N, dessous = zeros(NK); // colis des étages inférieurs, par classe
+      for (var g = 0; g < N; g++) {
+        if (g > 0) {
+          var plusFin = 0; // colis du dessous plus fins que la classe k
+          for (k = NK - 1; k >= 0; k--) {
+            var n = h[b + g][k] + (g === N - 1 ? h[C][k] : 0);
+            if (n) p += n * plusFin;
+            plusFin += dessous[k];
+          }
+        }
+        for (k = 0; k < NK; k++) dessous[k] += h[b + g][k];
       }
-      // centre du dernier étage : gros au centre et fines dans la même pile du dernier étage, ce n'est pas un écrasement
     }
     return p;
   }
   var ECRASE = 700; // coût d'un gros colis sur des fines : obligatoire, sauf si les longueurs l'empêchent
-  function cout(len, vol, cnt, pref, cfg, th, bg) {
+  function cout(len, vol, cnt, pref, cfg, h) {
     var L = cfg._L || L3, N = L.N, C = L.C;
-    var c = th ? ECRASE * paireEcrase(th, bg, L) : 0, mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100), f;
+    var c = h ? ECRASE * paireEcrase(h, L) : 0, mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100), f;
     for (var s = 0; s < 2; s++) {
       var b = s * N, l1 = len[b];
       // règles de longueur : priorité absolue (une infraction coûte plus que tout le reste)
@@ -190,13 +199,14 @@
     });
   }
   function agreger(colis, aff, L) {
-    var len = zeros(L.NR), vol = zeros(L.NR), cnt = zeros(L.NR), th = zeros(L.NR), bg = zeros(L.NR), pref = 0;
+    var len = zeros(L.NR), vol = zeros(L.NR), cnt = zeros(L.NR), h = [], pref = 0;
+    for (var q = 0; q < L.NR; q++) h.push(zeros(NK));
     for (var i = 0; i < colis.length; i++) {
       var r = aff[i];
       len[r] += colis[i].cm; vol[r] += colis[i].vol; cnt[r]++; pref += colis[i].aire * etageDe(r, L);
-      if (colis[i].fine) th[r]++; else bg[r]++;
+      h[r][colis[i].k]++;
     }
-    return { len: len, vol: vol, cnt: cnt, pref: pref, th: th, bg: bg };
+    return { len: len, vol: vol, cnt: cnt, pref: pref, h: h };
   }
 
   // Placement de départ glouton : étage 1 alterné jusqu'à ~milieu de la plage, puis 2, puis 3
@@ -205,7 +215,7 @@
     if (r) {
       for (var i = ordre.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)); var t = ordre[i]; ordre[i] = ordre[j]; ordre[j] = t; }
     } else {
-      ordre.sort(function (a, b) { return (colis[a].fine - colis[b].fine) || colis[b].aire - colis[a].aire || colis[b].cm - colis[a].cm; });
+      ordre.sort(function (a, b) { return (colis[a].k - colis[b].k) || colis[b].aire - colis[a].aire || colis[b].cm - colis[a].cm; });
     }
     var cible = Math.round((cfg.e1Min + cfg.e1Max) * 50);
     var N = L.N, len = zeros(L.NR), aff = new Array(colis.length);
@@ -234,11 +244,11 @@
 
   function optimiser(colis, cfg, aff, r, iters, biais, INT) {
     var n = colis.length, L = cfg._L, NR = L.NR;
-    var a = agreger(colis, aff, L), len = a.len, vol = a.vol, cnt = a.cnt, pref = a.pref, th = a.th, bg = a.bg;
-    function mv(k, c, sg) { len[k] += sg * c.cm; vol[k] += sg * c.vol; cnt[k] += sg; if (c.fine) th[k] += sg; else bg[k] += sg; }
+    var a = agreger(colis, aff, L), len = a.len, vol = a.vol, cnt = a.cnt, pref = a.pref, h = a.h;
+    function mv(k, c, sg) { len[k] += sg * c.cm; vol[k] += sg * c.vol; cnt[k] += sg; h[k][c.k] += sg; }
     var bs = 0, B = biais || null;
     if (B) for (var q = 0; q < n; q++) bs += B[q][aff[q]];
-    var cur = cout(len, vol, cnt, pref, cfg, th, bg) + bs, best = cur, bestAff = aff.slice();
+    var cur = cout(len, vol, cnt, pref, cfg, h) + bs, best = cur, bestAff = aff.slice();
     var T0 = 150, T1 = 0.01;
     for (var it = 0; it < iters; it++) {
       var T = T0 * Math.pow(T1 / T0, it / iters);
@@ -249,7 +259,7 @@
         mv(ri, ci, -1); mv(to, ci, 1);
         var p2 = pref + ci.aire * (etageDe(to, L) - etageDe(ri, L));
         var b2 = B ? bs + B[i][to] - B[i][ri] : 0;
-        var c2 = cout(len, vol, cnt, p2, cfg, th, bg) + b2;
+        var c2 = cout(len, vol, cnt, p2, cfg, h) + b2;
         if (c2 <= cur || r() < Math.exp((cur - c2) / T)) { aff[i] = to; cur = c2; pref = p2; bs = b2; }
         else { mv(to, ci, -1); mv(ri, ci, 1); }
       } else {
@@ -259,7 +269,7 @@
         mv(ri, ci, -1); mv(rj, cj, -1); mv(ri, cj, 1); mv(rj, ci, 1);
         var p3 = pref + (ci.aire - cj.aire) * (etageDe(rj, L) - etageDe(ri, L));
         var b3 = B ? bs + B[i][rj] - B[i][ri] + B[j][ri] - B[j][rj] : 0;
-        var c3 = cout(len, vol, cnt, p3, cfg, th, bg) + b3;
+        var c3 = cout(len, vol, cnt, p3, cfg, h) + b3;
         if (c3 <= cur || r() < Math.exp((cur - c3) / T)) { aff[i] = rj; aff[j] = ri; cur = c3; pref = p3; bs = b3; }
         else { mv(ri, cj, -1); mv(rj, ci, -1); mv(ri, ci, 1); mv(rj, cj, 1); }
       }
@@ -398,20 +408,19 @@
       var gros = [TOP, TOPD, CK].reduce(function (a, k) { return a + rows[k].colis.filter(function (c) { return !estPetit(c); }).length; }, 0);
       if (gros) { [TOP, TOPD, CK].forEach(function (k) { if (rows[k].colis.some(function (c) { return !estPetit(c); })) rows[k].alerte = true; }); erreurs.push('Étage 4 : seuls les 18×100 peuvent monter au 4e étage (' + gros + ' colis à descendre).'); }
     }
-    // gros colis posés au-dessus de planches fines
-    var thR = [], bgR = [];
-    RW.forEach(function (k) { thR.push(rows[k].colis.filter(function (c) { return c.fine; }).length); bgR.push(rows[k].colis.filter(function (c) { return !c.fine; }).length); });
-    var ecrase = paireEcrase(thR, bgR, L);
+    // colis plus épais posés au-dessus de plus fins
+    var hR = RW.map(function (k) { var t = zeros(NK); rows[k].colis.forEach(function (c) { t[c.k]++; }); return t; });
+    var ecrase = paireEcrase(hR, L);
     if (ecrase) {
       [0, 1].forEach(function (s) {
-        var p = s === 0 ? 'G' : 'D', basFine = 0;
+        var p = s === 0 ? 'G' : 'D', plusFine = -1; // classe la plus fine déjà posée dessous
         for (var f = 1; f <= N; f++) {
           var ks = f === N ? [p + f, CK] : [p + f];
-          if (basFine && ks.some(function (k) { return rows[k].colis.some(function (c) { return !c.fine; }); })) ks.forEach(function (k) { rows[k].alerte = true; });
-          if (!basFine && rows[p + f].colis.some(function (c) { return c.fine; })) basFine = f;
+          ks.forEach(function (k) { if (rows[k].colis.some(function (c) { return c.k < plusFine; })) rows[k].alerte = true; });
+          rows[p + f].colis.forEach(function (c) { plusFine = Math.max(plusFine, c.k); });
         }
       });
-      avis.push('Impossible de mettre toutes les petites sections au-dessus avec ces colis : gros colis posés sur des planches fines (' + ecrase + (ecrase > 1 ? ' cas' : ' cas') + '). Plan fait au mieux.');
+      avis.push('Impossible de mettre toutes les sections fines au-dessus des plus épaisses avec ces colis (' + ecrase + ' cas). Plan fait au mieux.');
     }
     var volG = rows[CK].vol / 2, volD = rows[CK].vol / 2;
     for (var e0 = 1; e0 <= N; e0++) { volG += rows['G' + e0].vol; volD += rows['D' + e0].vol; }

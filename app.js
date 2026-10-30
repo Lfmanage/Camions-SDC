@@ -26,6 +26,14 @@
     d.reglages = Object.assign({}, REG_DEF, d.reglages || {});
     d.reglages.couleurs = d.reglages.couleurs || {};
     if (!Array.isArray(d.reglages.sections)) d.reglages.sections = copieSections();
+    // nouvelles sections ajoutées une seule fois (on ne remet pas une section supprimée à la main)
+    d.reglages.ajouts = d.reglages.ajouts || [];
+    ['15x200', '15x150'].forEach(function (cle) {
+      if (d.reglages.ajouts.indexOf(cle) >= 0) return;
+      var m = cle.split('x').map(Number), sc = P.trouverSection(null, m[0], m[1]);
+      if (sc && !P.trouverSection(d.reglages.sections, m[0], m[1])) { var o = { ep: sc.ep, la: sc.la, pi: sc.pi }; if (sc.lg) o.lg = sc.lg.slice(); d.reglages.sections.push(o); }
+      d.reglages.ajouts.push(cle);
+    });
     d.clients = d.clients || [];
     d.sync = d.sync || {};
     return d;
@@ -695,7 +703,7 @@
     var lg = v.erreurs.filter(function (m) { return /^Étage/.test(m); });
     if (lg.length) return { cls: 'e', etq: '⚠ À revoir', detail: lg[0] };
     if (v.etat.code === 'trop') return { cls: 'e', etq: 'Dépassé ' + f2(v.etat.depasse) + ' m³' };
-    if (v.ecrase) return { cls: 'a', etq: '≈ Fait au mieux', detail: 'Avec ces colis, impossible de mettre toutes les petites sections au-dessus des grosses : les colis en rouge sont posés sur des planches fines.' };
+    if (v.ecrase) return { cls: 'a', etq: '≈ Fait au mieux', detail: 'Avec ces colis, impossible de mettre toutes les sections fines au-dessus des plus épaisses : les étages en rouge ont un colis posé sur plus fin que lui.' };
     if (P.deseq(v) > r.ecartMax + 0.005) return { cls: 'a', etq: '≈ Équilibré au mieux', detail: 'Avec ces colis, écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³ entre gauche et droite : le plus faible possible.' };
     var lgM = v.avis.filter(function (m) { return /cm/.test(m); });
     if (lgM.length) return { cls: 'a', etq: '≈ Équilibré au mieux', detail: lgM[0].replace(/\.$/, '') + ' : le plus petit écart possible avec ces colis.' };
@@ -816,7 +824,7 @@
   $('#btnPartager').addEventListener('click', function () { partagerImage(courant()); });
 
   // ---------- Image du plan (partage) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=24';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=25';
   function imagePlan(c) {
     var r = cfgC(c), v = vplan(c);
     var W = 1080, pad = 56, larg = W - 2 * pad, rowH = 92, tagW = 120;
