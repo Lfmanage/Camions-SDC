@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '26';
+  var VERSION_APP = '27';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -28,7 +28,7 @@
     if (!Array.isArray(d.reglages.sections)) d.reglages.sections = copieSections();
     // nouvelles sections ajoutées une seule fois (on ne remet pas une section supprimée à la main)
     d.reglages.ajouts = d.reglages.ajouts || [];
-    ['15x200', '15x150'].forEach(function (cle) {
+    ['15x200', '15x150', '25x200'].forEach(function (cle) {
       if (d.reglages.ajouts.indexOf(cle) >= 0) return;
       var m = cle.split('x').map(Number), sc = P.trouverSection(null, m[0], m[1]);
       if (sc && !P.trouverSection(d.reglages.sections, m[0], m[1])) { var o = { ep: sc.ep, la: sc.la, pi: sc.pi }; if (sc.lg) o.lg = sc.lg.slice(); d.reglages.sections.push(o); }
@@ -138,7 +138,7 @@
   var vueActive = 'accueil';
   var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages' };
   function montrer(v) {
-    vueActive = v;
+    vueActive = v; document.body.dataset.vue = v;
     $$('.vue').forEach(function (s) { s.classList.toggle('active', s.id === 'v-' + v); });
     $$('.onglet').forEach(function (b) { b.classList.toggle('actif', b.dataset.vue === ONGLET[v]); });
     window.scrollTo(0, 0);
@@ -398,12 +398,26 @@
     var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj; });
     var m3 = jour.reduce(function (a, c) { return a + c.total_m3; }, 0);
     $('#accStats').innerHTML = '<div class="stat"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></div><button type="button" class="stat stat-go" data-camions="1"><small>Camions aujourd\'hui</small><b>' + jour.length + '</b><i>Voir les derniers</i></button>';
-    $('#accNbJour').textContent = jour.length ? jour.length + ' camion' + (jour.length > 1 ? 's' : '') + ' aujourd\'hui' : 'Tous les camions';
+    $('#accNbJour').textContent = 'Tous les camions';
+    $('#accSous').textContent = jour.length ? jour.length + ' camion' + (jour.length > 1 ? 's' : '') + ' chargé' + (jour.length > 1 ? 's' : '') + ' aujourd\'hui' : 'Bonne journée au chantier';
     var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
     $('#accEnCours').innerHTML = cours.length ? '<p class="titre-sec">En cours</p><div class="carte liste-cours">' + cours.map(function (c) {
-      return '<button type="button" class="en-cours-l" data-reprendre="' + esc(c.id) + '"><span><b>' + esc(c.client || 'Sans client') + '</b><small>' + (c.reference ? 'Réf. ' + esc(c.reference) + ', ' : '') + f2(c.total_m3) + ' m³</small></span><span class="go">Reprendre</span></button>';
-    }).join('') + '</div>' : '';
+      return glisse(c.id, '<button type="button" class="en-cours-l" data-reprendre="' + esc(c.id) + '"><span><b>' + esc(c.client || 'Sans client') + '</b><small>' + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + f2(c.total_m3) + ' m³</small></span><span class="go">Reprendre</span></button>');
+    }).join('') + '</div><p class="astuce">Glisse à gauche pour supprimer, à droite pour ouvrir.</p>' : '';
   }
+  // ---------- Feuilles d'automne qui tombent (décor, ne bloque jamais un appui) ----------
+  function feuillesAutomne() {
+    var z = $('#feuillesZone'); if (!z || z.childNodes.length) return;
+    var h = '', n = 11;
+    for (var i = 0; i < n; i++) {
+      var prof = Math.random(), taille = Math.round(16 + prof * 26), duree = (14 - prof * 5 + Math.random() * 6).toFixed(1);
+      var flou = prof > 0.86 ? 2.2 : (prof < 0.2 ? 0.8 : 0);
+      h += '<i class="fe' + (i >= 5 ? ' fe-plus' : '') + '" style="left:' + (Math.random() * 96).toFixed(1) + '%;--d:' + duree + 's;--r:' + (-Math.random() * duree).toFixed(1) + 's;--b:' + (2 + Math.random() * 3).toFixed(1) + 's;--x:' + Math.round(20 + Math.random() * 50) + 'px">' +
+        '<i style="width:' + taille + 'px;height:' + taille + 'px;background-size:' + taille * 10 + 'px ' + taille + 'px;background-position:' + (-(i % 10) * taille) + 'px 0;filter:blur(' + flou + 'px) drop-shadow(0 ' + Math.round(2 + prof * 5) + 'px ' + Math.round(3 + prof * 6) + 'px rgba(40,20,0,.22));--t:' + (3 + Math.random() * 4).toFixed(1) + 's"></i></i>';
+    }
+    z.innerHTML = h;
+  }
+
   // ---------- Installer l'appli (Android : vraie installation ; iPhone : explication) ----------
   var invite = null;
   function estInstalle() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
@@ -718,6 +732,7 @@
     v.cote.forEach(function (x) { o.push(x.id); });
     c.ordre = o; return v;
   }
+  function hashBois(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; }
   function htmlPlan(c, opts) {
     var r = cfgC(c), v = vplan(c), st = statutPlan(v, r);
     var maxLen = r.e1Max * 100;
@@ -727,10 +742,10 @@
     var place = edit && selection ? 36 : 0; // place gardée pour le bouton « + » en bout d'étage
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
     function chip(k, centre, libre) {
-      return '<button type="button" title="' + esc(libColis(k)) + '" class="chip' + (centre ? ' centre' : '') + (selection === k.id && edit ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
-        (libre || k.cm / maxLen > .06 ? '<b>' + fm(k.lo) + ' m</b>' : '') + (libre || k.cm / maxLen > .12 ? '<small>' + fm(k.ep) + '×' + fm(k.la) + '</small>' : '') + '</button>';
+      return '<button type="button" title="' + esc(libColis(k)) + '" data-bois="' + (Math.abs(hashBois(k.id)) % 6) + '" class="chip' + (centre ? ' centre' : '') + (selection === k.id && edit ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
+        '<b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>';
     }
-    var h = '<div class="sum ' + st.cls + '"><span class="tot">' + f2(v.total) + '<small>/ ' + fm(r.cible) + ' m³</small></span><span class="etq">' + esc(st.etq) + '</span>' +
+    var h = '<div class="sum ' + st.cls + '"><span class="sum-g"><span class="tot">' + f2(v.total) + '<small>/ ' + fm(r.cible) + ' m³</small></span><span class="etq">' + esc(st.etq) + '</span></span>' +
       '<span class="gd">Gauche <b>' + f2(v.volG) + '</b><br>Droite <b>' + f2(v.volD) + '</b></span></div>';
     if (st.detail) h += '<p class="statut-detail">' + esc(st.detail) + '</p>';
     if (v.cote.length) {
@@ -790,8 +805,8 @@
     $$('.chip', z).forEach(function (ch) {
       ch.classList.remove('serre', 'mini');
       if (ch.scrollWidth > ch.clientWidth + 1) {
-        ch.classList.add('serre');
-        if (ch.scrollWidth > ch.clientWidth + 1) ch.classList.add('mini');
+        ch.classList.add('serre');                                          // texte resserré
+        if (ch.scrollWidth > ch.clientWidth + 1) ch.classList.add('mini'); // encore plus petit, mais jamais caché
       }
     });
   }
@@ -981,10 +996,59 @@
   var LIB = { ok: 'OK', peu: 'Pas assez', trop: 'Dépassé' };
   function ligneCam(c, enCours) {
     var qui = c.client || 'Sans client';
-    return '<button class="cam" type="button" data-id="' + esc(c.id) + '"><span class="h">' + heure(enCours ? c.maj_le : c.termine_le) + '</span>' +
+    return glisse(c.id, '<button class="cam" type="button" data-id="' + esc(c.id) + '"><span class="h">' + heure(enCours ? c.maj_le : c.termine_le) + '</span>' +
       '<span class="qui"><b>' + esc(qui) + '</b><small>' + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small></span>' +
-      '<span class="m3">' + f2(c.total_m3) + '</span>' +
-      (enCours ? '<span class="pastille cours">' + (c.id === db.courant ? 'Ouvert' : 'En cours') + '</span>' : '<span class="pastille ' + c.etat + '">' + LIB[c.etat] + '</span>') + '</button>';
+      '<span class="m3 ' + (enCours ? 'cours' : c.etat) + '" title="' + (enCours ? 'En cours' : LIB[c.etat]) + '">' + f2(c.total_m3) + '</span></button>');
+  }
+  // ---------- Glisser une ligne : à gauche supprimer, à droite ouvrir ----------
+  function glisse(id, html) {
+    return '<div class="sw" data-sw="' + esc(id) + '"><div class="sw-fond"><span class="sw-o">Ouvrir</span><span class="sw-s">Supprimer</span></div>' + html + '</div>';
+  }
+  var SEUIL_GLISSE = 90, glisseFini = 0;
+  function activerGlisser(zone, ouvrir, supprimer) {
+    var g = null;
+    zone.addEventListener('pointerdown', function (e) {
+      var sw = e.target.closest('.sw'); if (!sw || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      g = { sw: sw, el: sw.lastElementChild, x: e.clientX, y: e.clientY, dx: 0, actif: false, id: e.pointerId };
+    });
+    zone.addEventListener('pointermove', function (e) {
+      if (!g || e.pointerId !== g.id) return;
+      var dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (!g.actif) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { g = null; return; } // on fait défiler la page
+        if (Math.abs(dx) < 10) return;
+        g.actif = true; g.sw.classList.add('glisse');
+        try { g.sw.setPointerCapture(e.pointerId); } catch (er) {}
+      }
+      g.dx = dx; e.preventDefault();
+      g.el.style.transform = 'translateX(' + dx + 'px)';
+      g.sw.classList.toggle('vers-g', dx < 0); g.sw.classList.toggle('vers-d', dx > 0);
+      g.sw.classList.toggle('pret', Math.abs(dx) > SEUIL_GLISSE);
+    });
+    function fin() {
+      if (!g) return;
+      var o = g; g = null;
+      if (!o.actif) return;
+      glisseFini = Date.now();
+      o.sw.classList.remove('glisse');
+      var id = o.sw.dataset.sw;
+      if (o.dx < -SEUIL_GLISSE) { o.el.style.transform = 'translateX(-110%)'; setTimeout(function () { supprimer(id); }, 180); }
+      else if (o.dx > SEUIL_GLISSE) { o.el.style.transform = ''; o.sw.classList.remove('vers-d', 'pret'); ouvrir(id); }
+      else { o.el.style.transform = ''; o.sw.classList.remove('vers-g', 'vers-d', 'pret'); }
+    }
+    zone.addEventListener('pointerup', fin); zone.addEventListener('pointercancel', fin);
+    // un appui juste après un glissement ne doit pas ouvrir la ligne
+    zone.addEventListener('click', function (e) { if (Date.now() - glisseFini < 350) { e.stopPropagation(); e.preventDefault(); } }, true);
+  }
+  function supprimerCamion(id, rendre) {
+    var c = db.camions[id]; if (!c) return;
+    c.supprime = true; toucher(c); rendre();
+    toast('Camion supprimé', function () { c.supprime = false; toucher(c); rendre(); }, 'Annuler');
+  }
+  function ouvrirCamion(id) {
+    var c = db.camions[id]; if (!c) return;
+    if (c.statut === 'en_cours') { db.courant = id; sauver(true); viderForm(); aller('camion'); }
+    else detail(c);
   }
   function rendreHisto() {
     var q = ($('#recherche').value || '').trim().toUpperCase();
@@ -997,6 +1061,7 @@
     var fini = tous.filter(function (c) { return c.statut === 'termine'; }).sort(function (a, b) { return b.termine_le < a.termine_le ? -1 : 1; });
     var h = '';
     if (cours.length) h += '<div class="jour"><div class="jour-tete"><h2>Non terminés</h2><span>' + cours.length + '</span></div><div class="carte">' + cours.map(function (c) { return ligneCam(c, true); }).join('') + '</div></div>';
+    if (cours.length || fini.length) h = '<p class="astuce">Glisse à gauche pour supprimer, à droite pour ouvrir.</p>' + h;
     var jours = {}, ordre = [];
     fini.forEach(function (c) { var k = jourCle(c.termine_le); if (!jours[k]) { jours[k] = []; ordre.push(k); } jours[k].push(c); });
     ordre.forEach(function (k) {
@@ -1005,9 +1070,12 @@
         '<div class="carte">' + jours[k].map(function (c) { return ligneCam(c, false); }).join('') + '</div></div>';
     });
     if (!h) h = '<div class="carte vide">' + (q ? 'Aucun camion trouvé.' : 'Aucun camion enregistré pour l\'instant.') + '</div>';
+    else h += '<p class="legende"><i class="ok"></i>bon <i class="peu"></i>pas assez <i class="trop"></i>dépassé <i class="cours"></i>en cours</p>';
     $('#histo').innerHTML = h;
   }
   $('#recherche').addEventListener('input', rendreHisto);
+  activerGlisser($('#histo'), ouvrirCamion, function (id) { supprimerCamion(id, rendreHisto); });
+  activerGlisser($('#accEnCours'), ouvrirCamion, function (id) { supprimerCamion(id, rendreAccueil); });
   $('#histo').addEventListener('click', function (e) { var b = e.target.closest('.cam'); if (b) detail(db.camions[b.dataset.id]); });
 
   // Les 20 derniers camions terminés, par jour
@@ -1288,14 +1356,24 @@
     }
   });
   appliquerTheme();
+  feuillesAutomne();
+  try { // petit message après une mise à jour automatique
+    if (localStorage.getItem('csdc.version') && localStorage.getItem('csdc.version') !== VERSION_APP) setTimeout(function () { toast('Appli mise à jour : nouvelle version ' + VERSION_APP); }, 900);
+    localStorage.setItem('csdc.version', VERSION_APP);
+  } catch (e) {}
   history.replaceState({ v: 'accueil', d: 0 }, '');
   montrer('accueil');
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     var avaitCtrl = !!navigator.serviceWorker.controller, recharge = false;
-    navigator.serviceWorker.register('sw.js?v=17').catch(function () {});
+    // Mise à jour automatique : l'appli vérifie au démarrage et à chaque retour sur l'écran, puis se recharge toute seule
+    navigator.serviceWorker.register('sw.js?v=17').then(function (reg) {
+      function verifier() { try { reg.update(); } catch (e) {} }
+      document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') verifier(); });
+      setInterval(verifier, 30 * 60 * 1000);
+    }).catch(function () {});
     navigator.serviceWorker.addEventListener('controllerchange', function () {
-      if (avaitCtrl && !recharge) { recharge = true; location.reload(); }
+      if (avaitCtrl && !recharge) { recharge = true; try { localStorage.setItem('csdc.majVue', '0'); } catch (e) {} location.reload(); }
     });
   }
 })();
