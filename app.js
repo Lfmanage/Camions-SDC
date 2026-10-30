@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '28';
+  var VERSION_APP = '30';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -61,7 +61,9 @@
     db.camions[c.id] = c; db.courant = c.id;
     return c;
   }
+  var edition = null; // camion de l'historique ouvert dans le plan
   function courant() {
+    if (edition && db.camions[edition] && !db.camions[edition].supprime) return db.camions[edition];
     var c = db.camions[db.courant];
     if (!c || c.supprime || c.statut !== 'en_cours') { c = nouveauCamion(); sauver(true); }
     return c;
@@ -129,7 +131,9 @@
     if (retourDebut) { var v0 = retourDebut; retourDebut = false; history.replaceState({ v: v0, d: 0 }, ''); montrer(v0); return; }
     selection = null;
     montrer((history.state && history.state.v) || 'client');
+    if (apresRetour) { var fn = apresRetour; apresRetour = null; fn(); }
   });
+  var apresRetour = null; // action à faire une fois la feuille fermée (retour arrière fini)
   document.addEventListener('click', function (e) { if (e.target.closest('[data-retour]')) retour(); });
   function majRetour() { var ok = profondeur() > 0; $$('[data-retour]').forEach(function (b) { b.style.visibility = ok ? 'visible' : 'hidden'; }); }
   $('#feuilleFond').addEventListener('click', function () { if (!$('#feuilleFond').onclick) fermerFeuille(); });
@@ -148,8 +152,9 @@
   var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages' };
   function montrer(v) {
     vueActive = v; document.body.dataset.vue = v;
+    if (v !== 'plan') edition = null;
     $$('.vue').forEach(function (s) { s.classList.toggle('active', s.id === 'v-' + v); });
-    $$('.onglet').forEach(function (b) { b.classList.toggle('actif', b.dataset.vue === ONGLET[v]); });
+    $$('.onglet').forEach(function (b) { b.classList.toggle('actif', b.dataset.vue === (v === 'plan' && edition ? 'historique' : ONGLET[v])); });
     window.scrollTo(0, 0);
     if (v === 'accueil') rendreAccueil();
     if (v === 'calcul') { prepCalc(); rendreCalc(); }
@@ -655,6 +660,10 @@
       });
       return;
     }
+    if (edition) { // camion de l'historique : on enregistre et on revient
+      toucher(c); sauver(true); selection = null; edition = null;
+      retour(); toast('Plan enregistré ✔'); return;
+    }
     var e = P.etat(c.total_m3, cfgC(c));
     var go = e.code === 'ok' ? Promise.resolve(true) : demander({
       titre: 'Camion hors limites',
@@ -899,6 +908,120 @@
     c.lignes.forEach(function (l) { var n = l.nb || 1; t += '• ' + fm(l.ep) + '×' + fm(l.la) + ' · ' + fLong(l.lo) + ' m' + (n > 1 ? ' ×' + n : '') + ' — ' + f3(P.volTotalLigne(l)) + ' m³\n'; });
     return t + '\nSDC – Les Scieries du Centre';
   }
+  // Fiche de chargement : en-tête, chiffres clés, tableau par section, puis le plan
+  function ficheCanvas(c) {
+    if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) c.plan = P.meilleur(c.lignes, cfgC(c)).plan;
+    var v = vplan(c), W = 1080, pad = 56, larg = W - 2 * pad;
+    var INK = '#13221A', MU = '#5E6E64', VERT = '#1F4D38';
+    var F = function (w, px) { return w + ' ' + px + 'px "Inter Tight", Inter, system-ui, sans-serif'; };
+    // regroupement par section
+    var grp = {}, ordre = [];
+    c.lignes.forEach(function (l) {
+      var k = fm(l.ep) + ' × ' + fm(l.la);
+      if (!grp[k]) { grp[k] = { ep: l.ep, la: l.la, lgs: [], n: 0, m: 0 }; ordre.push(k); }
+      var g = grp[k]; if (g.lgs.indexOf(l.lo) < 0) g.lgs.push(l.lo); g.n += l.nb || 1; g.m += P.volTotalLigne(l);
+    });
+    ordre.sort(function (a, b) { return grp[b].ep - grp[a].ep || grp[b].la - grp[a].la; });
+    var nbTot = c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0);
+    var plan = imagePlan(c), cropY = 230, cropH = Math.max(10, (plan.finPlan || plan.height) - cropY), planH = Math.round(cropH * (larg / W));
+    // hauteur des lignes du tableau (les longueurs passent à la ligne si besoin)
+    var cv = document.createElement('canvas'), x = cv.getContext('2d');
+    var colLg = pad + 290, colN = W - pad - 220, colM = W - pad - 20, lgMax = colN - 60 - colLg;
+    x.font = F(600, 26);
+    var lignesTab = ordre.map(function (k) {
+      var g = grp[k], puces = g.lgs.sort(function (a, b) { return a - b; }).map(function (lo) { return fLong(lo) + ' m'; }), lignes = [[]], larg0 = 0;
+      puces.forEach(function (t) { var w = x.measureText(t).width + 28; if (larg0 + w > lgMax && lignes[lignes.length - 1].length) { lignes.push([]); larg0 = 0; } lignes[lignes.length - 1].push([t, w]); larg0 += w + 10; });
+      return { k: k, g: g, lignes: lignes, h: 40 + lignes.length * 46 };
+    });
+    var hTab = lignesTab.reduce(function (a, l) { return a + l.h; }, 0);
+    var H = 440 + 60 + hTab + 90 + 80 + planH + 110;
+    cv.width = W; cv.height = H;
+    x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+    function rond(a, b, w, h, rr) { x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
+    // en-tête
+    x.fillStyle = MU; x.font = F(600, 22); x.fillText('FICHE DE CHARGEMENT', pad, 76);
+    x.fillStyle = INK; x.font = F(700, 68); x.fillText(c.client || 'Camion', pad, 150);
+    var d = new Date(c.termine_le || c.maj_le || Date.now());
+    x.fillStyle = MU; x.font = F(500, 28);
+    x.fillText((c.reference ? 'Réf. ' + c.reference + ' · ' : '') + d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + heure(d.toISOString()), pad, 196);
+    if (LOGO.complete && LOGO.naturalWidth) { var lh = 120, lw = LOGO.naturalWidth * lh / LOGO.naturalHeight; x.drawImage(LOGO, W - pad - lw, 40, lw, lh); }
+    x.fillStyle = VERT; x.fillRect(pad, 226, larg, 6);
+    // chiffres clés
+    var cases = [['Volume', f2(v.total), ' m³', 1], ['Colis', String(nbTot), '', .6], ['Gauche / Droite', f2(v.volG) + ' / ' + f2(v.volD), '', 1.4]];
+    var tw = cases.reduce(function (a, k) { return a + k[3]; }, 0), cx = pad, gap = 20;
+    cases.forEach(function (k) {
+      var w = (larg - gap * 2) * k[3] / tw;
+      x.fillStyle = '#F1F5F0'; rond(cx, 260, w, 136, 22); x.fill();
+      x.fillStyle = MU; x.font = F(500, 24); x.fillText(k[0], cx + 28, 304);
+      x.fillStyle = INK; x.font = F(700, k[3] > 1.2 ? 50 : 56); x.fillText(k[1], cx + 28, 370);
+      if (k[2]) { var wv = x.measureText(k[1]).width; x.fillStyle = MU; x.font = F(500, 28); x.fillText(k[2], cx + 28 + wv, 370); }
+      cx += w + gap;
+    });
+    // tableau
+    var y = 460;
+    x.fillStyle = MU; x.font = F(600, 21);
+    x.fillText('SECTION', pad + 20, y); x.fillText('LONGUEURS', colLg, y);
+    x.textAlign = 'center'; x.fillText('COLIS', colN, y); x.textAlign = 'right'; x.fillText('M³', colM, y); x.textAlign = 'left';
+    y += 22; x.fillStyle = '#DDE3DC'; x.fillRect(pad, y, larg, 2); y += 2;
+    lignesTab.forEach(function (l, i) {
+      if (i % 2 === 0) { x.fillStyle = '#F7F9F6'; x.fillRect(pad, y, larg, l.h); }
+      var mid = y + l.h / 2 + 12;
+      x.fillStyle = INK; x.font = F(700, 36); x.fillText(l.k, pad + 20, mid);
+      var yy = y + 20;
+      l.lignes.forEach(function (lg) {
+        var xx = colLg;
+        lg.forEach(function (pu) { x.fillStyle = '#EADBBF'; rond(xx, yy, pu[1], 40, 10); x.fill(); x.fillStyle = '#3A2814'; x.font = F(600, 26); x.fillText(pu[0], xx + 14, yy + 29); xx += pu[1] + 10; });
+        yy += 46;
+      });
+      x.fillStyle = INK; x.font = F(700, 32); x.textAlign = 'center'; x.fillText(String(l.g.n), colN, mid);
+      x.font = F(600, 32); x.textAlign = 'right'; x.fillText(f3(l.g.m), colM, mid); x.textAlign = 'left';
+      y += l.h; x.fillStyle = '#EEF1ED'; x.fillRect(pad, y - 2, larg, 2);
+    });
+    x.fillStyle = VERT; x.fillRect(pad, y, larg, 4); y += 4;
+    x.fillStyle = '#F1F5F0'; x.fillRect(pad, y, larg, 80);
+    x.fillStyle = INK; x.font = F(700, 34); x.fillText('Total', pad + 20, y + 52);
+    x.textAlign = 'center'; x.fillText(String(nbTot), colN, y + 52); x.textAlign = 'right'; x.fillText(f3(v.total), colM, y + 52); x.textAlign = 'left';
+    y += 80 + 70;
+    // plan
+    x.fillStyle = INK; x.font = F(700, 34); x.fillText('Plan de chargement', pad, y); y += 26;
+    x.drawImage(plan, 0, cropY, W, cropH, pad, y, larg, planH);
+    x.strokeStyle = '#E3E6E1'; x.lineWidth = 2; rond(pad, y, larg, planH, 14); x.stroke();
+    y += planH + 50;
+    x.fillStyle = '#8A928D'; x.font = F(500, 22); x.textAlign = 'center'; x.fillText('SDC – Les Scieries du Centre · Camions SDC', W / 2, y); x.textAlign = 'left';
+    return cv;
+  }
+  function octets(dataUrl) { var bin = atob(dataUrl.split(',')[1]), arr = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return arr; }
+  // PDF d'une page contenant l'image JPEG (pas de bibliothèque : le fichier est écrit à la main)
+  function pdfDepuisJpeg(jpg, w, h) {
+    var PW = 595.28, PH = Math.round(PW * h / w * 100) / 100, parts = [], pos = 0, offs = [];
+    function add(t) { var b = typeof t === 'string' ? new TextEncoder().encode(t) : t; parts.push(b); pos += b.length; }
+    function obj(n, corps, flux) { offs[n] = pos; add(n + ' 0 obj\n' + corps + (flux ? '\nstream\n' : '\nendobj\n')); if (flux) { add(flux); add('\nendstream\nendobj\n'); } }
+    add('%PDF-1.4\n%\u00e2\u00e3\n');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    obj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PW + ' ' + PH + '] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>');
+    var cs = 'q ' + PW + ' 0 0 ' + PH + ' 0 0 cm /Im0 Do Q';
+    obj(4, '<< /Length ' + cs.length + ' >>', new TextEncoder().encode(cs));
+    obj(5, '<< /Type /XObject /Subtype /Image /Width ' + w + ' /Height ' + h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpg.length + ' >>', jpg);
+    var xref = pos, t = 'xref\n0 6\n0000000000 65535 f \n';
+    for (var n = 1; n <= 5; n++) t += String(offs[n]).padStart(10, '0') + ' 00000 n \n';
+    add(t + 'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF');
+    return new Blob(parts, { type: 'application/pdf' });
+  }
+  function nomFichier(c, ext) { return 'Fiche-' + ((c.client || 'camion').replace(/[^A-Z0-9]+/gi, '-')) + (c.reference ? '-' + c.reference : '') + '.' + ext; }
+  function ligneCourte(c) { var nb = c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0); return '🚛 ' + (c.client || 'Camion') + (c.reference ? ' · Réf. ' + c.reference : '') + ' · ' + f2(c.total_m3) + ' m³ · ' + nb + ' colis'; }
+  function envoyerFichier(fichier, texte, urlAff) {
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [fichier] })) {
+        var data = { files: [fichier], text: texte }; if (!navigator.canShare(data)) data = { files: [fichier] };
+        navigator.share(data).catch(function () {}); return;
+      }
+    } catch (e) {}
+    var lien = URL.createObjectURL(fichier);
+    var f = ouvrirFeuille('<h2>' + esc(fichier.name) + '</h2>' + (urlAff ? '<img src="' + urlAff + '" alt="Fiche" style="width:100%;border-radius:12px">' : '<p class="petit-txt">PDF prêt.</p>') +
+      '<div class="grille-btns"><a class="btn sec" style="display:grid;place-items:center;text-decoration:none" download="' + esc(fichier.name) + '" href="' + lien + '">Télécharger</a><button class="btn" type="button" data-ok="1">Fermer</button></div>');
+    $('[data-ok]', f).onclick = function () { fermerFeuille(); };
+  }
   function fichierPlan(c) {
     var url = imagePlan(c).toDataURL('image/png'), bin = atob(url.split(',')[1]), arr = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
@@ -913,21 +1036,18 @@
   }
   function choixPartage(c) {
     var f = ouvrirFeuille('<h2>Partager le camion</h2>' +
-      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche chauffeur</b><small>Texte + image du plan, par WhatsApp, SMS…</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche chauffeur (image)</b><small>Colis par section + plan, s\'affiche direct dans WhatsApp</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="pdf"><span class="op-ic">📄</span><span><b>Fiche chauffeur (PDF)</b><small>La même fiche, pratique pour imprimer</small></span></button>' +
       '<button type="button" class="opt-part" data-p="image"><span class="op-ic">🖼</span><span><b>Image du plan seulement</b><small>Comme avant</small></span></button>' +
       '<button type="button" class="opt-part" data-p="texte"><span class="op-ic">📋</span><span><b>Copier le texte</b><small>Pour le coller où tu veux</small></span></button>');
     f.onclick = function (e) {
       var b = e.target.closest('[data-p]'); if (!b) return;
       var p = b.dataset.p; f.onclick = null; fermerFeuille();
       if (p === 'image') { setTimeout(function () { partagerImage(c); }, 120); return; }
-      var txt = texteChauffeur(c);
-      if (p === 'texte') { copier(txt); return; }
-      try {
-        var fp = fichierPlan(c);
-        if (navigator.canShare && navigator.canShare({ files: [fp.fichier], text: txt })) { navigator.share({ files: [fp.fichier], text: txt, title: 'Camion ' + (c.client || '') }).catch(function () {}); return; }
-        if (navigator.share) { navigator.share({ text: txt }).catch(function () {}); return; }
-      } catch (er) {}
-      copier(txt); setTimeout(function () { partagerImage(c); }, 200);
+      if (p === 'texte') { copier(texteChauffeur(c)); return; }
+      var fc = ficheCanvas(c), url = fc.toDataURL('image/jpeg', 0.9), jpg = octets(url);
+      if (p === 'fiche') envoyerFichier(new File([jpg], nomFichier(c, 'jpg'), { type: 'image/jpeg' }), ligneCourte(c), url);
+      else envoyerFichier(new File([pdfDepuisJpeg(jpg, fc.width, fc.height)], nomFichier(c, 'pdf'), { type: 'application/pdf' }), ligneCourte(c), null);
     };
   }
 
@@ -1022,6 +1142,7 @@
       piste(v.cote.map(function (k) { return { k: k, cm: k.cm }; }), y + 40); y += rowH + 80;
     }
     x.font = F(500, 26);
+    cv.finPlan = y; // fin du dessin du plan (pour la fiche chauffeur)
     lignesMsg.forEach(function (m) { x.fillStyle = m[0]; x.fillText((m[2] ? '• ' : '   ') + m[1], pad, y + 20); y += 38; });
     x.fillStyle = LINE; x.fillRect(pad, H - 74, larg, 2);
     x.fillStyle = MU; x.font = F(500, 22);
@@ -1049,7 +1170,7 @@
       '<div class="grille-btns"><a class="btn sec" style="display:grid;place-items:center;text-decoration:none" download="' + esc(nom) + '" href="' + url + '">Télécharger</a><button class="btn" type="button" id="fermerImg">Fermer</button></div>');
     $('#fermerImg', f).onclick = fermerFeuille;
   }
-  window.__imagePlan = imagePlan; // pour les tests
+  window.__imagePlan = imagePlan; window.__fiche = function (c) { return ficheCanvas(c); }; window.__pdf = function (c) { var fc = ficheCanvas(c); return pdfDepuisJpeg(octets(fc.toDataURL('image/jpeg', 0.9)), fc.width, fc.height); }; // pour les tests
 
   // ---------- Historique ----------
   function jourCle(iso) { var d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -1224,8 +1345,17 @@
     if (!c) return;
     assurerPlan(c);
     var enCours = c.statut === 'en_cours';
-    var lignes = c.lignes.map(function (l) {
-      return '<div class="lig"><div class="txt"><div class="sec">' + fm(l.ep) + ' × ' + fm(l.la) + ((l.nb || 1) > 1 ? '<span class="mult">×' + l.nb + '</span>' : '') + '</div><div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m</div></div><span class="vol">' + f3(P.volTotalLigne(l)) + '</span></div>';
+    var gr = {}, nbColis = 0;
+    c.lignes.forEach(function (l) {
+      var k = l.ep + 'x' + l.la, g = gr[k] || (gr[k] = { ep: l.ep, la: l.la, lg: [], v: 0 });
+      if (g.lg.indexOf(l.lo) < 0) g.lg.push(l.lo);
+      g.v += P.volTotalLigne(l); nbColis += (l.nb || 1);
+    });
+    var gl = Object.keys(gr).map(function (k) { return gr[k]; }).sort(function (a, b) { return b.ep - a.ep || b.la - a.la; });
+    var lignes = gl.map(function (g) {
+      return '<div class="pli-l"><b>' + fm(g.ep) + '×' + fm(g.la) + '</b><span class="pli-lg">' +
+        g.lg.sort(function (a, b) { return a - b; }).map(function (lo) { return '<i>' + fLong(lo) + '</i>'; }).join('') +
+        '</span><em>' + f3(g.v) + '</em></div>';
     }).join('');
     var date = enCours ? 'En cours · modifié à ' + heure(c.maj_le) : new Date(c.termine_le).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + heure(c.termine_le);
     var sel = selection; selection = null;
@@ -1235,8 +1365,8 @@
       '<div class="grille-btns">' +
       (enCours ? '<button class="btn" data-a="reprendre" type="button">Reprendre</button>' : '<button class="btn" data-a="dupliquer" type="button">Dupliquer</button>') +
       '<button class="btn sec" data-a="image" type="button">Partager</button></div>' +
-      '<div class="carte liste" style="flex:none;max-height:none">' + (lignes || '<div class="vide">Aucun colis</div>') + '</div>' +
-      (c.lignes.length ? htmlPlan(c, { lecture: true }) : '') +
+      (c.lignes.length ? '<div class="plan-histo">' + htmlPlan(c, { lecture: true }) + '<button class="btn-lien plan-grand" data-a="plan" type="button">Ouvrir le plan en grand ›</button></div>' : '') +
+      (c.lignes.length ? '<details class="pli carte"><summary><span>Colis</span><small>' + nbColis + ' colis · ' + gl.length + ' section' + (gl.length > 1 ? 's' : '') + '</small></summary>' + lignes + '</details>' : '<div class="carte"><div class="vide">Aucun colis</div></div>') +
       '<div class="grille-btns"><button class="btn danger" data-a="suppr" type="button">Supprimer</button><button class="btn sec" data-a="fermer" type="button">Fermer</button></div>');
     selection = sel;
     $('#feuilleFond').onclick = null;
@@ -1244,6 +1374,12 @@
       b.onclick = function () {
         var a = b.dataset.a;
         if (a === 'fermer') fermerFeuille();
+        if (a === 'plan') {
+          selection = null;
+          var ouvrirPlan = function () { if (enCours) db.courant = c.id; else edition = c.id; aller('plan'); };
+          if (history.state && history.state.f) { apresRetour = ouvrirPlan; fermerFeuille(); } else { fermerFeuille(); ouvrirPlan(); }
+          if (!enCours) toast('Plan de ' + (c.client || 'ce camion') + ' : tu peux le modifier');
+        }
         if (a === 'image') { fermerFeuille(); setTimeout(function () { choixPartage(c); }, 260); }
         if (a === 'reprendre') { db.courant = c.id; sauver(true); fermerFeuille(); viderForm(); setTimeout(function () { aller('camion'); }, 60); }
         if (a === 'dupliquer') {
