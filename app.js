@@ -135,7 +135,7 @@
     $$('.onglet').forEach(function (b) { b.classList.toggle('actif', b.dataset.vue === ONGLET[v]); });
     window.scrollTo(0, 0);
     if (v === 'accueil') rendreAccueil();
-    if (v === 'calcul') rendreCalc();
+    if (v === 'calcul') { prepCalc(); rendreCalc(); }
     if (v === 'client') rendreClient();
     if (v === 'camion') rendreCamion();
     if (v === 'plan') rendrePlanVue();
@@ -431,6 +431,14 @@
 
   // ---------- Calcul m³ ----------
   var calc = { ep: '', la: '', pi: '', lo: '', actif: 'ep' };
+  // Calcul m³ : on ne montre que les paquets du calcul en cours. Si un camion déjà rempli est
+  // encore ouvert, on démarre un nouveau calcul vide ; l'ancien reste dans l'historique (non terminés).
+  var calcCamId = null;
+  function prepCalc() {
+    var c = courant();
+    if (c.id !== calcCamId && c.lignes.length) { c = nouveauCamion(); sauver(true); }
+    calcCamId = c.id;
+  }
   var ORDRE = ['ep', 'la', 'pi', 'lo'];
   function calcVol() {
     var v = ORDRE.map(function (k) { return P.num(calc[k]); });
@@ -687,6 +695,7 @@
     var lg = v.erreurs.filter(function (m) { return /^Étage/.test(m); });
     if (lg.length) return { cls: 'e', etq: '⚠ À revoir', detail: lg[0] };
     if (v.etat.code === 'trop') return { cls: 'e', etq: 'Dépassé ' + f2(v.etat.depasse) + ' m³' };
+    if (v.ecrase) return { cls: 'a', etq: '≈ Fait au mieux', detail: 'Avec ces colis, impossible de mettre toutes les petites sections au-dessus des grosses : les colis en rouge sont posés sur des planches fines.' };
     if (P.deseq(v) > r.ecartMax + 0.005) return { cls: 'a', etq: '≈ Équilibré au mieux', detail: 'Avec ces colis, écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³ entre gauche et droite : le plus faible possible.' };
     var lgM = v.avis.filter(function (m) { return /cm/.test(m); });
     if (lgM.length) return { cls: 'a', etq: '≈ Équilibré au mieux', detail: lgM[0].replace(/\.$/, '') + ' : le plus petit écart possible avec ces colis.' };
@@ -807,7 +816,7 @@
   $('#btnPartager').addEventListener('click', function () { partagerImage(courant()); });
 
   // ---------- Image du plan (partage) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=23';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=24';
   function imagePlan(c) {
     var r = cfgC(c), v = vplan(c);
     var W = 1080, pad = 56, larg = W - 2 * pad, rowH = 92, tagW = 120;
