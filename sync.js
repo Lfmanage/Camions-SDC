@@ -4,8 +4,9 @@
 (function () {
   'use strict';
   // ⬇⬇⬇ À REMPLIR UNE FOIS (Supabase › Project Settings › API) ⬇⬇⬇
-  var SUPABASE_URL = 'https://gkwpaylkblzwqtaelgvw.supabase.co/rest/v1/';
-  var SUPABASE_CLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdrd3BheWxrYmx6d3F0YWVsZ3Z3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzk3MjcsImV4cCI6MjEwODk1NTcyN30.31xv8Lc20ngIQVfn82zhWwqZeCT70AqX64ZG7znq0m4';
+  var SUPABASE_URL = 'https://gkwpaylkblzwqtaelgvw.supabase.co';   // ex. https://abcdefgh.supabase.co
+  var SUPABASE_CLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdrd3BheWxrYmx6d3F0YWVsZ3Z3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzk3MjcsImV4cCI6MjEwODk1NTcyN30.31xv8Lc20ngIQVfn82zhWwqZeCT70AqX64ZG7znq0m4';   // clé publique « anon » (commence par eyJ…)
+  // ⬆⬆⬆
 
   var CLE = 'csdc.equipe';
   var PARTAGE = ['m3Min', 'm3Max', 'e1Min', 'e1Max', 'ecartMax', 'seuil4', 'sections', 'ajouts'];
@@ -15,7 +16,7 @@
   function garder() { try { localStorage.setItem(CLE, JSON.stringify(st)); } catch (e) {} }
   function conf() {
     var o = window.CSDC_SUPABASE || {};
-    return { url: String(o.url || st.url || SUPABASE_URL || '').replace(/\/+$/, ''), cle: o.cle || st.cle || SUPABASE_CLE || '' };
+    return { url: String(o.url || st.url || SUPABASE_URL || '').replace(/^(https?:\/\/[^\/]+).*$/i, '$1'), cle: o.cle || st.cle || SUPABASE_CLE || '' };
   }
   function actif() { var c = conf(); return !!(c.url && c.cle); }
   function rejoint() { return actif() && !!st.equipe && !!(st.session && st.session.uid); }

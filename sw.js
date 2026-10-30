@@ -1,28 +1,28 @@
 /* Camions SDC — service worker (hors ligne). Changer VERSION à chaque mise à jour.
    Mise à jour automatique : la page est toujours redemandée au serveur, le nouveau service worker
    s'active tout de suite (skipWaiting + clients.claim) et l'appli se recharge seule. Rien à réinstaller. */
-const VERSION = 'camions-sdc-v39';
+const VERSION = 'camions-sdc-v40';
 const FICHIERS = [
   './',
   'index.html',
-  'style.css?v=39',
-  'plan.js?v=39',
-  'sync.js?v=39',
-  'app.js?v=39',
-  'manifest.webmanifest?v=39',
-  'icon-192.png?v=39',
-  'icon-512.png?v=39',
-  'icon-maskable-512.png?v=39',
-  'apple-touch-icon.png?v=39',
-  'favicon-32.png?v=39',
-  'camion.jpg?v=39',
-  'bois.jpg?v=39',
-  'logo-clair.png?v=39',
-  'logo-sombre.png?v=39',
-  'foret-clair.jpg?v=39',
-  'foret-sombre.jpg?v=39',
-  'feuilles.png?v=39',
-  'bois-colis.jpg?v=39'
+  'style.css?v=40',
+  'plan.js?v=40',
+  'sync.js?v=40',
+  'app.js?v=40',
+  'manifest.webmanifest?v=40',
+  'icon-192.png?v=40',
+  'icon-512.png?v=40',
+  'icon-maskable-512.png?v=40',
+  'apple-touch-icon.png?v=40',
+  'favicon-32.png?v=40',
+  'camion.jpg?v=40',
+  'bois.jpg?v=40',
+  'logo-clair.png?v=40',
+  'logo-sombre.png?v=40',
+  'foret-clair.jpg?v=40',
+  'foret-sombre.jpg?v=40',
+  'feuilles.png?v=40',
+  'bois-colis.jpg?v=40'
 ];
 
 self.addEventListener('install', (e) => {
