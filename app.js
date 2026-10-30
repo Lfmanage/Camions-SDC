@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '35';
+  var VERSION_APP = '36';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -802,7 +802,7 @@
     if (edit) {
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
       var auMil = sel && (c.plan || {})[sel.id] === 'C' + N, dejaMil = v.rows['C' + N].colis.length > 0;
-      if (apercu) h += '<div class="barre-sel bs1"><span class="bs-t" style="white-space:normal">Les colis <b class="vert">BOUGÉ</b> gardent le camion équilibré.</span><button type="button" class="btn petit btn-valider" data-apok="1">Valider</button><button type="button" class="btn sec petit" data-apno="1">Annuler</button></div>';
+      if (apercu) h += '<div class="barre-sel bs1"><span class="bs-t" style="white-space:normal">' + (apercu.alerte ? '<b class="orange">⚠ ' + esc(apercu.alerte) + '</b><br>Dernier étage réorganisé.' : (apercu.bouges.length ? 'Dernier étage réorganisé : colis <b class="vert">BOUGÉ</b>.' : 'Colis au milieu.')) + '</span><button type="button" class="btn petit btn-valider" data-apok="1">Valider</button><button type="button" class="btn sec petit" data-apno="1">Annuler</button></div>';
       else if (sel && !selCote) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b></span>' +
         (auMil ? '<button type="button" class="btn sec petit" data-decote="1">Sortir</button>'
                : '<button type="button" class="btn petit btn-mil" data-milieu="1">' + (dejaMil ? 'Échanger avec le milieu' : 'Milieu') + '</button><button type="button" class="btn sec petit" data-decote="1">De côté</button>') +
@@ -881,52 +881,41 @@
   // Met le colis au milieu (à cheval sur les 2 côtés, au dernier étage, tout devant)
   // ---------- Colis au MILIEU : 1 seul, à cheval, tout devant ----------
   var apercu = null; // solution proposée, affichée en attendant « Valider » ou « Annuler »
-  var refMil = null; // le plan actuel sert de référence : la solution ne doit pas être moins bonne
-  function bonMilieu(v) { return P.noteVerif(v) <= refMil.note + 0.5 && P.deseq(v) <= refMil.deseq + 0.005; }
+  // Milieu : on réorganise seulement le dernier étage (conducteur + passager) autour du colis du milieu.
+  // Seule règle stricte : le dernier étage ne doit pas être plus long que les étages 2 (en dessous).
+  function noteMilieu(v) {
+    var em = reg().ecartMax, d = P.deseq(v);
+    return (d > em + 0.005 ? 500 * (d - em) : 0) + P.noteVerif(v);
+  }
   function auMilieu(c, id) {
     if (!c.ordre) fixerOrdre(c);
-    var v1 = vplan(c); refMil = { note: Math.max(P.noteVerif(v1), 99), deseq: Math.max(reg().ecartMax, P.deseq(v1)) };
-    var k = 'C' + v1.N, plan = Object.assign({}, c.plan || {}), ordre = c.ordre.slice();
-    var ancien = Object.keys(plan).filter(function (x) { return plan[x] === k && x !== id; })[0];
-    if (ancien) { // échange avec le colis déjà au milieu
-      plan[ancien] = plan[id];
-      var ia = ordre.indexOf(ancien), ib = ordre.indexOf(id); ordre[ia] = id; ordre[ib] = ancien;
+    var v1 = vplan(c), N = v1.N, k = 'C' + N, plan0 = Object.assign({}, c.plan || {}), ordre = c.ordre.slice();
+    var haut = Object.keys(plan0).filter(function (x) { return x !== id && (plan0[x] === 'G' + N || plan0[x] === 'D' + N || plan0[x] === k); });
+    var base = Object.assign({}, plan0); base[id] = k;
+    var errAvant = v1.erreurs.slice(), best = null, pire = null, nb = Math.min(haut.length, 14);
+    for (var m = 0; m < (1 << nb); m++) {
+      var q = Object.assign({}, base);
+      haut.forEach(function (x, i) { q[x] = i < nb ? ((m >> i) & 1 ? 'D' + N : 'G' + N) : plan0[x] === k ? 'G' + N : plan0[x]; });
+      var v = P.verifier(c.lignes, q, cfgC(c), ordre);
+      var nouv = v.erreurs.filter(function (e) { return errAvant.indexOf(e) < 0; });
+      var bouges = haut.filter(function (x) { return q[x] !== plan0[x]; });
+      var n = noteMilieu(v) + bouges.length * 0.01;
+      if (nouv.length) { if (!pire || nouv.length < pire.nouv.length) pire = { nouv: nouv }; continue; }
+      if (!best || n < best.n) best = { n: n, p: q, v: v, b: bouges };
     }
-    plan[id] = k;
-    var t0 = Date.now(), v2 = P.verifier(c.lignes, plan, cfgC(c), ordre);
     selection = null;
-    if (bonMilieu(v2)) { appliquerMilieu(c, plan, ordre, ancien ? 'Échangé avec le milieu' : 'Colis mis au MILIEU, tout devant'); return; }
-    // on cherche 1 puis 2 changements (échange ou déplacement) qui gardent le camion bon
-    var ids = Object.keys(plan).filter(function (x) { return x !== id && plan[x] !== 'X'; });
-    var rangs = v1.ROWS.filter(function (r) { return r !== k; });
-    function voisins(p, o) {
-      var out = [];
-      for (var a = 0; a < ids.length; a++) for (var b = a + 1; b < ids.length; b++) {
-        var x = ids[a], y = ids[b]; if (p[x] === p[y]) continue;
-        var q = Object.assign({}, p); q[x] = p[y]; q[y] = p[x];
-        var o2 = o.slice(), ix = o2.indexOf(x), iy = o2.indexOf(y); o2[ix] = y; o2[iy] = x;
-        out.push({ p: q, o: o2, b: [x, y] });
-      }
-      ids.forEach(function (x) { rangs.forEach(function (r) { if (p[x] === r) return; var q = Object.assign({}, p); q[x] = r; out.push({ p: q, o: o, b: [x] }); }); });
-      return out;
-    }
-    var best = null;
-    function essai(cand, bouges) {
-      var v = P.verifier(c.lignes, cand.p, cfgC(c), cand.o);
-      if (!bonMilieu(v)) return;
-      var n = P.noteVerif(v) + bouges.length * 0.3;
-      if (!best || n < best.n) best = { n: n, p: cand.p, o: cand.o, b: bouges };
-    }
-    var n1 = voisins(plan, ordre);
-    n1.forEach(function (cand) { essai(cand, cand.b); });
-    if (!best) {
-      for (var i = 0; i < n1.length && Date.now() - t0 < 1500; i++) {
-        voisins(n1[i].p, n1[i].o).forEach(function (cand) { essai(cand, n1[i].b.concat(cand.b.filter(function (x) { return n1[i].b.indexOf(x) < 0; }))); });
-      }
-    }
-    if (!best) { toastRouge('Impossible au milieu : ' + raisonMilieu(v2)); return; }
-    apercu = { c: c, avant: { plan: c.plan, ordre: c.ordre, man: c.planManuel }, bouges: best.b.concat(ancien ? [ancien] : []) };
-    c.plan = best.p; c.ordre = best.o; c.planManuel = true;
+    if (!best) { toastRouge('Impossible au milieu : ' + (pire ? pire.nouv[0].replace(/\.$/, '') + '.' : 'le plan ne serait plus bon.')); return; }
+    var alerte = alerteMilieu(best.v);
+    if (!best.b.length && !alerte) { appliquerMilieu(c, best.p, ordre, 'Colis mis au MILIEU, tout devant'); return; }
+    apercu = { c: c, avant: { plan: c.plan, ordre: c.ordre, man: c.planManuel }, bouges: best.b, alerte: alerte };
+    c.plan = best.p; c.ordre = ordre; c.planManuel = true;
+  }
+  function alerteMilieu(v) {
+    var em = reg().ecartMax, d = Math.abs(v.ecart);
+    if (v.ecart < -0.005) return 'côté passager plus lourd de ' + f2(-v.ecart) + ' m³';
+    if (d > em + 0.005) return 'écart ' + f2(d) + ' m³ (max ' + f2(em) + ')';
+    var lg = P.ecartLg(v); if (lg > P.ECART_LG) return f2(lg / 100) + ' m d\'écart de longueur gauche/droite';
+    return '';
   }
   function appliquerMilieu(c, plan, ordre, msg) { c.plan = plan; c.ordre = ordre; c.planManuel = true; toucher(c); toast(msg); }
   function raisonMilieu(v) {

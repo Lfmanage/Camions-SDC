@@ -756,3 +756,4 @@ body[data-vue="plan"] .fe, body[data-vue="calcul"] .fe { scale: .65; opacity: .8
 .barre-sel .vert { color: #5ee08f; }
 .barre-sel .btn-valider { background: #1f9d55; color: #fff; border: 0; }
 .toast.rouge { background: rgba(110, 24, 18, .95) !important; color: #fff !important; }
+.barre-sel .orange { color: #FFB347; }
