@@ -750,3 +750,9 @@ body[data-vue="plan"] .fe, body[data-vue="calcul"] .fe { scale: .65; opacity: .8
 .barre-sel.bs1 .bs-t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
 .barre-sel.bs1 .btn.petit { flex: 0 0 auto; min-height: 32px; height: 32px; padding: 0 11px; font-size: 13px; border-radius: 9px; }
 .barre-sel.bs1 .x { flex: 0 0 auto; width: 30px; height: 32px; }
+/* v35 — milieu : aperçu de la solution */
+.chip.bouge { box-shadow: inset 0 0 0 3px #1f9d55; position: relative; }
+.chip.bouge::before { content: "BOUGÉ"; position: absolute; top: 3px; right: 4px; font: 800 7.5px/1 Inter, system-ui, sans-serif; color: #fff; background: #1f9d55; padding: 2px 3px; border-radius: 3px; z-index: 2; }
+.barre-sel .vert { color: #5ee08f; }
+.barre-sel .btn-valider { background: #1f9d55; color: #fff; border: 0; }
+.toast.rouge { background: rgba(110, 24, 18, .95) !important; color: #fff !important; }

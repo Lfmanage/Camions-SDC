@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '34';
+  var VERSION_APP = '35';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -153,6 +153,7 @@
   function montrer(v) {
     vueActive = v; document.body.dataset.vue = v;
     if (v !== 'plan') edition = null;
+    if (apercu && v !== 'plan') { finApercu(courant(), false); }
     $$('.vue').forEach(function (s) { s.classList.toggle('active', s.id === 'v-' + v); });
     $$('.onglet').forEach(function (b) { b.classList.toggle('actif', b.dataset.vue === (v === 'plan' && edition ? 'historique' : ONGLET[v])); });
     window.scrollTo(0, 0);
@@ -593,6 +594,7 @@
 
   // Un autre bon plan, calculé instantanément sur le téléphone
   $('#btnAutre').addEventListener('click', function () {
+    if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
     var c = courant(), b = $('#btnAutre');
     if (!c.lignes.length || b.disabled) return;
     b.disabled = true; b.classList.add('calcul'); b.innerHTML = '<span class="spin"></span>Calcul…';
@@ -633,6 +635,7 @@
   }
 
   $('#btnVider').addEventListener('click', function () {
+    if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
     var c = courant(); if (!c.lignes.length) return;
     var avant = { plan: c.plan, ordre: c.ordre, man: c.planManuel };
     fixerOrdre(c);
@@ -643,6 +646,7 @@
   });
 
   $('#btnTerminer').addEventListener('click', function () {
+    if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
     var c = courant();
     if (!c.lignes.length) { toast('Aucun colis à enregistrer.'); return; }
     assurerPlan(c);
@@ -764,7 +768,7 @@
     var place = edit && selection ? 36 : 0; // place gardée pour le bouton « + » en bout d'étage
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
     function chip(k, centre, libre) {
-      return '<button type="button" title="' + esc(libColis(k)) + '" data-bois="' + (Math.abs(hashBois(k.id)) % 6) + '" class="chip' + (centre ? ' centre' : '') + (selection === k.id && edit ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
+      return '<button type="button" title="' + esc(libColis(k)) + '" data-bois="' + (Math.abs(hashBois(k.id)) % 6) + '" class="chip' + (centre ? ' centre' : '') + (selection === k.id && edit ? ' sel' : '') + (apercu && apercu.bouges.indexOf(k.id) >= 0 ? ' bouge' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
         '<b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>';
     }
     var h = '<div class="sum ' + st.cls + '"><span class="sum-g"><span class="tot">' + f2(v.total) + '<small>/ ' + fm(r.cible) + ' m³</small></span><span class="etq">' + esc(st.etq) + '</span></span>' +
@@ -797,10 +801,11 @@
     });
     if (edit) {
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
-      var auMil = sel && (c.plan || {})[sel.id] === 'C' + N;
-      if (sel && !selCote) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b></span>' +
+      var auMil = sel && (c.plan || {})[sel.id] === 'C' + N, dejaMil = v.rows['C' + N].colis.length > 0;
+      if (apercu) h += '<div class="barre-sel bs1"><span class="bs-t" style="white-space:normal">Les colis <b class="vert">BOUGÉ</b> gardent le camion équilibré.</span><button type="button" class="btn petit btn-valider" data-apok="1">Valider</button><button type="button" class="btn sec petit" data-apno="1">Annuler</button></div>';
+      else if (sel && !selCote) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b></span>' +
         (auMil ? '<button type="button" class="btn sec petit" data-decote="1">Sortir</button>'
-               : '<button type="button" class="btn petit btn-mil" data-milieu="1">Milieu</button><button type="button" class="btn sec petit" data-decote="1">De côté</button>') +
+               : '<button type="button" class="btn petit btn-mil" data-milieu="1">' + (dejaMil ? 'Échanger avec le milieu' : 'Milieu') + '</button><button type="button" class="btn sec petit" data-decote="1">De côté</button>') +
         '<button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else h += '<div class="aide-l"><span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer.</span>' +
@@ -874,17 +879,71 @@
   }
 
   // Met le colis au milieu (à cheval sur les 2 côtés, au dernier étage, tout devant)
+  // ---------- Colis au MILIEU : 1 seul, à cheval, tout devant ----------
+  var apercu = null; // solution proposée, affichée en attendant « Valider » ou « Annuler »
+  var refMil = null; // le plan actuel sert de référence : la solution ne doit pas être moins bonne
+  function bonMilieu(v) { return P.noteVerif(v) <= refMil.note + 0.5 && P.deseq(v) <= refMil.deseq + 0.005; }
   function auMilieu(c, id) {
-    var v1 = vplan(c), k = 'C' + v1.N, plan = Object.assign({}, c.plan || {});
-    plan[id] = k;
-    var v2 = vplan(c, plan);
-    if (P.noteVerif(v2) > P.noteVerif(v1)) {
-      var nouv = v2.erreurs.filter(function (m) { return v1.erreurs.indexOf(m) < 0; });
-      selection = null; return toast('Pas possible au milieu : ' + String(nouv[0] || 'le plan ne serait plus bon').replace(/\.$/, '') + '.');
+    if (!c.ordre) fixerOrdre(c);
+    var v1 = vplan(c); refMil = { note: Math.max(P.noteVerif(v1), 99), deseq: Math.max(reg().ecartMax, P.deseq(v1)) };
+    var k = 'C' + v1.N, plan = Object.assign({}, c.plan || {}), ordre = c.ordre.slice();
+    var ancien = Object.keys(plan).filter(function (x) { return plan[x] === k && x !== id; })[0];
+    if (ancien) { // échange avec le colis déjà au milieu
+      plan[ancien] = plan[id];
+      var ia = ordre.indexOf(ancien), ib = ordre.indexOf(id); ordre[ia] = id; ordre[ib] = ancien;
     }
-    if (P.deseq(v2) > Math.max(reg().ecartMax, P.deseq(v1)) + 0.001) { selection = null; return toast('Pas possible au milieu : le camion serait déséquilibré.'); }
-    placer(c, id, k);
-    toast('Colis mis au MILIEU, tout devant');
+    plan[id] = k;
+    var t0 = Date.now(), v2 = P.verifier(c.lignes, plan, cfgC(c), ordre);
+    selection = null;
+    if (bonMilieu(v2)) { appliquerMilieu(c, plan, ordre, ancien ? 'Échangé avec le milieu' : 'Colis mis au MILIEU, tout devant'); return; }
+    // on cherche 1 puis 2 changements (échange ou déplacement) qui gardent le camion bon
+    var ids = Object.keys(plan).filter(function (x) { return x !== id && plan[x] !== 'X'; });
+    var rangs = v1.ROWS.filter(function (r) { return r !== k; });
+    function voisins(p, o) {
+      var out = [];
+      for (var a = 0; a < ids.length; a++) for (var b = a + 1; b < ids.length; b++) {
+        var x = ids[a], y = ids[b]; if (p[x] === p[y]) continue;
+        var q = Object.assign({}, p); q[x] = p[y]; q[y] = p[x];
+        var o2 = o.slice(), ix = o2.indexOf(x), iy = o2.indexOf(y); o2[ix] = y; o2[iy] = x;
+        out.push({ p: q, o: o2, b: [x, y] });
+      }
+      ids.forEach(function (x) { rangs.forEach(function (r) { if (p[x] === r) return; var q = Object.assign({}, p); q[x] = r; out.push({ p: q, o: o, b: [x] }); }); });
+      return out;
+    }
+    var best = null;
+    function essai(cand, bouges) {
+      var v = P.verifier(c.lignes, cand.p, cfgC(c), cand.o);
+      if (!bonMilieu(v)) return;
+      var n = P.noteVerif(v) + bouges.length * 0.3;
+      if (!best || n < best.n) best = { n: n, p: cand.p, o: cand.o, b: bouges };
+    }
+    var n1 = voisins(plan, ordre);
+    n1.forEach(function (cand) { essai(cand, cand.b); });
+    if (!best) {
+      for (var i = 0; i < n1.length && Date.now() - t0 < 1500; i++) {
+        voisins(n1[i].p, n1[i].o).forEach(function (cand) { essai(cand, n1[i].b.concat(cand.b.filter(function (x) { return n1[i].b.indexOf(x) < 0; }))); });
+      }
+    }
+    if (!best) { toastRouge('Impossible au milieu : ' + raisonMilieu(v2)); return; }
+    apercu = { c: c, avant: { plan: c.plan, ordre: c.ordre, man: c.planManuel }, bouges: best.b.concat(ancien ? [ancien] : []) };
+    c.plan = best.p; c.ordre = best.o; c.planManuel = true;
+  }
+  function appliquerMilieu(c, plan, ordre, msg) { c.plan = plan; c.ordre = ordre; c.planManuel = true; toucher(c); toast(msg); }
+  function raisonMilieu(v) {
+    var e = v.erreurs[0];
+    if (e) return e.replace(/\.$/, '') + '.';
+    if (v.ecart < -0.005) return 'le côté passager deviendrait plus lourd que le côté conducteur.';
+    if (P.deseq(v) > reg().ecartMax + 0.005) return 'le camion serait déséquilibré (' + f2(P.deseq(v)) + ' m³ d\'écart, max ' + f2(reg().ecartMax) + ').';
+    if (P.ecartLg(v) > P.ECART_LG) return 'trop d\'écart de longueur entre gauche et droite.';
+    return 'le plan ne serait plus bon.';
+  }
+  function toastRouge(msg) { toast(msg); $('#toast').classList.add('rouge'); setTimeout(function () { $('#toast').classList.remove('rouge'); }, 4200); clearTimeout(toastMin); toastMin = setTimeout(function () { $('#toast').hidden = true; }, 4200); }
+  function finApercu(c, garder) {
+    if (!apercu) return;
+    c = apercu.c;
+    if (garder) { toucher(c); toast('Colis mis au MILIEU ✔'); }
+    else { c.plan = apercu.avant.plan; c.ordre = apercu.avant.ordre; c.planManuel = apercu.avant.man; }
+    apercu = null;
   }
   $('#planZone').addEventListener('click', function (e) {
     var c = courant();
@@ -895,6 +954,11 @@
       if (c.planDepart) { c.plan = JSON.parse(JSON.stringify(c.planDepart.plan)); c.ordre = null; c.planManuel = false; c.planVariante = false; c.planCalcule = true; }
       else calculerPlan(c);
       toucher(c); selection = null; rendrePlanVue(); toast('Meilleur plan remis'); return;
+    }
+    if (apercu) {
+      if (e.target.closest('[data-apok]')) { finApercu(c, true); rendrePlanVue(); }
+      else if (e.target.closest('[data-apno]')) { finApercu(c, false); rendrePlanVue(); }
+      return; // pendant l'aperçu, on ne touche à rien d'autre
     }
     if (e.target.closest('[data-milieu]') && selection) { auMilieu(c, selection); rendrePlanVue(); return; }
     if (e.target.closest('[data-decote]') && selection) {

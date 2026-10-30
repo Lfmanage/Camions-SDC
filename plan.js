@@ -168,7 +168,7 @@
     // dernier étage : paires gauche/droite puis le centre ; le tout doit tenir sur l'étage du dessous
     var E = Math.max(len[N - 1], len[2 * N - 1]) + len[C], sup = Math.min(len[N - 2], len[2 * N - 2]);
     if (E > sup) { var de = E - sup; c += DUR + 50 * de + de * de / 10; }
-    if (cnt[C] > 1) c += 300 * (cnt[C] - 1);
+    if (cnt[C] > 1) c += DUR * 2 * (cnt[C] - 1); // un seul colis au milieu (à cheval)
     c += 4 * cnt[C] + 0.05 * Math.abs(len[N - 1] - len[2 * N - 1]);
     // équilibre : le centre pèse à moitié de chaque côté ; l'écart doit être au dernier étage
     var D = 0;
@@ -444,6 +444,7 @@
     var mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     if (nonPlaces.length) erreurs.push(nonPlaces.length + (nonPlaces.length > 1 ? ' colis non placés.' : ' colis non placé.'));
     if (cote.length) erreurs.push(cote.length + ' colis de côté : remets-' + (cote.length > 1 ? 'les' : 'le') + ' dans le camion.');
+    if (rows[CK].colis.length > 1) { rows[CK].alerte = true; erreurs.push('Un seul colis au milieu : il est à cheval sur les 2 côtés.'); }
     [0, 1].forEach(function (s) {
       var p = s === 0 ? 'G' : 'D', r1 = rows[p + '1'], r2 = rows[p + '2'];
       if (r1.len < mn || r1.len > mx) {
