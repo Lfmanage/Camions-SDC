@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '22';
+  var VERSION_APP = '26';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -146,7 +146,7 @@
     if (v === 'calcul') { prepCalc(); rendreCalc(); }
     if (v === 'client') rendreClient();
     if (v === 'camion') rendreCamion();
-    if (v === 'plan') rendrePlanVue();
+    if (v === 'plan') { rendrePlanVue(); requestAnimationFrame(ajusterPlan); }
     if (v === 'historique') rendreHisto();
     if (v === 'reglages') rendreReglages();
     majRetour();
@@ -727,7 +727,7 @@
     var place = edit && selection ? 36 : 0; // place gardée pour le bouton « + » en bout d'étage
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
     function chip(k, centre, libre) {
-      return '<button type="button" class="chip' + (centre ? ' centre' : '') + (selection === k.id && edit ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
+      return '<button type="button" title="' + esc(libColis(k)) + '" class="chip' + (centre ? ' centre' : '') + (selection === k.id && edit ? ' sel' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
         (libre || k.cm / maxLen > .06 ? '<b>' + fm(k.lo) + ' m</b>' : '') + (libre || k.cm / maxLen > .12 ? '<small>' + fm(k.ep) + '×' + fm(k.la) + '</small>' : '') + '</button>';
     }
     var h = '<div class="sum ' + st.cls + '"><span class="tot">' + f2(v.total) + '<small>/ ' + fm(r.cible) + ' m³</small></span><span class="etq">' + esc(st.etq) + '</span>' +
@@ -760,8 +760,9 @@
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
       if (sel && !selCote) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Touche un autre colis pour échanger, ou + pour le déplacer.</span><button type="button" class="btn sec petit" data-decote="1">Mettre de côté</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else if (sel) h += '<div class="barre-sel"><span><b>' + esc(libColis(sel)) + '</b><br>Choisis où le poser.</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else h += '<p class="aide">Touche un colis pour l\'échanger, le déplacer ou le mettre de côté. Le colis hachuré est au centre de l\'étage ' + N + '.' + (N === 4 ? ' Camion surtout en 18×100 : plan sur 4 étages (seuls les 18×100 montent au 4e).' : '') + '</p>';
-      if (c.planManuel || c.planVariante) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Revenir au plan de départ</button>';
+      else h += '<div class="aide-l"><span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer.</span>' +
+        ((c.planManuel || c.planVariante) ? '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>' : '') + '</div>';
+      if (sel && (c.planManuel || c.planVariante)) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>';
     }
     return h;
   }
@@ -772,7 +773,30 @@
     var v = vplan(c);
     if (c.lignes.length && (v.nonPlaces.length || (!c.planManuel && (P.noteVerif(v) >= 1000 || (!c.planVariante && P.deseq(v) > reg().ecartMax + 0.005))))) { majPlan(c); toucher(c); }
     $('#planZone').innerHTML = htmlPlan(c, {});
+    ajusterPlan();
   }
+  // Le plan tient sur un écran : hauteur des étages calculée selon la place du téléphone, textes resserrés si besoin
+  var RH_MAX = 48, RH_MIN = 30, RH_GRAND = 64;
+  function ajusterPlan() {
+    var z = $('#planZone'); if (!z || vueActive !== 'plan') return;
+    var n = $$('.rang', z).length || 6;
+    z.style.setProperty('--rh', RH_MAX + 'px');
+    var trop = z.scrollHeight - z.clientHeight;
+    if (trop > 0) z.style.setProperty('--rh', Math.max(RH_MIN, RH_MAX - Math.ceil(trop / n)) + 'px');
+    else if (z.lastElementChild) { // grand écran : les étages s'agrandissent pour remplir la place
+      var libre = z.clientHeight - (z.lastElementChild.getBoundingClientRect().bottom - z.getBoundingClientRect().top + z.scrollTop);
+      if (libre > n) z.style.setProperty('--rh', Math.min(RH_GRAND, RH_MAX + Math.floor(libre / n)) + 'px');
+    }
+    $$('.chip', z).forEach(function (ch) {
+      ch.classList.remove('serre', 'mini');
+      if (ch.scrollWidth > ch.clientWidth + 1) {
+        ch.classList.add('serre');
+        if (ch.scrollWidth > ch.clientWidth + 1) ch.classList.add('mini');
+      }
+    });
+  }
+  var minuterieAjust = null;
+  window.addEventListener('resize', function () { clearTimeout(minuterieAjust); minuterieAjust = setTimeout(ajusterPlan, 120); });
 
   function echanger(c, a, b) {
     var plan = Object.assign({}, c.plan || {}), ra = plan[a], rb = plan[b];
@@ -824,7 +848,7 @@
   $('#btnPartager').addEventListener('click', function () { partagerImage(courant()); });
 
   // ---------- Image du plan (partage) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=25';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=26';
   function imagePlan(c) {
     var r = cfgC(c), v = vplan(c);
     var W = 1080, pad = 56, larg = W - 2 * pad, rowH = 92, tagW = 120;

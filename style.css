@@ -448,3 +448,40 @@ input.erreur { border-color: var(--rouge); animation: secoue .3s; }
 .btn.vider { padding: 0 12px; font-size: 12.5px; line-height: 1.15; color: var(--muted); white-space: normal; text-align: center; }
 .stat-go { text-align: left; display: flex; flex-direction: column; color: var(--text); }
 .stat-go i { font-style: normal; font-size: 12px; color: var(--accent); font-weight: 500; margin-top: 2px; }
+
+/* ---------- v26 : plan sur un seul écran, pour toutes les tailles de téléphone ---------- */
+#v-plan.active { height: 100vh; height: 100dvh; min-height: 0; gap: 8px; }
+#v-plan .etapes { display: none; }
+#v-plan .pied { margin-top: 0; padding-top: 0; }
+#v-plan .pied .btn.gros { min-height: 48px; }
+#planZone { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; gap: 7px; --rh: 46px; }
+.sum { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }
+.sum .tot { font-size: 30px; }
+.sum .tot small { font-size: 13px; margin-left: 4px; }
+.sum .etq { justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.sum .gd { font-size: 11.5px; line-height: 1.35; }
+.cote { gap: 4px; }
+.cote-t { padding: 2px 2px 0; }
+.hl { font-size: 15px; }
+.rangs { padding: 5px 8px 3px; }
+.rang { min-height: var(--rh, 42px); grid-template-columns: 44px minmax(0, 1fr); gap: 5px; }
+.trk { height: calc(var(--rh, 42px) - 6px); }
+.tag { font-size: 10px; }
+.tag b { font-size: 12.5px; }
+.sens { padding: 1px 0 1px 49px; font-size: 10.5px; }
+.chip { padding: 0 6px 0 5px; }
+.chip.serre { padding: 0 4px 0 3px; }
+.chip.serre b { font-size: 11px; letter-spacing: -.03em; }
+.chip.serre small { font-size: 8.5px; letter-spacing: -.02em; }
+.chip.mini small { display: none; }
+.aide-l { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); padding: 0 2px; }
+.aide-l .btn-lien { min-height: 32px; font-size: 13px; white-space: nowrap; }
+#planZone .barre-sel { bottom: 0; }
+#planZone > .recalc { align-self: flex-end; min-height: 28px; font-size: 13px; }
+@media (max-width: 360px) {
+  .sum .tot { font-size: 26px; }
+  .sum .gd { font-size: 11px; }
+  .rang { grid-template-columns: 40px minmax(0, 1fr); }
+  .sens { padding-left: 45px; }
+  .hl { font-size: 14px; }
+}
