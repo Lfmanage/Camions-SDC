@@ -10,53 +10,50 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=19">
-<link rel="icon" href="favicon-32.png?v=19" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=19">
+<link rel="manifest" href="manifest.webmanifest?v=20">
+<link rel="icon" href="favicon-32.png?v=20" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=20">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=19">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
 <main id="app">
 
   <!-- ============ ACCUEIL ============ -->
   <section class="vue active" id="v-accueil">
-    <div class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour <span>👋</span></h1></div><span class="badge-sdc">SDC</span></div>
+    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1></div><span class="badge-sdc">SDC</span></header>
     <button class="hero-go" id="btnCommencer" type="button">
-      <span class="hg-ico"><svg viewBox="0 0 24 24"><path d="M2.5 7h11v9h-11zM13.5 10h4l3.5 3.5V16h-7.5z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span>
-      <small>Nouveau</small><b>Charger un camion</b><span class="hg-btn">Commencer →</span>
+      <span class="hg-txt"><small>Nouveau camion</small><b>Charger un camion</b></span>
+      <span class="hg-fl" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
     </button>
     <div class="tuiles">
-      <button class="tuile" data-go="calcul" type="button"><span class="t-ico bois">🪵</span><b>Calcul m³</b><small>Un colis, vite</small></button>
-      <button class="tuile" data-go="historique" type="button"><span class="t-ico bleu">🕘</span><b>Historique</b><small id="accNbJour">—</small></button>
+      <button class="tuile" data-go="calcul" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg><b>Calcul m³</b><small>Paquet par paquet</small></button>
+      <button class="tuile" data-go="historique" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><b>Historique</b><small id="accNbJour">—</small></button>
     </div>
     <div class="stats" id="accStats"></div>
     <div id="accEnCours"></div>
+    <button class="installer" id="btnInstaller" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><b>Installer l'appli</b><small>Sur l'écran d'accueil, comme une vraie appli</small></span></button>
   </section>
 
   <!-- ============ CALCUL M³ ============ -->
   <section class="vue" id="v-calcul">
     <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Calcul m³</h1><button class="lien" id="calcEffacer" type="button">Effacer</button></header>
-    <div class="calc-res"><div><small>Ce paquet</small><p id="calcFormule">Tape les 4 valeurs</p></div><div class="calc-v"><b id="calcVol">0,000</b><span>m³</span></div></div>
+    <div class="calc-res"><span>Ce paquet</span><div class="calc-v"><b id="calcVol">0,000</b><span>m³</span></div></div>
     <div class="calc-champs">
-      <button class="fd" data-k="ep" type="button"><small>Épaiss.</small><b><span>—</span></b></button>
+      <button class="fd" data-k="ep" type="button"><small>Épaisseur</small><b><span>—</span></b></button>
       <button class="fd" data-k="la" type="button"><small>Largeur</small><b><span>—</span></b></button>
       <button class="fd" data-k="pi" type="button"><small>Pièces</small><b><span>—</span></b></button>
-      <button class="fd" data-k="lo" type="button"><small>Long.</small><b><span>—</span></b></button>
+      <button class="fd" data-k="lo" type="button"><small>Longueur</small><b><span>—</span></b></button>
     </div>
     <div class="pave" id="pave">
       <button type="button" data-t="1">1</button><button type="button" data-t="2">2</button><button type="button" data-t="3">3</button><button type="button" data-t="del" class="gris" aria-label="Effacer">⌫</button>
       <button type="button" data-t="4">4</button><button type="button" data-t="5">5</button><button type="button" data-t="6">6</button><button type="button" data-t="," class="gris">,</button>
-      <button type="button" data-t="7">7</button><button type="button" data-t="8">8</button><button type="button" data-t="9">9</button><button type="button" data-t="next" class="suiv">Suivant</button>
+      <button type="button" data-t="7">7</button><button type="button" data-t="8">8</button><button type="button" data-t="9">9</button><button type="button" data-t="next" class="suiv" id="paveSuiv">Suivant</button>
       <button type="button" data-t="0" class="zero">0</button>
     </div>
-    <div class="calc-bas">
-      <div class="pas"><button type="button" id="cMoins">−</button><span><b id="cNb">1</b> colis</span><button type="button" id="cPlus">+</button></div>
-      <button class="btn" id="calcAjout" type="button">+ Ajouter le paquet</button>
-    </div>
-    <div class="carte suivi" id="calcSuivi"></div>
+    <div class="suivi" id="calcSuivi"></div>
   </section>
 
   <!-- ============ ÉTAPE 1 : CLIENT ============ -->
@@ -83,7 +80,7 @@
       <div class="seg seg2" id="segVol"><button type="button" data-m="plage" class="actif">Entre 39 et 41 m³</button><button type="button" data-m="exact">Volume exact</button></div>
       <div id="volExactZone" hidden><label class="lg-champ"><input id="volExact" inputmode="decimal" autocomplete="off" placeholder="ex. 40"><i>m³</i></label><p class="sous">Tolérance ± 0,25 m³.</p></div>
     </div>
-    <div class="pied"><button class="btn gros" id="btnEtape2" type="button">Valider →</button></div>
+    <div class="pied"><button class="btn gros" id="btnEtape2" type="button">Valider</button></div>
   </section>
 
   <!-- ============ ÉTAPE 2 : COLIS ============ -->
@@ -115,7 +112,7 @@
     </form>
 
     <div class="carte liste" id="liste"></div>
-    <div class="pied"><button class="btn gros" id="btnPlan" type="button">Voir le plan de chargement →</button></div>
+    <div class="pied"><button class="btn gros" id="btnPlan" type="button">Voir le plan de chargement</button></div>
   </section>
 
   <!-- ============ ÉTAPE 3 : PLAN ============ -->
@@ -123,7 +120,7 @@
     <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Plan de chargement</h1><button class="lien" id="btnPartager" type="button">Partager</button></header>
     <div class="etapes"><span class="on"><i></i>Client</span><span class="on"><i></i>Colis</span><span class="on"><i></i>Plan</span></div>
     <div id="planZone"></div>
-    <div class="pied deux"><button class="btn gros sec" id="btnAutre" type="button">↻ Autre plan</button><button class="btn gros noir" id="btnTerminer" type="button">Terminer ✓</button></div>
+    <div class="pied deux"><button class="btn gros sec" id="btnAutre" type="button">Autre plan</button><button class="btn gros noir" id="btnTerminer" type="button">Terminer</button></div>
   </section>
 
   <!-- ============ HISTORIQUE ============ -->
@@ -152,8 +149,8 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=19"></script>
-<script src="sync.js?v=19"></script>
-<script src="app.js?v=19"></script>
+<script src="plan.js?v=20"></script>
+<script src="sync.js?v=20"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

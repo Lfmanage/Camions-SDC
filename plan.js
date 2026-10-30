@@ -273,20 +273,34 @@
   var COTE = ['gauche', 'droite'];
 
   // Vérifie un plan (calculé ou modifié à la main). Messages en français.
-  function verifier(lignes, plan, cfg) {
+  // ordre (facultatif) : liste d'ids qui fixe l'ordre des colis dans chaque rangée (cabine → arrière)
+  // plan[id] === 'X' : colis mis de côté par l'utilisateur
+  function verifier(lignes, plan, cfg, ordre) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var colis = colisDe(lignes);
     var rows = {}; ROWS.forEach(function (k) { rows[k] = { colis: [], len: 0, vol: 0 }; });
-    var nonPlaces = [];
+    var nonPlaces = [], cote = [];
     colis.forEach(function (c) {
       var k = plan && plan[c.id];
       if (k && rows[k]) { rows[k].colis.push(c); rows[k].len += c.cm; rows[k].vol += c.vol; }
+      else if (k === 'X') cote.push(c);
       else nonPlaces.push(c);
     });
+    if (ordre && ordre.length) {
+      var pos = {}; ordre.forEach(function (id, i) { pos[id] = i; });
+      var rang = function (c, i) { return pos[c.id] !== undefined ? pos[c.id] : 1e6 + i; };
+      ROWS.forEach(function (k) {
+        var l = rows[k].colis.map(function (c, i) { return [rang(c, i), c]; });
+        l.sort(function (a, b) { return a[0] - b[0]; });
+        rows[k].colis = l.map(function (x) { return x[1]; });
+      });
+      cote = cote.map(function (c, i) { return [rang(c, i), c]; }).sort(function (a, b) { return a[0] - b[0]; }).map(function (x) { return x[1]; });
+    }
     ROWS.forEach(function (k) { rows[k].m = rows[k].len / 100; rows[k].alerte = false; });
     var erreurs = [], avis = [];
     var mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     if (nonPlaces.length) erreurs.push(nonPlaces.length + (nonPlaces.length > 1 ? ' colis non placés.' : ' colis non placé.'));
+    if (cote.length) erreurs.push(cote.length + ' colis de côté : remets-' + (cote.length > 1 ? 'les' : 'le') + ' dans le camion.');
     [0, 1].forEach(function (s) {
       var p = s === 0 ? 'G' : 'D', r1 = rows[p + '1'], r2 = rows[p + '2'], r3 = rows[p + '3'];
       if (r1.len < mn || r1.len > mx) {
@@ -318,7 +332,7 @@
     if (totCm > 6 * mx) erreurs.push('Trop de colis : ' + f2(totCm / 100) + ' m bout à bout, le camion en prend au plus ' + f2(6 * cfg.e1Max) + ' m.');
     if (colis.length === 1) erreurs.push('Un seul colis : impossible de remplir l\'étage 1 des deux côtés.');
 
-    var total = volG + volD + nonPlaces.reduce(function (a, c) { return a + c.vol; }, 0);
+    var total = volG + volD + nonPlaces.concat(cote).reduce(function (a, c) { return a + c.vol; }, 0);
     var et = etat(total, cfg);
     if (et.code === 'peu') avis.push('Volume : ' + f2(total) + ' m³, il manque ' + f2(et.manque) + ' m³ pour atteindre ' + f2(cfg.m3Min) + ' m³.');
     if (et.code === 'trop') avis.push('Volume : ' + f2(total) + ' m³, limite dépassée de ' + f2(et.depasse) + ' m³.');
@@ -327,7 +341,7 @@
     function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
     erreurs = uniq(erreurs); avis = uniq(avis);
     return {
-      rows: rows, nonPlaces: nonPlaces, erreurs: erreurs, avis: avis,
+      rows: rows, nonPlaces: nonPlaces, cote: cote, erreurs: erreurs, avis: avis,
       volG: volG, volD: volD, ecart: ecart, total: total, etat: et, e3: E3 / 100, sup3: sup3 / 100,
       ok: erreurs.length === 0, parfait: erreurs.length === 0 && avis.length === 0
     };
