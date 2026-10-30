@@ -95,7 +95,13 @@
   }
 
   // Coût d'un plan (longueurs en cm, volumes en m³, nombre de colis par rangée)
-  var DUR = 1000;
+  var DUR = 1000, ECART_LG = 75; // cm : écart de longueur gauche/droite toléré par étage
+  // Plus grand écart de longueur gauche/droite d'un étage (cm) ; droite plus longue = très mauvais
+  function ecartLg(v) {
+    var m = 0;
+    [1, 2, 3].forEach(function (f) { var d = v.rows['G' + f].len - v.rows['D' + f].len; m = Math.max(m, d < 0 ? 1000 - d : d); });
+    return m;
+  }
   function cout(len, vol, cnt, pref, cfg) {
     var c = 0, mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     for (var s = 0; s < 2; s++) {
@@ -119,7 +125,13 @@
     c += d3v < 0 ? -40 * d3v : 6 * d3v;
     c += D < 0 ? -80 * D : 2 * D;
     if (Math.abs(D) > cfg.ecartMax) c += 400 * (Math.abs(D) - cfg.ecartMax);
-    c += 0.02 * (Math.abs(len[0] - len[3]) + Math.abs(len[1] - len[4]));
+    // longueurs gauche/droite à chaque étage : pareil si possible, sinon la gauche plus longue de 75 cm au plus
+    for (var f = 0; f < 3; f++) {
+      var dl = len[f] - len[f + 3];
+      if (dl < 0) c += 600 + 30 * -dl;
+      else if (dl > ECART_LG) c += 600 + 30 * (dl - ECART_LG);
+      c += 3 * Math.abs(dl);
+    }
     c += pref * 1e-7; // préférence : grosses sections en bas
     return c;
   }
@@ -225,14 +237,15 @@
   // Plan sûr : si le premier calcul laisse une erreur de rangement, on recommence avec d'autres essais
   function noteVerif(v) {
     var e = v.erreurs.filter(function (m) { return !/^(Pas assez de colis|Trop de colis|Un seul colis)/.test(m); }).length;
-    return e * 1000 + (v.ecart < -0.005 ? 100 + -v.ecart * 10 : 0) + Math.abs(v.ecart);
+    var lg = ecartLg(v); // écart de longueur gauche/droite : 0 visé, 75 cm toléré
+    return e * 1000 + (v.ecart < -0.005 ? 100 + -v.ecart * 10 : 0) + Math.abs(v.ecart) + (lg > ECART_LG ? 200 + Math.min(lg - ECART_LG, 700) : 0) + lg * 0.01;
   }
   function meilleur(lignes, cfg, essaisMax) {
     var best = null, n = essaisMax || 8;
     for (var g = 0; g < n; g++) {
       var res = proposer(lignes, cfg, false, g), note = noteVerif(res.verif);
       if (!best || note < best.note) best = { plan: res.plan, verif: res.verif, note: note };
-      if (note < 1000 && res.verif.ecart >= -0.005 && res.verif.ecart <= (Object.assign({}, DEFAUT, cfg || {})).ecartMax + 0.005) break;
+      if (note < 1000 && res.verif.ecart >= -0.005 && res.verif.ecart <= (Object.assign({}, DEFAUT, cfg || {})).ecartMax + 0.005 && ecartLg(res.verif) <= ECART_LG) break;
     }
     return best;
   }
@@ -248,12 +261,13 @@
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var vus = {}; (dejaVus || []).forEach(function (x) { vus[x] = 1; });
     var ref = meilleur(lignes, cfg), refOk = noteVerif(ref.verif) < 1000;
-    var seuil = Math.max(cfg.ecartMax, deseq(ref.verif)) + 0.005;
+    var seuil = Math.max(cfg.ecartMax, deseq(ref.verif)) + 0.005, seuilLg = Math.max(ECART_LG, ecartLg(ref.verif));
     var g0 = graine || 1, t0 = Date.now();
     for (var g = g0; g < g0 + 30 && Date.now() - t0 < 2500; g++) {
       var res = proposer(lignes, cfg, false, 1000 + g, 4 + (g % 4) * 3), v = res.verif;
       if (refOk && noteVerif(v) >= 1000) continue;
       if (deseq(v) > seuil) continue;
+      if (ecartLg(v) > seuilLg) continue;
       var sig = signature(lignes, res.plan);
       if (vus[sig]) continue;
       return { plan: res.plan, verif: v, signature: sig, graine: g + 1 };
@@ -322,6 +336,11 @@
       var d = rows['G' + f].vol - rows['D' + f].vol;
       if (Math.abs(d) > cfg.ecartMax + tol) avis.push('Étage ' + f + ' déséquilibré de ' + f2(Math.abs(d)) + ' m³ (plus lourd à ' + (d > 0 ? 'gauche' : 'droite') + '). L\'écart devrait être à l\'étage 3.');
     });
+    [1, 2, 3].forEach(function (f) {
+      var dl = rows['G' + f].len - rows['D' + f].len;
+      if (dl < 0) avis.push('Étage ' + f + ' : la droite est plus longue que la gauche de ' + Math.round(-dl) + ' cm (la gauche doit être la plus longue).');
+      else if (dl > ECART_LG) avis.push('Étage ' + f + ' : ' + Math.round(dl) + ' cm d\'écart de longueur entre gauche et droite (75 cm au plus).');
+    });
     var d3 = rows.G3.vol - rows.D3.vol;
     if (Math.abs(d3) > cfg.ecartMax + tol) avis.push('Étage 3 déséquilibré de ' + f2(Math.abs(d3)) + ' m³ (plus lourd à ' + (d3 > 0 ? 'gauche' : 'droite') + ').');
     if (d3 < -tol && ecart >= -tol) avis.push('Étage 3 : la droite est plus chargée que la gauche de ' + f2(-d3) + ' m³.');
@@ -347,7 +366,7 @@
     };
   }
 
-  var Plan = { SECTIONS: SECTIONS, trouverSection: trouverSection, lgPlan: lgPlan, ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, autre: autre, signature: signature, verifier: verifier, f2: f2 };
+  var Plan = { SECTIONS: SECTIONS, trouverSection: trouverSection, lgPlan: lgPlan, ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, ecartLg: ecartLg, ECART_LG: ECART_LG, autre: autre, signature: signature, verifier: verifier, f2: f2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = Plan;
   else root.Plan = Plan;
 })(typeof window !== 'undefined' ? window : this);

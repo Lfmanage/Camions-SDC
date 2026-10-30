@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var P = window.Plan;
-  var VERSION_APP = '21';
+  var VERSION_APP = '22';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -688,6 +688,8 @@
     if (lg.length) return { cls: 'e', etq: '⚠ À revoir', detail: lg[0] };
     if (v.etat.code === 'trop') return { cls: 'e', etq: 'Dépassé ' + f2(v.etat.depasse) + ' m³' };
     if (P.deseq(v) > r.ecartMax + 0.005) return { cls: 'a', etq: '≈ Équilibré au mieux', detail: 'Avec ces colis, écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³ entre gauche et droite : le plus faible possible.' };
+    var lgM = v.avis.filter(function (m) { return /cm/.test(m); });
+    if (lgM.length) return { cls: 'a', etq: '≈ Équilibré au mieux', detail: lgM[0].replace(/\.$/, '') + ' : le plus petit écart possible avec ces colis.' };
     return { cls: 'o', etq: '✓ Équilibré' };
   }
 
@@ -762,6 +764,7 @@
     var lg = v2.erreurs.filter(function (m) { return /^Étage/.test(m); });
     if (lg.length && P.noteVerif(v2) > P.noteVerif(v1)) { selection = null; return toast('Échange refusé : ' + lg[0]); }
     if (P.deseq(v2) > Math.max(reg().ecartMax, P.deseq(v1)) + 0.001) { selection = null; return toast('Échange refusé : le camion serait déséquilibré.'); }
+    if (P.ecartLg(v2) > Math.max(P.ECART_LG, P.ecartLg(v1))) { selection = null; return toast('Échange refusé : trop d\'écart de longueur entre gauche et droite.'); }
     if (!c.ordre) fixerOrdre(c);
     var ia = c.ordre.indexOf(a), ib = c.ordre.indexOf(b); c.ordre[ia] = b; c.ordre[ib] = a; // chacun prend la place de l'autre
     c.plan = plan; c.planManuel = true; selection = null; toucher(c);
@@ -803,7 +806,7 @@
   $('#btnPartager').addEventListener('click', function () { partagerImage(courant()); });
 
   // ---------- Image du plan (partage) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=21';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=22';
   function imagePlan(c) {
     var r = cfgC(c), v = vplan(c);
     var W = 1080, pad = 56, larg = W - 2 * pad, rowH = 92, tagW = 120;
