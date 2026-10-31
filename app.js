@@ -1455,7 +1455,7 @@
     return t + '\nSDC – Les Scieries du Centre';
   }
   // Fiche de chargement : en-tête, chiffres clés, tableau par section, puis le plan
-  function ficheCanvas(c) { return ficheJolie(c, true); }
+  function ficheCanvas(c) { return ficheJolie(c, 'tout'); }
   function octets(dataUrl) { var bin = atob(dataUrl.split(',')[1]), arr = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return arr; }
   // PDF d'une page contenant l'image JPEG (pas de bibliothèque : le fichier est écrit à la main)
   function pdfDepuisJpeg(jpg, w, h) {
@@ -1488,6 +1488,20 @@
       '<div class="grille-btns"><a class="btn sec" style="display:grid;place-items:center;text-decoration:none" download="' + esc(fichier.name) + '" href="' + lien + '">Télécharger</a><button class="btn" type="button" data-ok="1">Fermer</button></div>');
     $('[data-ok]', f).onclick = function () { fermerFeuille(); };
   }
+  function envoyerFichiers(l, texte) {
+    var fs = l.map(function (x) { return x.f; });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: fs })) {
+        var data = { files: fs, text: texte }; if (!navigator.canShare(data)) data = { files: fs };
+        navigator.share(data).catch(function () {}); return;
+      }
+    } catch (e) {}
+    var f = ouvrirFeuille('<h2>2 fichiers prêts</h2>' + l.map(function (x) {
+      return (x.url ? '<img src="' + x.url + '" alt="" style="width:100%;border-radius:12px;margin-bottom:6px">' : '') +
+        '<a class="btn sec" style="display:grid;place-items:center;text-decoration:none;margin-bottom:10px" download="' + esc(x.f.name) + '" href="' + URL.createObjectURL(x.f) + '">Télécharger ' + esc(x.f.name) + '</a>';
+    }).join('') + '<button class="btn" type="button" data-ok="1">Fermer</button>');
+    $('[data-ok]', f).onclick = function () { fermerFeuille(); };
+  }
   function fichierPlan(c) {
     var url = imagePlan(c).toDataURL('image/png'), bin = atob(url.split(',')[1]), arr = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
@@ -1502,8 +1516,8 @@
   }
   function choixPartage(c) {
     var f = ouvrirFeuille('<h2>Partager le camion</h2>' +
-      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche chauffeur (image)</b><small>Colis par section + plan, s\'affiche direct dans WhatsApp</small></span></button>' +
-      '<button type="button" class="opt-part" data-p="pdf"><span class="op-ic">📄</span><span><b>Fiche chauffeur (PDF)</b><small>La même fiche, pratique pour imprimer</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche chauffeur / client (images)</b><small>2 images : détail des colis + plan de chargement</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="pdf"><span class="op-ic">📄</span><span><b>Fiche chauffeur / client (PDF)</b><small>2 PDF : détail des colis + plan, pratique pour imprimer</small></span></button>' +
       '<button type="button" class="opt-part" data-p="image"><span class="op-ic">🖼</span><span><b>Image du plan seulement</b><small>Comme avant</small></span></button>' +
       '<button type="button" class="opt-part" data-p="texte"><span class="op-ic">📋</span><span><b>Copier le texte</b><small>Pour le coller où tu veux</small></span></button>');
     f.onclick = function (e) {
@@ -1511,17 +1525,22 @@
       var p = b.dataset.p; f.onclick = null; fermerFeuille();
       if (p === 'image') { setTimeout(function () { partagerImage(c); }, 120); return; }
       if (p === 'texte') { copier(texteChauffeur(c)); return; }
-      var fc = ficheCanvas(c), url = fc.toDataURL('image/jpeg', 0.9), jpg = octets(url);
-      if (p === 'fiche') envoyerFichier(new File([jpg], nomFichier(c, 'jpg'), { type: 'image/jpeg' }), ligneCourte(c), url);
-      else envoyerFichier(new File([pdfDepuisJpeg(jpg, fc.width, fc.height)], nomFichier(c, 'pdf'), { type: 'application/pdf' }), ligneCourte(c), null);
+      // 2 fichiers séparés : le détail des colis, puis le plan de chargement
+      var fichiers = [['detail', 'Colis'], ['plan', 'Plan']].map(function (m) {
+        var fc = ficheJolie(c, m[0]), url = fc.toDataURL('image/jpeg', 0.9), jpg = octets(url), nom = nomFichier(c, 'x').replace(/^Fiche-/, m[1] + '-');
+        return p === 'fiche' ? { f: new File([jpg], nom.replace(/\.x$/, '.jpg'), { type: 'image/jpeg' }), url: url } : { f: new File([pdfDepuisJpeg(jpg, fc.width, fc.height)], nom.replace(/\.x$/, '.pdf'), { type: 'application/pdf' }), url: null };
+      });
+      envoyerFichiers(fichiers, ligneCourte(c));
     };
   }
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
   var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=54';
-  function imagePlan(c) { return ficheJolie(c, false); }
+  function imagePlan(c) { return ficheJolie(c, 'plan'); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
-  function ficheJolie(c, avecDetail) {
+  var POIDS_TXT = '25 000 kg';
+  function ficheJolie(c, mode) {
+    var avecDetail = mode !== 'plan', avecPlan = mode !== 'detail', HT = 300;
     assurerPlan(c);
     var W = 1080, pad = 40, larg = W - 2 * pad, S = 2.6; // S : échelle par rapport à l'écran du téléphone
     var INK = '#16221A', MU = '#5E6E64', VERT = '#3B5A34', CARTE = 'rgba(247,250,245,.92)';
@@ -1560,7 +1579,7 @@
     var hTab = avecDetail ? 110 + tab.reduce(function (a, l) { return a + l.h; }, 0) + 76 + 40 : 0;
     var plans = rems.map(function (rc) { var v = vplan(rc); return { c: rc, v: v, r: cfgC(rc) }; });
     var rowH = 46 * S, hCote = 70 + plans[0].v.N * (rowH + 12) + 160;
-    var hPlans = plans.reduce(function (a, p) { return a + (c.double ? 80 : 0) + 2 * (hCote + 30); }, 0);
+    var hPlans = !avecPlan ? 0 : plans.reduce(function (a, p) { return a + (c.double ? 80 : 0) + 2 * (hCote + 30); }, 0);
     var msgs = [];
     plans.forEach(function (p, i) {
       var e1Long = ['G', 'D'].some(function (s2) { return p.v.rows[s2 + '1'].ext > Math.round(p.r.e1Max * 100); });
@@ -1576,7 +1595,7 @@
     function couper(t, max) { var mots = t.split(' '), out = [], cur = ''; mots.forEach(function (w) { var e = cur ? cur + ' ' + w : w; if (x.measureText(e).width > max && cur) { out.push(cur); cur = w; } else cur = e; }); if (cur) out.push(cur); return out; }
     var lmsg = []; msgs.forEach(function (m) { couper('• ' + m, larg - 60).forEach(function (l) { lmsg.push(l); }); });
     lmsg = []; var hPied = 110; // pas de remarques sur la fiche (client / chauffeur)
-    var H = pad + 230 + 30 + hTab + hPlans + hPied + pad;
+    var H = pad + HT + 30 + hTab + hPlans + hPied + pad;
     cv.width = W; cv.height = H;
     // ---- fond d'écran du moment ----
     x.fillStyle = '#DCE5DA'; x.fillRect(0, 0, W, H);
@@ -1587,15 +1606,20 @@
     }
     x.fillStyle = 'rgba(232,238,230,' + Math.max(0.15, fd.voile / 100) + ')'; x.fillRect(0, 0, W, H);
     // ---- en-tête ----
-    var y = pad; carte(y, 230);
+    var y = pad; carte(y, HT);
     var d = new Date(base.termine_le || base.maj_le || Date.now()), dt = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    x.fillStyle = INK; x.font = F(700, 64, true); x.fillText((base.client || 'Camion') + (base.reference ? ' · ' + base.reference : ''), pad + 36, y + 82);
-    x.fillStyle = MU; x.font = F(500, 30); x.fillText(dt.charAt(0).toUpperCase() + dt.slice(1) + ' · ' + heure(d.toISOString()) + ' · ' + nbTot + ' colis', pad + 36, y + 132);
     var vb = vplan(c.double ? remDeN(c, 0) : c), gT = c.double ? plans.reduce(function (a, p) { return a + p.v.volG; }, 0) : vb.volG, dT = c.double ? plans.reduce(function (a, p) { return a + p.v.volD; }, 0) : vb.volD;
-    x.font = F(500, 28); x.fillText((c.double ? 'Double remorque ' + fm(c.double.lg[0]) + ' m + ' + fm(c.double.lg[1]) + ' m · ' : '') + 'Gauche ' + f2(gT) + ' · Droite ' + f2(dT), pad + 36, y + 182);
-    x.textAlign = 'right'; x.fillStyle = INK; x.font = F(700, 96, true); x.fillText(f2(base.total_m3), W - pad - 36, y + 104);
-    x.fillStyle = MU; x.font = F(500, 30); x.fillText('m³', W - pad - 36, y + 146); x.textAlign = 'left';
-    y += 230 + 30;
+    x.fillStyle = MU; x.font = F(600, 24); x.fillText(mode === 'detail' ? 'DÉTAIL DES COLIS' : (mode === 'plan' ? 'PLAN DE CHARGEMENT' : 'FICHE DE CHARGEMENT'), pad + 36, y + 46);
+    x.fillStyle = INK; x.font = F(700, 62, true); x.fillText('Client : ' + (base.client || '—'), pad + 36, y + 110);
+    x.font = F(600, 34); x.fillText('N° de commande : ' + (base.reference || '—'), pad + 36, y + 160);
+    x.fillStyle = MU; x.font = F(500, 28); x.fillText(dt.charAt(0).toUpperCase() + dt.slice(1) + ' · ' + heure(d.toISOString()) + ' · ' + nbTot + ' colis', pad + 36, y + 208);
+    x.fillText((c.double ? 'Double remorque ' + fm(c.double.lg[0]) + ' + ' + fm(c.double.lg[1]) + ' m · ' : '') + 'Gauche ' + f2(gT) + ' · Droite ' + f2(dT), pad + 36, y + 250);
+    x.textAlign = 'right'; x.fillStyle = INK; x.font = F(700, 92, true); x.fillText(f2(base.total_m3), W - pad - 36, y + 112);
+    x.fillStyle = MU; x.font = F(500, 30); x.fillText('m³', W - pad - 36, y + 150);
+    x.font = F(700, 40, true); x.fillStyle = INK; var wp = x.measureText(POIDS_TXT).width;
+    x.fillStyle = 'rgba(59,90,52,.12)'; rond(W - pad - 36 - wp - 28, y + 182, wp + 28, 58, 29); x.fill();
+    x.fillStyle = VERT; x.fillText(POIDS_TXT, W - pad - 50, y + 224); x.textAlign = 'left';
+    y += HT + 30;
     // ---- détail des colis ----
     if (avecDetail) {
       carte(y, hTab - 40);
@@ -1635,7 +1659,7 @@
       x.restore();
     }
     function roue(cx0, cy0) { x.fillStyle = '#3D4541'; x.beginPath(); x.arc(cx0, cy0, 27, 0, 6.29); x.fill(); x.fillStyle = '#C3CBC6'; x.beginPath(); x.arc(cx0, cy0, 15, 0, 6.29); x.fill(); x.fillStyle = '#3D4541'; x.beginPath(); x.arc(cx0, cy0, 6, 0, 6.29); x.fill(); }
-    plans.forEach(function (p, ip) {
+    if (avecPlan) plans.forEach(function (p, ip) {
       var v = p.v, r = p.r, rc = p.c, N = v.N, mx = Math.round(r.e1Max * 100), maxLen = mx;
       v.ROWS.forEach(function (k2) { maxLen = Math.max(maxLen, v.rows[k2].ext || v.rows[k2].len); });
       if (c.double) { var tr = 'Remorque ' + (ip + 1) + ' · ' + fm(c.double.lg[ip]) + ' m · ' + f2(rc.total_m3) + ' m³'; x.font = F(700, 44, true); var wtr = x.measureText(tr).width; x.fillStyle = VERT; rond(pad, y + 6, wtr + 44, 62, 31); x.fill(); x.fillStyle = '#fff'; x.fillText(tr, pad + 22, y + 52); y += 80; }
@@ -1694,7 +1718,7 @@
       '<div class="grille-btns"><a class="btn sec" style="display:grid;place-items:center;text-decoration:none" download="' + esc(nom) + '" href="' + url + '">Télécharger</a><button class="btn" type="button" id="fermerImg">Fermer</button></div>');
     $('#fermerImg', f).onclick = fermerFeuille;
   }
-  window.__imagePlan = imagePlan; window.__fiche = function (c) { return ficheCanvas(c); }; window.__pdf = function (c) { var fc = ficheCanvas(c); return pdfDepuisJpeg(octets(fc.toDataURL('image/jpeg', 0.9)), fc.width, fc.height); }; // pour les tests
+  window.__imagePlan = imagePlan; window.__fiche2 = ficheJolie; window.__fiche = function (c) { return ficheCanvas(c); }; window.__pdf = function (c) { var fc = ficheCanvas(c); return pdfDepuisJpeg(octets(fc.toDataURL('image/jpeg', 0.9)), fc.width, fc.height); }; // pour les tests
 
   // ---------- Historique ----------
   function jourCle(iso) { var d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
