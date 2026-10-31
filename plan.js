@@ -389,6 +389,7 @@
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var vus = {}; (dejaVus || []).forEach(function (x) { vus[x] = 1; });
     var ref = refVerif ? { verif: refVerif } : meilleur(lignes, cfg), refOk = noteVerif(ref.verif) < 1000;
+    var refTient = tient(ref.verif, cfg);
     var seuil = Math.max(cfg.ecartMax, deseq(ref.verif)) + 0.005, seuilLg = Math.max(ECART_LG, ecartLg(ref.verif));
     var g0 = graine || 1, t0 = Date.now();
     for (var g = g0; g < g0 + 30 && Date.now() - t0 < 2500; g++) {
@@ -398,6 +399,7 @@
       if (deseq(v) > seuil) continue;
       if (ecartLg(v) > seuilLg) continue;
       if ((v.manque || 0) > (ref.verif.manque || 0) + 40) continue;
+      if (refTient && !tient(v, cfg)) continue; // jamais un plan qui dépasse
       var sig = signature(lignes, res.plan);
       if (vus[sig]) continue;
       return { plan: res.plan, verif: v, signature: sig, graine: g + 1, note: noteVerif(v) };

@@ -1,34 +1,34 @@
 /* Camions SDC — service worker (hors ligne). Changer VERSION à chaque mise à jour.
    Mise à jour automatique : la page est toujours redemandée au serveur, le nouveau service worker
    s'active tout de suite (skipWaiting + clients.claim) et l'appli se recharge seule. Rien à réinstaller. */
-const VERSION = 'camions-sdc-v49';
+const VERSION = 'camions-sdc-v51';
 const FICHIERS = [
   './',
   'index.html',
-  'barlow-regular.woff?v=49',
-  'barlow-medium.woff?v=49',
-  'barlow-semibold.woff?v=49',
-  'barlow-bold.woff?v=49',
-  'barlowcondensed-semibold.woff?v=49',
-  'barlowcondensed-bold.woff?v=49',
-  'style.css?v=49',
-  'plan.js?v=49',
-  'sync.js?v=49',
-  'app.js?v=49',
-  'manifest.webmanifest?v=49',
-  'icon-192.png?v=49',
-  'icon-512.png?v=49',
-  'icon-maskable-512.png?v=49',
-  'apple-touch-icon.png?v=49',
-  'favicon-32.png?v=49',
-  'camion.jpg?v=49',
-  'bois.jpg?v=49',
-  'logo-clair.png?v=49',
-  'logo-sombre.png?v=49',
-  'foret-clair.jpg?v=49',
-  'foret-sombre.jpg?v=49',
-  'feuilles.png?v=49',
-  'bois-colis.jpg?v=49'
+  'barlow-regular.woff?v=51',
+  'barlow-medium.woff?v=51',
+  'barlow-semibold.woff?v=51',
+  'barlow-bold.woff?v=51',
+  'barlowcondensed-semibold.woff?v=51',
+  'barlowcondensed-bold.woff?v=51',
+  'style.css?v=51',
+  'plan.js?v=51',
+  'sync.js?v=51',
+  'app.js?v=51',
+  'manifest.webmanifest?v=51',
+  'icon-192.png?v=51',
+  'icon-512.png?v=51',
+  'icon-maskable-512.png?v=51',
+  'apple-touch-icon.png?v=51',
+  'favicon-32.png?v=51',
+  'camion.jpg?v=51',
+  'bois.jpg?v=51',
+  'logo-clair.png?v=51',
+  'logo-sombre.png?v=51',
+  'foret-clair.jpg?v=51',
+  'foret-sombre.jpg?v=51',
+  'feuilles.png?v=51',
+  'bois-colis.jpg?v=51'
 ];
 
 self.addEventListener('install', (e) => {

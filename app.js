@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '49';
+  var VERSION_APP = '51';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -88,7 +88,7 @@
     out.sort(function (a, b) { return (pos[a.id] != null ? pos[a.id] : 1e6) - (pos[b.id] != null ? pos[b.id] : 1e6); });
     return out;
   }
-  function besoinSplit(p) { return p.double && p.lignes.length && (!p.double.r || p.double.sig !== sigLignes(p.lignes)); }
+  function besoinSplit(p) { return p.double && p.lignes.length && (!p.double.r || p.double.sig !== sigLignes(p.lignes) || p.double.algo !== 2); }
   function splitDouble(p) {
     var res = P.partager(p.lignes, p.double.lg, Object.assign({}, db.reglages), p.double.graine || 0);
     p.double.r = res.map(function (x, i) {
@@ -96,7 +96,7 @@
         planDepart: { plan: JSON.parse(JSON.stringify(x.plan)), note: x.note }, planCalcule: true, planManuel: false, planVariante: false, plansVus: null, graineAutre: 1,
         total_m3: Math.round(P.totalM3(x.lignes) * 1000) / 1000 };
     });
-    p.double.actif = 0; p.double.sig = sigLignes(p.lignes);
+    p.double.actif = 0; p.double.sig = sigLignes(p.lignes); p.double.algo = 2;
   }
   function courantBase() {
     if (edition && db.camions[edition] && !db.camions[edition].supprime) return db.camions[edition];
@@ -114,6 +114,7 @@
     if (c.double) { if (besoinSplit(c)) splitDouble(c); return; }
     if (!c.lignes.length) { majPlan(c); return; }
     var res = P.meilleurTient(c.lignes, cfgC(c));
+    c.tientEssaye = sigLignes(c.lignes);
     c.plan = res.plan; c.decal = null; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
     c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
   }
@@ -767,7 +768,20 @@
         res = P.autre(c.lignes, cfgC(c), c.plansVus, (c.graineAutre || 1) + 50, refV);
       }
       b.disabled = false; b.classList.remove('calcul'); b.innerHTML = 'Autre plan';
-      if (!res) { toast('C\'est le seul bon plan avec ces colis.'); return; }
+      if (!res) {
+        var base = courantBase();
+        if (base.double && base.double.r) { // double : on réorganise les 2 remorques avec tous les colis
+          var actifAvant = base.double.actif || 0;
+          base.double.graine = (base.double.graine || 0) + 1; base.double.r = null; selection = null; selRem = null;
+          $('#planZone').innerHTML = '<div class="calcul-plan"><span class="spin"></span>Réorganisation des 2 remorques…</div>';
+          setTimeout(function () { splitDouble(base); base.double.actif = actifAvant; toucher(base); rendrePlanVue(); toast('Les 2 remorques ont été réorganisées'); }, 40);
+          return;
+        }
+        // camion normal : le meilleur plan où tout rentre (tous les colis, même ceux de côté)
+        var mt = P.meilleurTient(c.lignes, cfgC(c));
+        if (P.signature(c.lignes, mt.plan) === P.signature(c.lignes, c.plan || {})) { toast('C\'est le seul bon plan avec ces colis.'); return; }
+        res = { plan: mt.plan, note: mt.note, signature: P.signature(c.lignes, mt.plan), graine: (c.graineAutre || 1) + 1 };
+      }
       c.plan = res.plan; c.ordre = null; c.decal = null; c.planManuel = false; c.planVariante = true; c.graineAutre = res.graine;
       var mieux = c.planDepart && res.note < c.planDepart.note - 0.01;
       if (mieux) c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
@@ -1070,7 +1084,7 @@
     if (ro) { assurerPlan(c); $('#planZone').innerHTML = '<p class="verrou">🔒 Plan de ' + esc(prenomDe(c)) + ' : lecture seule.</p>' + htmlPlan(c, { lecture: true }); ajusterPlan(); return; }
     // le plan doit toujours être bon : on le refait s'il est faux ou incomplet (sauf modification à la main)
     var v = vplan(c);
-    var besoin = c.lignes.length && (v.nonPlaces.length || (!c.planCalcule && !c.planManuel && (P.noteVerif(v) >= 1000 || (!c.planVariante && P.deseq(v) > reg().ecartMax + 0.005))));
+    var besoin = c.lignes.length && (v.nonPlaces.length || (!c.planManuel && c.tientEssaye !== sigLignes(c.lignes) && !P.tient(v, cfgC(c))) || (!c.planCalcule && !c.planManuel && (P.noteVerif(v) >= 1000 || (!c.planVariante && P.deseq(v) > reg().ecartMax + 0.005))));
     if (besoin) {
       $('#planZone').innerHTML = '<div class="calcul-plan"><span class="spin"></span>Calcul du meilleur plan…</div>';
       setTimeout(function () { calculerPlan(c); toucher(c); if (vueActive === 'plan') { $('#planZone').innerHTML = htmlPlan(c, {}); ajusterPlan(); } }, 40);
@@ -2058,7 +2072,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=49" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=49" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=51" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=51" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
