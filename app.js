@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '48';
+  var VERSION_APP = '49';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -512,13 +512,13 @@
     var auj = jourCle(d.toISOString()), tous = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime; });
     var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj; });
     var m3 = jour.reduce(function (a, c) { return a + c.total_m3; }, 0);
-    $('#accStats').innerHTML = '<div class="stat"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></div><button type="button" class="stat stat-go" data-camions="1"><small>Camions aujourd\'hui</small><b>' + jour.length + '</b><i>Voir les derniers</i></button>';
+    $('#accStats').innerHTML = '<button type="button" class="stat-bande" data-camions="1"><span class="sb-c"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></span><i class="sb-sep"></i><span class="sb-c"><small>Camions</small><b>' + jour.length + '</b></span><span class="sb-go">Voir ›</span></button>';
     $('#accNbJour').textContent = 'Tous les camions';
     $('#accSous').textContent = salutation(d);
     var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && estAMoi(c); }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
-    $('#accEnCours').innerHTML = cours.length ? '<p class="titre-sec">En cours</p><div class="carte liste-cours">' + cours.map(function (c) {
+    $('#accEnCours').innerHTML = cours.length ? '<p class="titre-sec cours-t"><span>En cours</span><small>' + cours.length + '</small></p><div class="carte liste-cours">' + cours.map(function (c) {
       return glisse(c.id, '<button type="button" class="en-cours-l" data-reprendre="' + esc(c.id) + '"><span><b>' + esc(c.client || 'Sans client') + '</b><small>' + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + f2(c.total_m3) + ' m³</small></span><span class="go">Reprendre</span></button>');
-    }).join('') + '</div><p class="astuce">Glisse à gauche pour supprimer, à droite pour ouvrir.</p>' : '';
+    }).join('') + '<p class="astuce-in">← Glisse pour supprimer · Glisse pour ouvrir →</p></div>' : '';
   }
   // ---------- Feuilles d'automne qui tombent (décor, ne bloque jamais un appui) ----------
   function feuillesAutomne() {
@@ -813,8 +813,6 @@
   function problemesCamion(c) {
     var r = cfgC(c), v = vplan(c), out = [];
     if (v.cote.length) out.push(['⚠', v.cote.length + ' colis oublié' + (v.cote.length > 1 ? 's' : '') + ' de côté', v.cote.map(libColis).join(', ') + ' · ' + (v.cote.length > 1 ? 'ils seront retirés' : 'il sera retiré') + ' du camion']);
-    var e1 = ['G', 'D'].filter(function (s) { var l = v.rows[s + '1'].len; return l < Math.round(r.e1Min * 100) && l > 0; });
-    if (e1.length) out.push(['⚠', 'É1 trop court', e1.map(function (s) { return (s === 'G' ? 'conducteur ' : 'passager ') + fm(v.rows[s + '1'].m) + ' m'; }).join(' · ') + ' (mini ' + fm(r.e1Min) + ' m)']);
     alertesCourtes(c, v).forEach(function (t) {
       if (t === 'Pas équilibré') out.push(['⚠', 'Pas équilibré', 'conducteur ' + f2(v.volG) + ' m³ / passager ' + f2(v.volD) + ' m³' + (v.ecart < -0.005 ? ' (le passager est plus lourd)' : ' (écart ' + f2(Math.abs(v.ecart)) + ')')]);
       else out.push(['⚠', t, '']);
@@ -917,7 +915,8 @@
     var N = v.N || 3, maxCm = 2 * N * Math.round(r.e1Max * 100);
     if (totCm > maxCm) return { cls: 'e', etq: '⚠ Trop long', court: fm((totCm - maxCm) / 100) + ' m de colis en trop : retire des colis.', detail: 'Les colis font ' + fm(totCm / 100) + ' m bout à bout : ' + fm((totCm - maxCm) / 100) + ' m de trop pour ' + N + ' étages de ' + fm(r.e1Max) + ' m. Retire des colis.' };
     if (v.etat.code === 'peu') return { cls: 'a', etq: 'Il manque ' + f2(v.etat.manque) + ' m³' };
-    var lg = v.erreurs.filter(function (m) { return /^Étage/.test(m); });
+    var e1Long = ['G', 'D'].some(function (s2) { return v.rows[s2 + '1'].len > Math.round(r.e1Max * 100); });
+    var lg = v.erreurs.filter(function (m) { return /^Étage/.test(m) && (e1Long || !/il faut entre/.test(m)); });
     if (lg.length) return { cls: 'e', etq: '⚠ À revoir', detail: lg[0] };
     if (v.etat.code === 'trop') return { cls: 'e', etq: 'Dépassé ' + f2(v.etat.depasse) + ' m³' };
     if (v.ecrase) return { cls: 'a', etq: '≈ Fait au mieux', court: 'Étages en rouge : épaisseurs mélangées.', detail: 'Avec ces colis, impossible de mettre toutes les sections fines au-dessus des plus épaisses : les étages en rouge ont un colis posé sur plus fin que lui.' };
@@ -1001,7 +1000,7 @@
       h += '<section class="cote"><div class="cote-t"><span class="hl ' + (s === 'G' ? 'bleu' : 'rose') + '">' + NOMS[s] + '</span><small>' + f2(s === 'G' ? v.volG : v.volD) + ' m³</small></div><div class="rangs">';
       ETG.forEach(function (f) {
         var ro = v.rows[s + f], lgAff = ro.m;
-        h += '<div class="rang' + (ro.alerte ? ' ko' : '') + '"><div class="tag">É' + f + '<b>@LG@</b></div><div class="trk"><i class="lim" style="left:calc(2px + (100% - ' + (4 + place) + 'px) * ' + (r.e1Max * 100 / maxLen).toFixed(4) + ')"></i>';
+        h += '<div class="rang' + (ro.alerte ? ' ko' : '') + '"><div class="tag">É' + f + '<b>@LG@</b>@LIB@</div><div class="trk"><i class="lim" style="left:calc(2px + (100% - ' + (4 + place) + 'px) * ' + (r.e1Max * 100 / maxLen).toFixed(4) + ')"></i>';
         if (f === N) {
           var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len);
           var E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
@@ -1012,8 +1011,16 @@
           if (ro.colis.length && aMain) h += htmlVide(Math.max(0, v.rows[s + (f - 1)].ext - fin), 'data-fin="' + s + f + '"');
           lgAff = E / 100;
         } else ro.colis.forEach(function (k) { h += chip(k, false); });
+        // place libre : É1 par rapport à la remorque, É2 par rapport à É1, É3 par rapport à É2
+        var occ = ro.ext + (f === N ? v.rows['C' + N].len : 0);
+        var libre = (f > 1 ? Math.min(Math.round(r.e1Max * 100), v.rows[s + (f - 1)].ext) : Math.round(r.e1Max * 100)) - occ;
+        var mainIci = f === N && ro.colis.some(function (k) { return c.decal && c.decal[k.id] != null; });
+        if (!(edit && (selection || selEtr)) && libre >= 30 && !mainIci) {
+          h += '<i class="libre-txt" style="left:calc(2px + (100% - ' + (4 + place) + 'px) * ' + (occ / maxLen).toFixed(4) + ');width:calc((100% - ' + (4 + place) + 'px) * ' + (libre / maxLen).toFixed(4) + ' - 2px)"></i>';
+          h = h.replace('@LIB@', '<em class="tag-libre">' + fm(Math.round(libre) / 100) + ' m libre</em>');
+        }
+        h = h.replace('@LIB@', '');
         if (edit && (selection || selEtr)) {
-          var libre = (f > 1 ? Math.min(Math.round(r.e1Max * 100), v.rows[s + (f - 1)].ext) : Math.round(r.e1Max * 100)) - ro.ext - (f === N ? v.rows['C' + N].len : 0);
           h += '<button type="button" class="poser" data-poser="' + s + f + '" aria-label="Poser ici">+' + (libre >= 50 ? '<small>' + fm(Math.round(libre) / 100) + ' m libre</small>' : '') + '</button>';
         }
         h = h.replace('@LG@', fm(Math.round(lgAff * 100) / 100) + ' m');
@@ -1034,7 +1041,7 @@
         '<button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button>' +
         '<button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else h += '<div class="aide-l">' + (legMil || '<span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer. Glisse ceux du dernier étage.</span>') +
+      else h += '<div class="aide-l">' + (legMil || '<span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer. Glisse ceux du dernier étage.</span>') + '<span class="leg-libre"><i></i>Place libre : jusqu\'au bout de l\'étage du dessous (É1 : jusqu\'au bout de la remorque)</span>' +
         ((c.planManuel || c.planVariante) ? '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>' : '') + '</div>';
       if (sel && (c.planManuel || c.planVariante)) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>';
     }
@@ -1470,7 +1477,7 @@
     if (c.lignes.length && !c.double && (!c.plan || !Object.keys(c.plan).length)) c.plan = P.meilleur(c.lignes, cfgC(c)).plan;
     var v = vplan(c), W = 1080, pad = 56, larg = W - 2 * pad;
     var INK = '#13221A', MU = '#5E6E64', VERT = '#3B5A34';
-    var F = function (w, px) { return w + ' ' + px + 'px "Inter Tight", Inter, system-ui, sans-serif'; };
+    var F = function (w, px) { return w + ' ' + px + 'px Barlow, system-ui, sans-serif'; };
     // regroupement par section
     var grp = {}, ordre = [];
     c.lignes.forEach(function (l) {
@@ -1621,7 +1628,7 @@
     x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, W, cv.height);
     x.drawImage(A, 0, 0, W, top, 0, 0, W, top);
     x.fillStyle = '#FFFFFF'; x.fillRect(W / 2, 40, W / 2, 120); // total : celui des 2 remorques
-    var F = function (w, px) { return w + ' ' + px + 'px "Inter Tight", Inter, system-ui, sans-serif'; };
+    var F = function (w, px) { return w + ' ' + px + 'px Barlow, system-ui, sans-serif'; };
     x.textAlign = 'right'; x.fillStyle = '#141A17'; x.font = F(600, 64); x.fillText(f2(c.total_m3) + ' m³', W - 56, 132); x.textAlign = 'left';
     x.fillStyle = '#FFFFFF'; x.fillRect(0, 180, W, 48);
     x.font = F(600, 28); x.fillStyle = '#141A17'; x.fillText('Double remorque · ' + fm(c.double.lg[0]) + ' m + ' + fm(c.double.lg[1]) + ' m', 56, 216);
@@ -1640,7 +1647,7 @@
     var msgs = v.erreurs.map(function (m) { return [ROUGE, m]; }).concat(v.avis.map(function (m) { return ['#B4690E', m]; }));
     if (!msgs.length) msgs.push(['#1E7A50', 'Plan conforme : longueurs bonnes et camion équilibré.']);
     var cv = document.createElement('canvas'), x = cv.getContext('2d');
-    var F = function (w, px) { return w + ' ' + px + 'px "Inter Tight", Inter, system-ui, sans-serif'; };
+    var F = function (w, px) { return w + ' ' + px + 'px Barlow, system-ui, sans-serif'; };
     x.font = F(500, 26);
     function couper(t, max) {
       var mots = t.split(' '), out = [], cur = '';
@@ -2051,7 +2058,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=48" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=48" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=49" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=49" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

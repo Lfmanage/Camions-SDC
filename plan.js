@@ -453,7 +453,7 @@
     [0, 1].forEach(function (s) {
       var p = s === 0 ? 'G' : 'D', r1 = rows[p + '1'], r2 = rows[p + '2'];
       if (r1.len < mn || r1.len > mx) {
-        r1.alerte = true;
+        if (r1.len > mx) r1.alerte = true; // trop court : pas grave si tout est chargé
         erreurs.push('Étage 1 ' + COTE[s] + ' : ' + f2(r1.m) + ' m, il faut entre ' + f2(cfg.e1Min) + ' et ' + f2(cfg.e1Max) + ' m.');
       }
       if (r2.len > r1.len) { r2.alerte = true; erreurs.push('Étage 2 ' + COTE[s] + ' : ' + f2(r2.m) + ' m, plus long que l\'étage 1 (' + f2(r1.m) + ' m).'); }

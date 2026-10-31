@@ -1,3 +1,9 @@
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=49') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=49') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=49') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=49') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=49') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=49') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -25,8 +31,8 @@
   --bleu: rgba(64, 150, 255, .36);
   --r: 14px;
   --nav-h: 60px;
-  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --num: 'Inter Tight', 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --sans: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --num: 'Barlow', -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
 }
 @supports (color: color-mix(in srgb, red 50%, blue)) {
@@ -738,7 +744,7 @@ body[data-vue="plan"] .fe, body[data-vue="calcul"] .fe { scale: .65; opacity: .8
 
 /* v32 — colis du MILIEU : tout devant, bien visible */
 .chip.centre { position: relative; background-image: repeating-linear-gradient(135deg, rgba(209, 138, 14, .22) 0 6px, transparent 6px 12px), linear-gradient(#F6DC96, #EFCB72) !important; box-shadow: inset 0 0 0 2px #D18A0E; }
-.chip.centre::after { content: 'MILIEU'; position: absolute; top: 2px; right: 4px; font: 800 7.5px/1 Inter, system-ui, sans-serif; letter-spacing: .03em; color: #fff; background: #D18A0E; padding: 2px 3px; border-radius: 3px; }
+.chip.centre::after { content: 'MILIEU'; position: absolute; top: 2px; right: 4px; font: 700 8px/1 Barlow, system-ui, sans-serif; letter-spacing: .03em; color: #fff; background: #D18A0E; padding: 2px 3px; border-radius: 3px; }
 .leg-mil { margin: 2px 2px 0; font-size: 12px; line-height: 1.3; opacity: .9; }
 .leg-mil span { display: inline-block; font-weight: 800; font-size: 10px; color: #fff; background: #D18A0E; padding: 2px 5px; border-radius: 4px; margin-right: 2px; }
 .sens .leg-mil { margin: 0; font-size: 11px; white-space: nowrap; color: inherit; }
@@ -752,7 +758,7 @@ body[data-vue="plan"] .fe, body[data-vue="calcul"] .fe { scale: .65; opacity: .8
 .barre-sel.bs1 .x { flex: 0 0 auto; width: 30px; height: 32px; }
 /* v35 — milieu : aperçu de la solution */
 .chip.bouge { box-shadow: inset 0 0 0 3px #1f9d55; position: relative; }
-.chip.bouge::before { content: "BOUGÉ"; position: absolute; top: 3px; right: 4px; font: 800 7.5px/1 Inter, system-ui, sans-serif; color: #fff; background: #1f9d55; padding: 2px 3px; border-radius: 3px; z-index: 2; }
+.chip.bouge::before { content: "BOUGÉ"; position: absolute; top: 3px; right: 4px; font: 700 8px/1 Barlow, system-ui, sans-serif; color: #fff; background: #1f9d55; padding: 2px 3px; border-radius: 3px; z-index: 2; }
 .barre-sel .vert { color: #5ee08f; }
 .barre-sel .btn-valider { background: #1f9d55; color: #fff; border: 0; }
 .toast.rouge { background: rgba(110, 24, 18, .95) !important; color: #fff !important; }
@@ -761,7 +767,7 @@ body[data-vue="plan"] .fe, body[data-vue="calcul"] .fe { scale: .65; opacity: .8
 /* v37 — MILIEU : bande dorée en haut, légende sous le plan */
 .chip.centre { padding-top: 9px; }
 .chip.centre::after { content: none; }
-.chip.centre::before { content: 'MILIEU'; position: absolute; left: 0; right: 0; top: 0; height: 9px; background: #D18A0E; color: #fff; font: 800 7px/9px Inter, system-ui, sans-serif; letter-spacing: .06em; text-align: center; }
+.chip.centre::before { content: 'MILIEU'; position: absolute; left: 0; right: 0; top: 0; height: 9px; background: #D18A0E; color: #fff; font: 700 8px/9px Barlow, system-ui, sans-serif; letter-spacing: .06em; text-align: center; }
 .chip.centre.bouge::before { content: 'MILIEU'; }
 .aide-l .leg-mil { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aide-l .leg-mil span { display: inline-block; font-weight: 800; font-size: 9.5px; color: #fff; background: #D18A0E; padding: 1px 5px; border-radius: 4px; margin-right: 3px; }
@@ -799,7 +805,7 @@ body[data-vue="plan"] .fe, body[data-vue="calcul"] .fe { scale: .65; opacity: .8
 .kpi { grid-template-columns: 1fr 1fr; margin-bottom: 10px; }
 .eq-k > div, .kpi > div { background: var(--card); border-radius: 14px; padding: 9px 11px; border: 1px solid var(--line); }
 .eq-k small, .kpi small { display: block; font-size: 11px; opacity: .65; }
-.eq-k b, .kpi b { font-size: 21px; font-family: 'Inter Tight', Inter, sans-serif; }
+.eq-k b, .kpi b { font-size: 21px; font-family: Barlow, sans-serif; }
 .eq-k em, .kpi em { font-style: normal; font-size: 12px; opacity: .65; margin-left: 3px; }
 .kpi i { font-style: normal; font-size: 11px; font-weight: 700; margin-left: 6px; }
 .kpi i.plus { color: #1f9d55; } .kpi i.moins { color: #c0392b; }
@@ -973,7 +979,7 @@ img, svg, canvas { max-width: 100%; }
 .chip[data-bois="5"] { background-position: -75px -17px, 0 0; }
 .chip small { color: #6E5434; }
 .chip.centre { padding-top: 0; background: repeating-linear-gradient(135deg, rgba(59, 90, 52, .28) 0 6px, transparent 6px 12px), linear-gradient(180deg, #F0DCAE, #DDBD85) !important; box-shadow: inset 0 0 0 2px #3B5A34; }
-.chip.centre::before { content: 'MILIEU'; position: absolute; left: auto; right: 3px; top: 3px; height: auto; width: auto; background: #3B5A34; color: #E6F0DA; font: 800 7.5px/1 Inter, system-ui, sans-serif; letter-spacing: .04em; padding: 2px 4px; border-radius: 4px; }
+.chip.centre::before { content: 'MILIEU'; position: absolute; left: auto; right: 3px; top: 3px; height: auto; width: auto; background: #3B5A34; color: #E6F0DA; font: 700 8px/1 Barlow, system-ui, sans-serif; letter-spacing: .04em; padding: 2px 4px; border-radius: 4px; }
 .chip.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
 .leg-mil span { background: #3B5A34 !important; color: #E6F0DA !important; }
 /* v47 — côtés surlignés au Stabilo : conducteur bleu, passager rose */
@@ -1040,13 +1046,54 @@ img, svg, canvas { max-width: 100%; }
 .lien-double span { position: relative; z-index: 0; padding: 0 6px; color: var(--text); font-weight: 700; }
 .lien-double span::before { content: ""; position: absolute; z-index: -1; left: -2px; right: -4px; bottom: 1px; height: 62%; border-radius: 3px 8px 4px 9px / 7px 3px 8px 4px; transform: rotate(-1.2deg) skewX(-6deg); background: linear-gradient(90deg, rgba(150,200,120,.5), rgba(150,200,120,.85) 12%, rgba(160,210,130,.8) 85%, rgba(150,200,120,.45)); }
 
-/* v47 — textes lisibles sur la forêt : Stabilo jaune doux */
-#v-accueil .titre-sec, #v-accueil .astuce { text-shadow: none; color: #1f2a22; }
-#v-accueil .titre-sec { display: inline-block; justify-self: start; align-self: flex-start; }
-#v-accueil .titre-sec, #v-accueil .astuce { position: relative; z-index: 0; }
-#v-accueil .titre-sec::before { content: ""; position: absolute; z-index: -1; left: -5px; right: -6px; bottom: 0; height: 62%; border-radius: 3px 8px 4px 9px / 7px 3px 8px 4px; transform: rotate(-1deg) skewX(-6deg); background: rgba(255, 228, 120, .8); }
-#v-accueil .astuce { align-self: center; width: fit-content; margin-left: auto; margin-right: auto; padding: 1px 8px; border-radius: 6px; background: rgba(255, 233, 140, .72); font-weight: 500; }
-:root[data-theme="sombre"] #v-accueil .titre-sec, :root[data-theme="sombre"] #v-accueil .astuce { color: #1f2a22; }
+/* v48 — « En cours » lisible, astuce dans la carte */
+#v-accueil .cours-t { display: flex; align-items: center; gap: 8px; margin: 4px 2px 0; text-shadow: none; }
+#v-accueil .cours-t span { position: relative; z-index: 0; padding: 0 6px; font-size: 14px; font-weight: 700; color: #1f2a22; white-space: nowrap; }
+#v-accueil .cours-t span::before { content: ""; position: absolute; z-index: -1; left: -2px; right: -4px; bottom: 1px; height: 60%; border-radius: 3px 8px 4px 9px / 7px 3px 8px 4px; transform: rotate(-1deg) skewX(-6deg); background: rgba(255, 226, 120, .85); }
+#v-accueil .cours-t small { min-width: 20px; height: 20px; border-radius: 10px; display: inline-grid; place-items: center; font-size: 11.5px; font-weight: 700; background: var(--accent); color: #fff; padding: 0 6px; }
+:root[data-theme="sombre"] #v-accueil .cours-t small { color: #17220f; }
+.astuce-in { margin: 0; padding: 7px 12px 9px; text-align: center; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); }
+.libre-txt { position: absolute; right: 4px; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); opacity: .9; pointer-events: none; white-space: nowrap; overflow: visible; letter-spacing: -.02em; }
 #btnInstaller { display: none !important; }
 .poser { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; white-space: nowrap; }
 .poser small { font-size: 10px; font-weight: 700; opacity: .9; }
+
+/* v49 — accueil plus compact et plus agréable */
+#v-accueil .tuiles { gap: 8px; }
+#v-accueil .tuile { display: grid; grid-template-columns: 38px 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; min-height: 0; padding: 10px 12px; border-radius: 18px; }
+#v-accueil .tuile svg { grid-row: 1 / 3; width: 38px; height: 38px; padding: 8px; margin: 0; border-radius: 12px; background: var(--accent-soft); box-sizing: border-box; }
+#v-accueil .tuile b { margin: 0; font-size: 14.5px; line-height: 1.15; }
+#v-accueil .tuile small { font-size: 11.5px; line-height: 1.2; }
+#accStats { display: block; }
+.stat-bande { width: 100%; display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); color: var(--text); text-align: left; font-family: inherit; }
+:root[data-theme="sombre"] .stat-bande { border-color: var(--edge); }
+.sb-c { display: flex; flex-direction: column; }
+.sb-c small { font-size: 11.5px; color: var(--muted); }
+.sb-c b { font-family: var(--num); font-size: 19px; font-weight: 650; letter-spacing: -.02em; line-height: 1.15; }
+.sb-sep { width: 1px; align-self: stretch; background: var(--line); }
+.sb-go { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--accent); }
+/* place libre : zone pointillée verte jusqu'au bout de l'étage du dessous (ou de la remorque pour É1) */
+.libre-txt { right: auto; top: 4px; bottom: 4px; border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 5px; background: color-mix(in srgb, var(--accent) 7%, transparent); box-sizing: border-box; }
+.tag-libre { display: block; font-style: normal; font-size: 9.5px; font-weight: 700; color: var(--accent); line-height: 1.1; white-space: nowrap; letter-spacing: -.02em; }
+.leg-libre { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.leg-libre i { width: 18px; height: 11px; border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 3px; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.aide-l { flex-wrap: wrap; }
+.leg-libre { flex-basis: 100%; order: 3; }
+/* v49 — colonne étage un peu plus large pour « 0,5 m libre » */
+.rang, .rang.rang-ch { grid-template-columns: 56px minmax(0, 1fr); }
+.tag-libre { font-size: 10px; }
+.sens { padding-left: 61px; }
+/* v49 — « Charger un camion » en grand */
+@media (max-width: 959px) {
+  #v-accueil .hero-go { min-height: 128px; padding: 22px 20px; border-radius: 26px; }
+  #v-accueil .hg-txt small { font-size: 14.5px; }
+  #v-accueil .hg-txt b { font-size: 31px; line-height: 1.1; }
+  #v-accueil .hg-fl { width: 62px; height: 62px; }
+  #v-accueil .hg-fl svg { width: 28px; height: 28px; }
+}
+
+/* v49 — police Barlow (texte) + Barlow Condensed (titres), style panneau de chantier */
+body { font-feature-settings: "tnum"; }
+.acc-titre, .hg-txt b, .hl, h1, .cote-t .hl, .cfg-t, .titre-sec span, .rem-onglets button { font-family: 'Barlow Condensed', 'Barlow', sans-serif; letter-spacing: -.005em; }
+.acc-titre { font-weight: 700; }
+.hg-txt b { font-weight: 700; }
