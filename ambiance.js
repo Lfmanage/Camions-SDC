@@ -2,7 +2,7 @@
    et événements (Bonne année, Noël…). Tout se règle dans reglages.fonds et reglages.ambiance. */
 (function () {
   'use strict';
-  var V = '53';
+  var V = '54';
   var NB_INT = 9;
   var DEF_EVTS = [
     { id: 'an', emo: '🎊', nom: 'Bonne année', du: '01-01', au: '01-31', msg: 'Bonne année {annee} 🎊', effet: 'poussieres', extras: [] },
@@ -14,7 +14,7 @@
   ];
   var PERIODES = { '30m': 1800e3, '1h': 3600e3, '2h': 7200e3, '4h': 14400e3 };
   function copie(x) { return JSON.parse(JSON.stringify(x)); }
-  function defFonds() { var l = []; for (var i = 1; i <= NB_INT; i++) l.push({ id: 'f' + i }); return { liste: l, flou: 1, voile: 40, freq: '2h', ordre: 'hasard', fixe: null, ancre: null }; }
+  function defFonds() { var l = []; for (var i = 1; i <= NB_INT; i++) l.push({ id: 'f' + i }); return { liste: l, flou: 0, voile: 25, freq: '2h', ordre: 'hasard', fixe: null, ancre: null }; }
   function defAmb() { return { mode: 'auto', force: { effet: 'neige', extras: [] }, quantite: 2, msgAuto: true, evts: copie(DEF_EVTS) }; }
   // Réglages complets (avec les valeurs par défaut), sans modifier ceux de l'appli
   function cfg(r) {
@@ -99,7 +99,7 @@
   }
   function miniDe(item) { return item.ext ? (item.th || '') : 'mini-' + item.id.slice(1) + '.jpg?v=' + V; }
 
-  var calques = null, actif = 0, urlAff = null, minFond = null;
+  var calques = null, actif = 0, urlAff = null, minFond = null, imgAff = null;
   function majFond(r) {
     if (!calques) { var z = document.getElementById('fondForet'); if (!z) return; calques = z.querySelectorAll('.ff-img'); }
     var f = cfg(r).fonds, im = imageActuelle(r), px = Math.round(f.flou * 1.6 * 10) / 10;
@@ -117,7 +117,7 @@
         var suivant = calques[1 - actif];
         suivant.style.backgroundImage = 'url("' + u + '")';
         suivant.classList.add('on'); calques[actif].classList.remove('on');
-        actif = 1 - actif; urlAff = u;
+        actif = 1 - actif; urlAff = u; if (img.naturalWidth) imgAff = img;
       };
       img.src = u;
     });
@@ -291,7 +291,7 @@
   window.Ambiance = {
     cfg: cfg, preparer: preparer, defEvts: function () { return copie(DEF_EVTS); }, defFonds: defFonds, NB_INT: NB_INT,
     evenement: evenement, message: message, effetActuel: effetActuel, imageActuelle: imageActuelle, visibles: visibles,
-    appliquer: appliquer, majFond: majFond, urlDe: urlDe, miniDe: miniDe, garderExt: garderExt,
+    appliquer: appliquer, majFond: majFond, imageAffichee: function () { return imgAff; }, urlDe: urlDe, miniDe: miniDe, garderExt: garderExt,
     chargeur: function (fn) { chargeur = fn; }
   };
 })();

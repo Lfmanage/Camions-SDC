@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '53';
+  var VERSION_APP = '54';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -891,7 +891,11 @@
     if (lg.length) return { cls: 'e', etq: '⚠ À revoir', detail: lg[0] };
     if (v.etat.code === 'trop') return { cls: 'e', etq: 'Dépassé ' + f2(v.etat.depasse) + ' m³' };
     if (v.ecrase) return { cls: 'a', etq: '≈ Fait au mieux', court: 'Étages en rouge : épaisseurs mélangées.', detail: 'Avec ces colis, impossible de mettre toutes les sections fines au-dessus des plus épaisses : les étages en rouge ont un colis posé sur plus fin que lui.' };
-    if (P.deseq(v) > r.ecartMax + 0.005) return { cls: 'a', etq: '≈ Équilibré au mieux', court: 'Écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³, le plus faible possible.', detail: 'Avec ces colis, écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³ entre gauche et droite : le plus faible possible.' };
+    if (P.deseq(v) > r.ecartMax + 0.005) {
+      var dq = P.deseq(v); if (dq >= 100) dq -= 100; // +100 = le passager est plus lourd (pénalité interne, pas un écart)
+      if (v.ecart < -0.005) return { cls: 'a', etq: '≈ Équilibré au mieux', court: 'Côté passager plus chargé de ' + f2(-v.ecart) + ' m³.', detail: 'Avec ces colis, le côté passager est plus chargé de ' + f2(-v.ecart) + ' m³ : le plus proche possible.' };
+      return { cls: 'a', etq: '≈ Équilibré au mieux', court: 'Écart de ' + f2(dq) + ' m³, le plus faible possible.', detail: 'Avec ces colis, écart de ' + f2(dq) + ' m³ entre gauche et droite : le plus faible possible.' };
+    }
     var lgM = v.avis.filter(function (m) { return /cm/.test(m); });
     if (lgM.length) return { cls: 'a', etq: '≈ Équilibré au mieux', court: 'Longueurs gauche/droite : le plus proche possible.', detail: lgM[0].replace(/\.$/, '') + ' : le plus petit écart possible avec ces colis.' };
     if (v.avis.some(function (m) { return /seule solution/.test(m); })) return { cls: 'a', etq: '≈ Fait au mieux', court: 'Un étage du haut est plus long : seule solution pour tout charger.', detail: 'Pour tout faire rentrer (ou garder les sections fines en haut), un étage du haut est plus long que celui du dessous. Il ne dépasse jamais la remorque.' };
@@ -1451,87 +1455,7 @@
     return t + '\nSDC – Les Scieries du Centre';
   }
   // Fiche de chargement : en-tête, chiffres clés, tableau par section, puis le plan
-  function ficheCanvas(c) {
-    if (c.lignes.length && !c.double && (!c.plan || !Object.keys(c.plan).length)) c.plan = P.meilleur(c.lignes, cfgC(c)).plan;
-    var v = vplan(c), W = 1080, pad = 56, larg = W - 2 * pad;
-    var INK = '#13221A', MU = '#5E6E64', VERT = '#3B5A34';
-    var F = function (w, px) { return w + ' ' + px + 'px Barlow, system-ui, sans-serif'; };
-    // regroupement par section
-    var grp = {}, ordre = [];
-    c.lignes.forEach(function (l) {
-      var k = fm(l.ep) + ' × ' + fm(l.la);
-      if (!grp[k]) { grp[k] = { ep: l.ep, la: l.la, lgs: [], n: 0, m: 0 }; ordre.push(k); }
-      var g = grp[k]; if (g.lgs.indexOf(l.lo) < 0) g.lgs.push(l.lo); g.n += l.nb || 1; g.m += P.volTotalLigne(l);
-    });
-    ordre.sort(function (a, b) { return grp[b].ep - grp[a].ep || grp[b].la - grp[a].la; });
-    var nbTot = c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0);
-    var plan = imagePlan(c), cropY = 230, cropH = Math.max(10, (plan.finPlan || plan.height) - cropY), planH = Math.round(cropH * (larg / W));
-    // hauteur des lignes du tableau (les longueurs passent à la ligne si besoin)
-    var cv = document.createElement('canvas'), x = cv.getContext('2d');
-    var colLg = pad + 290, colN = W - pad - 220, colM = W - pad - 20, lgMax = colN - 60 - colLg;
-    x.font = F(600, 26);
-    var lignesTab = ordre.map(function (k) {
-      var g = grp[k], puces = g.lgs.sort(function (a, b) { return a - b; }).map(function (lo) { return fLong(lo) + ' m'; }), lignes = [[]], larg0 = 0;
-      puces.forEach(function (t) { var w = x.measureText(t).width + 28; if (larg0 + w > lgMax && lignes[lignes.length - 1].length) { lignes.push([]); larg0 = 0; } lignes[lignes.length - 1].push([t, w]); larg0 += w + 10; });
-      return { k: k, g: g, lignes: lignes, h: 40 + lignes.length * 46 };
-    });
-    var hTab = lignesTab.reduce(function (a, l) { return a + l.h; }, 0);
-    var H = 440 + 60 + hTab + 90 + 80 + planH + 110;
-    cv.width = W; cv.height = H;
-    x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
-    function rond(a, b, w, h, rr) { x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
-    // en-tête
-    x.fillStyle = MU; x.font = F(600, 22); x.fillText('FICHE DE CHARGEMENT', pad, 76);
-    x.fillStyle = INK; x.font = F(700, 68); x.fillText(c.client || 'Camion', pad, 150);
-    var d = new Date(c.termine_le || c.maj_le || Date.now());
-    x.fillStyle = MU; x.font = F(500, 28);
-    x.fillText((c.reference ? 'Réf. ' + c.reference + ' · ' : '') + d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + heure(d.toISOString()), pad, 196);
-    if (LOGO.complete && LOGO.naturalWidth) { var lh = 120, lw = LOGO.naturalWidth * lh / LOGO.naturalHeight; x.drawImage(LOGO, W - pad - lw, 40, lw, lh); }
-    x.fillStyle = VERT; x.fillRect(pad, 226, larg, 6);
-    // chiffres clés
-    var cases = [['Volume', f2(v.total), ' m³', 1], ['Colis', String(nbTot), '', .6], ['Gauche / Droite', f2(v.volG) + ' / ' + f2(v.volD), '', 1.4]];
-    var tw = cases.reduce(function (a, k) { return a + k[3]; }, 0), cx = pad, gap = 20;
-    cases.forEach(function (k) {
-      var w = (larg - gap * 2) * k[3] / tw;
-      x.fillStyle = '#F1F5F0'; rond(cx, 260, w, 136, 22); x.fill();
-      x.fillStyle = MU; x.font = F(500, 24); x.fillText(k[0], cx + 28, 304);
-      x.fillStyle = INK; x.font = F(700, k[3] > 1.2 ? 50 : 56); x.fillText(k[1], cx + 28, 370);
-      if (k[2]) { var wv = x.measureText(k[1]).width; x.fillStyle = MU; x.font = F(500, 28); x.fillText(k[2], cx + 28 + wv, 370); }
-      cx += w + gap;
-    });
-    // tableau
-    var y = 460;
-    x.fillStyle = MU; x.font = F(600, 21);
-    x.fillText('SECTION', pad + 20, y); x.fillText('LONGUEURS', colLg, y);
-    x.textAlign = 'center'; x.fillText('COLIS', colN, y); x.textAlign = 'right'; x.fillText('M³', colM, y); x.textAlign = 'left';
-    y += 22; x.fillStyle = '#DDE3DC'; x.fillRect(pad, y, larg, 2); y += 2;
-    lignesTab.forEach(function (l, i) {
-      if (i % 2 === 0) { x.fillStyle = '#F7F9F6'; x.fillRect(pad, y, larg, l.h); }
-      var mid = y + l.h / 2 + 12;
-      x.fillStyle = INK; x.font = F(700, 36); x.fillText(l.k, pad + 20, mid);
-      var yy = y + 20;
-      l.lignes.forEach(function (lg) {
-        var xx = colLg;
-        lg.forEach(function (pu) { x.fillStyle = '#EADBBF'; rond(xx, yy, pu[1], 40, 10); x.fill(); x.fillStyle = '#3A2814'; x.font = F(600, 26); x.fillText(pu[0], xx + 14, yy + 29); xx += pu[1] + 10; });
-        yy += 46;
-      });
-      x.fillStyle = INK; x.font = F(700, 32); x.textAlign = 'center'; x.fillText(String(l.g.n), colN, mid);
-      x.font = F(600, 32); x.textAlign = 'right'; x.fillText(f3(l.g.m), colM, mid); x.textAlign = 'left';
-      y += l.h; x.fillStyle = '#EEF1ED'; x.fillRect(pad, y - 2, larg, 2);
-    });
-    x.fillStyle = VERT; x.fillRect(pad, y, larg, 4); y += 4;
-    x.fillStyle = '#F1F5F0'; x.fillRect(pad, y, larg, 80);
-    x.fillStyle = INK; x.font = F(700, 34); x.fillText('Total', pad + 20, y + 52);
-    x.textAlign = 'center'; x.fillText(String(nbTot), colN, y + 52); x.textAlign = 'right'; x.fillText(f3(v.total), colM, y + 52); x.textAlign = 'left';
-    y += 80 + 70;
-    // plan
-    x.fillStyle = INK; x.font = F(700, 34); x.fillText('Plan de chargement', pad, y); y += 26;
-    x.drawImage(plan, 0, cropY, W, cropH, pad, y, larg, planH);
-    x.strokeStyle = '#E3E6E1'; x.lineWidth = 2; rond(pad, y, larg, planH, 14); x.stroke();
-    y += planH + 50;
-    x.fillStyle = '#8A928D'; x.font = F(500, 22); x.textAlign = 'center'; x.fillText('SDC – Les Scieries du Centre · Camions SDC', W / 2, y); x.textAlign = 'left';
-    return cv;
-  }
+  function ficheCanvas(c) { return ficheJolie(c, true); }
   function octets(dataUrl) { var bin = atob(dataUrl.split(',')[1]), arr = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return arr; }
   // PDF d'une page contenant l'image JPEG (pas de bibliothèque : le fichier est écrit à la main)
   function pdfDepuisJpeg(jpg, w, h) {
@@ -1593,138 +1517,165 @@
     };
   }
 
-  // ---------- Image du plan (partage) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=26';
-  // Double remorque : les 2 plans l'un sous l'autre, avec le total du camion en haut
-  function imagePlan(c) {
-    if (!c.double) return imagePlan1(c);
-    assurerPlan(c);
-    var A = imagePlan1(remDeN(c, 0)), B = imagePlan1(remDeN(c, 1)), W = A.width, top = 230, tH = 70;
-    var fa = A.finPlan || A.height, fb = B.finPlan || B.height;
-    var cv = document.createElement('canvas'), x = cv.getContext('2d');
-    cv.width = W; cv.height = top + 2 * tH + (fa - top) + (fb - top) + 30;
-    x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, W, cv.height);
-    x.drawImage(A, 0, 0, W, top, 0, 0, W, top);
-    x.fillStyle = '#FFFFFF'; x.fillRect(W / 2, 40, W / 2, 120); // total : celui des 2 remorques
-    var F = function (w, px) { return w + ' ' + px + 'px Barlow, system-ui, sans-serif'; };
-    x.textAlign = 'right'; x.fillStyle = '#141A17'; x.font = F(600, 64); x.fillText(f2(c.total_m3) + ' m³', W - 56, 132); x.textAlign = 'left';
-    x.fillStyle = '#FFFFFF'; x.fillRect(0, 180, W, 48);
-    x.font = F(600, 28); x.fillStyle = '#141A17'; x.fillText('Double remorque · ' + fm(c.double.lg[0]) + ' m + ' + fm(c.double.lg[1]) + ' m', 56, 216);
-    var y = top;
-    [[A, fa, 0], [B, fb, 1]].forEach(function (z) {
-      x.fillStyle = '#3B5A34'; x.font = F(800, 34); x.fillText('Remorque ' + (z[2] + 1) + ' · ' + fm(c.double.lg[z[2]]) + ' m · ' + f2(c.double.r[z[2]].total_m3) + ' m³', 56, y + 48);
-      y += tH; x.drawImage(z[0], 0, top, W, z[1] - top, 0, y, W, z[1] - top); y += z[1] - top;
-    });
-    cv.finPlan = y; return cv;
-  }
+  // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=54';
+  function imagePlan(c) { return ficheJolie(c, false); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
-  function imagePlan1(c) {
-    var r = cfgC(c), v = vplan(c);
-    var W = 1080, pad = 56, larg = W - 2 * pad, rowH = 92, tagW = 120;
-    var INK = '#141A17', MU = '#6E7570', LINE = '#E3E6E1', ROUGE = '#C23A2B';
-    var msgs = v.erreurs.map(function (m) { return [ROUGE, m]; }).concat(v.avis.map(function (m) { return ['#B4690E', m]; }));
-    if (!msgs.length) msgs.push(['#1E7A50', 'Plan conforme : longueurs bonnes et camion équilibré.']);
+  function ficheJolie(c, avecDetail) {
+    assurerPlan(c);
+    var W = 1080, pad = 40, larg = W - 2 * pad, S = 2.6; // S : échelle par rapport à l'écran du téléphone
+    var INK = '#16221A', MU = '#5E6E64', VERT = '#3B5A34', CARTE = 'rgba(247,250,245,.92)';
+    var F = function (w, px, cond) { return w + ' ' + px + 'px ' + (cond ? '"Barlow Condensed", ' : '') + 'Barlow, system-ui, sans-serif'; };
     var cv = document.createElement('canvas'), x = cv.getContext('2d');
-    var F = function (w, px) { return w + ' ' + px + 'px Barlow, system-ui, sans-serif'; };
-    x.font = F(500, 26);
-    function couper(t, max) {
-      var mots = t.split(' '), out = [], cur = '';
-      mots.forEach(function (w) { var essai = cur ? cur + ' ' + w : w; if (x.measureText(essai).width > max && cur) { out.push(cur); cur = w; } else cur = essai; });
-      if (cur) out.push(cur); return out;
+    function rond(a, b, w, h, rr) { rr = Math.min(rr, h / 2, w / 2); x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
+    function carte(y, h) { x.save(); x.shadowColor = 'rgba(10,30,20,.14)'; x.shadowBlur = 24; x.shadowOffsetY = 6; x.fillStyle = CARTE; rond(pad, y, larg, h, 36); x.fill(); x.restore(); }
+    function stabilo(t, xx, yy, coul, px) {
+      x.font = F(700, px, true); var w = x.measureText(t).width;
+      x.save(); x.translate(xx - 8, yy - px * 0.52); x.transform(1, -0.02, -0.1, 1, 0, 0);
+      var g = x.createLinearGradient(0, 0, w + 22, 0); g.addColorStop(0, coul.replace('A', '.55')); g.addColorStop(0.12, coul.replace('A', '.9')); g.addColorStop(0.88, coul.replace('A', '.85')); g.addColorStop(1, coul.replace('A', '.45'));
+      x.fillStyle = g; rond(0, 0, w + 22, px * 0.62, 8); x.fill(); x.restore();
+      x.fillStyle = INK; x.fillText(t, xx + 2, yy);
     }
-    var lignesMsg = []; msgs.forEach(function (m) { couper(m[1], larg - 30).forEach(function (l, i) { lignesMsg.push([m[0], l, i === 0]); }); });
-    var N = v.N, ETG = []; for (var e0 = N; e0 >= 1; e0--) ETG.push(e0);
-    var hCote = 70 + N * (rowH + 14) + 50;
-    var H = 250 + 2 * (hCote + 30) + (v.rows['C' + N].colis.length ? 50 : 0) + (v.cote.length ? rowH + 80 : 0) + lignesMsg.length * 38 + 110;
+    // ---- mesures ----
+    var base = c, rems = c.double && c.double.r ? [0, 1].map(function (i) { return remDeN(c, i); }) : [c];
+    var grp = {}, ordre = [];
+    base.lignes.forEach(function (l) {
+      var k = fm(l.ep) + '×' + fm(l.la);
+      if (!grp[k]) { grp[k] = { ep: l.ep, la: l.la, lgs: {}, n: 0, m: 0 }; ordre.push(k); }
+      var g = grp[k], n = l.nb || 1; g.lgs[l.lo] = (g.lgs[l.lo] || 0) + n; g.n += n; g.m += P.volTotalLigne(l);
+    });
+    ordre.sort(function (a, b) { return grp[b].ep - grp[a].ep || grp[b].la - grp[a].la; });
+    var nbTot = base.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0);
+    var colLg = pad + 210, colN = W - pad - 170, colM = W - pad - 30, lgMax = colN - 50 - colLg;
+    x.font = F(500, 27);
+    var tab = ordre.map(function (k) {
+      var g = grp[k], lignes = [[]], l0 = 0;
+      Object.keys(g.lgs).map(Number).sort(function (a, b) { return a - b; }).forEach(function (lo) {
+        var t = fm(lo) + ' m' + (g.lgs[lo] > 1 ? ' ×' + g.lgs[lo] : ''), w = x.measureText(t).width + 26;
+        if (l0 + w > lgMax && lignes[lignes.length - 1].length) { lignes.push([]); l0 = 0; }
+        lignes[lignes.length - 1].push([t, w]); l0 += w + 10;
+      });
+      return { k: k, g: g, lignes: lignes, h: 30 + lignes.length * 50 };
+    });
+    var hTab = avecDetail ? 110 + tab.reduce(function (a, l) { return a + l.h; }, 0) + 76 + 40 : 0;
+    var plans = rems.map(function (rc) { var v = vplan(rc); return { c: rc, v: v, r: cfgC(rc) }; });
+    var rowH = 46 * S, hCote = 70 + plans[0].v.N * (rowH + 12) + 160;
+    var hPlans = plans.reduce(function (a, p) { return a + (c.double ? 80 : 0) + 2 * (hCote + 30); }, 0);
+    var msgs = [];
+    plans.forEach(function (p, i) {
+      var e1Long = ['G', 'D'].some(function (s2) { return p.v.rows[s2 + '1'].ext > Math.round(p.r.e1Max * 100); });
+      p.v.erreurs.concat(p.v.avis).forEach(function (m) {
+        if (/il faut entre/.test(m) && !e1Long) return;
+        if (/colis de côté/.test(m)) return;
+        msgs.push((c.double ? 'Remorque ' + (i + 1) + ' : ' : '') + m);
+      });
+    });
+    var et = P.etat(base.total_m3, cfgC(base)), rb = cfgC(base);
+    if (c.double && et.code === 'trop') msgs.push('Volume : ' + f2(base.total_m3) + ' m³, limite dépassée de ' + f2(et.depasse) + ' m³.');
+    x.font = F(500, 27);
+    function couper(t, max) { var mots = t.split(' '), out = [], cur = ''; mots.forEach(function (w) { var e = cur ? cur + ' ' + w : w; if (x.measureText(e).width > max && cur) { out.push(cur); cur = w; } else cur = e; }); if (cur) out.push(cur); return out; }
+    var lmsg = []; msgs.forEach(function (m) { couper('• ' + m, larg - 60).forEach(function (l) { lmsg.push(l); }); });
+    lmsg = []; var hPied = 110; // pas de remarques sur la fiche (client / chauffeur)
+    var H = pad + 230 + 30 + hTab + hPlans + hPied + pad;
     cv.width = W; cv.height = H;
-    x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, W, H);
-    // en-tête
-    x.fillStyle = INK; x.font = F(700, 50);
-    x.fillText((c.client || 'Camion') + (c.reference ? ' ' + c.reference : ''), pad, 96);
-    var d = new Date(c.termine_le || c.maj_le || Date.now()), dt = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    x.font = F(500, 26); x.fillStyle = MU;
-    x.fillText(dt.charAt(0).toUpperCase() + dt.slice(1) + ', ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), pad, 138);
-    x.textAlign = 'right'; x.fillStyle = INK; x.font = F(600, 64);
-    var tTxt = f2(v.total); x.font = F(500, 26); var wU = x.measureText(' m³').width;
-    x.fillStyle = MU; x.fillText(' m³', W - pad, 132); x.font = F(600, 64); x.fillStyle = INK; x.fillText(tTxt, W - pad - wU, 132);
-    x.textAlign = 'left';
-    x.fillStyle = LINE; x.fillRect(pad, 168, larg, 2);
-    var meta = [['Gauche', f2(v.volG)], ['Droite', f2(v.volD)], ['Écart', f2(Math.abs(v.ecart))]], mx = pad;
-    meta.forEach(function (m) { x.font = F(500, 26); x.fillStyle = MU; x.fillText(m[0] + ' ', mx, 216); mx += x.measureText(m[0] + ' ').width; x.font = F(600, 28); x.fillStyle = INK; x.fillText(m[1], mx, 216); mx += x.measureText(m[1]).width + 40; });
-    var maxLen = Math.max.apply(null, v.ROWS.map(function (k) { return v.rows[k].len; }).concat([r.e1Max * 100]));
-    var trkX = pad + tagW, trkW = larg - tagW;
-    function rond(a, b, w, h, rr) { x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
-    function colis(k, xx, yy, w, centre) {
-      x.fillStyle = '#EBCF9C'; rond(xx, yy, w, rowH - 20, 8); x.fill();
-      if (centre) { x.save(); rond(xx, yy, w, rowH - 20, 8); x.clip(); x.strokeStyle = 'rgba(59,90,52,.28)'; x.lineWidth = 6; for (var t = -rowH; t < w; t += 18) { x.beginPath(); x.moveTo(xx + t, yy + rowH); x.lineTo(xx + t + rowH, yy - 20); x.stroke(); } x.restore(); }
-      x.fillStyle = 'rgba(160,110,50,.25)'; x.fillRect(xx + w - 7, yy + 4, 5, rowH - 28);
-      x.strokeStyle = centre ? '#3B5A34' : 'rgba(120,80,30,.14)'; x.lineWidth = centre ? 4 : 2; rond(xx, yy, w, rowH - 20, 8); x.stroke();
-      if (centre) { x.font = F(800, 17); var bw = x.measureText('MILIEU').width + 14; x.fillStyle = '#3B5A34'; rond(xx + w - bw - 10, yy - 12, bw, 24, 6); x.fill(); x.fillStyle = '#fff'; x.fillText('MILIEU', xx + w - bw - 3, yy + 6); }
-      x.save(); x.beginPath(); x.rect(xx, yy, w - 8, rowH - 20); x.clip();
-      x.fillStyle = '#2B2216'; x.font = F(700, 28); x.fillText(fm(k.lo) + ' m', xx + 14, yy + 34);
-      x.fillStyle = '#6A5536'; x.font = F(500, 21); x.fillText(fm(k.ep) + '×' + fm(k.la), xx + 14, yy + 62);
+    // ---- fond d'écran du moment ----
+    x.fillStyle = '#DCE5DA'; x.fillRect(0, 0, W, H);
+    var fd = Ambiance.cfg(reg()).fonds, im = Ambiance.imageAffichee();
+    if (im && im.naturalWidth) {
+      var k = Math.max(W / im.naturalWidth, H / im.naturalHeight), iw = im.naturalWidth * k, ih = im.naturalHeight * k;
+      try { x.save(); if (fd.flou) x.filter = 'blur(' + Math.round(fd.flou * 1.6 * S) + 'px)'; x.drawImage(im, (W - iw) / 2, (H - ih) / 2, iw, ih); x.restore(); } catch (e) {}
+    }
+    x.fillStyle = 'rgba(232,238,230,' + Math.max(0.15, fd.voile / 100) + ')'; x.fillRect(0, 0, W, H);
+    // ---- en-tête ----
+    var y = pad; carte(y, 230);
+    var d = new Date(base.termine_le || base.maj_le || Date.now()), dt = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    x.fillStyle = INK; x.font = F(700, 64, true); x.fillText((base.client || 'Camion') + (base.reference ? ' · ' + base.reference : ''), pad + 36, y + 82);
+    x.fillStyle = MU; x.font = F(500, 30); x.fillText(dt.charAt(0).toUpperCase() + dt.slice(1) + ' · ' + heure(d.toISOString()) + ' · ' + nbTot + ' colis', pad + 36, y + 132);
+    var vb = vplan(c.double ? remDeN(c, 0) : c), gT = c.double ? plans.reduce(function (a, p) { return a + p.v.volG; }, 0) : vb.volG, dT = c.double ? plans.reduce(function (a, p) { return a + p.v.volD; }, 0) : vb.volD;
+    x.font = F(500, 28); x.fillText((c.double ? 'Double remorque ' + fm(c.double.lg[0]) + ' m + ' + fm(c.double.lg[1]) + ' m · ' : '') + 'Gauche ' + f2(gT) + ' · Droite ' + f2(dT), pad + 36, y + 182);
+    x.textAlign = 'right'; x.fillStyle = INK; x.font = F(700, 96, true); x.fillText(f2(base.total_m3), W - pad - 36, y + 104);
+    x.fillStyle = MU; x.font = F(500, 30); x.fillText('m³', W - pad - 36, y + 146); x.textAlign = 'left';
+    y += 230 + 30;
+    // ---- détail des colis ----
+    if (avecDetail) {
+      carte(y, hTab - 40);
+      x.fillStyle = INK; x.font = F(700, 40, true); x.fillText('Détail des colis', pad + 36, y + 60);
+      var yy = y + 102; x.fillStyle = MU; x.font = F(500, 24);
+      x.fillText('Section', pad + 36, yy); x.fillText('Longueurs', colLg, yy); x.textAlign = 'right'; x.fillText('Colis', colN, yy); x.fillText('m³', colM, yy); x.textAlign = 'left';
+      yy += 14;
+      tab.forEach(function (l) {
+        x.fillStyle = 'rgba(0,0,0,.07)'; x.fillRect(pad + 36, yy, larg - 72, 2);
+        var mid = yy + l.h / 2 + 11;
+        x.fillStyle = INK; x.font = F(700, 32); x.fillText(l.k, pad + 36, mid);
+        var ly = yy + 15;
+        l.lignes.forEach(function (lg) { var lx = colLg; lg.forEach(function (pu) { x.fillStyle = '#EFE4CC'; rond(lx, ly, pu[1], 40, 10); x.fill(); x.fillStyle = '#3A2814'; x.font = F(500, 27); x.fillText(pu[0], lx + 13, ly + 29); lx += pu[1] + 10; }); ly += 50; });
+        x.textAlign = 'right'; x.font = F(500, 30); x.fillText(String(l.g.n), colN, mid); x.fillText(f2(l.g.m), colM, mid); x.textAlign = 'left';
+        yy += l.h;
+      });
+      x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(pad + 36, yy, larg - 72, 3);
+      x.fillStyle = INK; x.font = F(700, 32); x.fillText('Total', pad + 36, yy + 52);
+      x.textAlign = 'right'; x.fillText(String(nbTot), colN, yy + 52); x.fillText(f2(base.total_m3), colM, yy + 52); x.textAlign = 'left';
+      y += hTab;
+    }
+    // ---- plans ----
+    function bois(xx, yy, w, h, k, centre) {
+      x.save(); rond(xx, yy, w, h, 14); x.clip();
+      var g = x.createLinearGradient(0, yy, 0, yy + h); g.addColorStop(0, '#F0DCAE'); g.addColorStop(1, '#DDBD85'); x.fillStyle = g; x.fillRect(xx, yy, w, h);
+      x.strokeStyle = 'rgba(160,122,69,.22)'; x.lineWidth = 2;
+      var sd = Math.abs(hashBois(k.id)) % 97;
+      for (var i = 0; i < 4; i++) { var ly = yy + h * (0.18 + i * 0.22) + (sd % 7); x.beginPath(); x.moveTo(xx, ly); x.bezierCurveTo(xx + w * 0.3, ly - 6, xx + w * 0.6, ly + 7, xx + w, ly - 2); x.stroke(); }
+      x.beginPath(); x.ellipse(xx + w * (0.3 + (sd % 40) / 100), yy + h * 0.5, 22, 7, 0, 0, 6.29); x.stroke();
+      if (centre) { x.strokeStyle = 'rgba(59,90,52,.28)'; x.lineWidth = 16; for (var t = -h; t < w; t += 34) { x.beginPath(); x.moveTo(xx + t, yy + h); x.lineTo(xx + t + h, yy); x.stroke(); } }
+      x.fillStyle = 'rgba(160,110,50,.25)'; x.fillRect(xx + w - 12, yy, 12, h);
+      x.restore();
+      if (centre) { x.strokeStyle = VERT; x.lineWidth = 5; rond(xx + 2, yy + 2, w - 4, h - 4, 13); x.stroke(); x.font = F(800, 20); var bw = x.measureText('MILIEU').width + 18; x.fillStyle = VERT; rond(xx + w - bw - 10, yy + 8, bw, 30, 8); x.fill(); x.fillStyle = '#E6F0DA'; x.fillText('MILIEU', xx + w - bw - 1, yy + 30); }
+      x.save(); rond(xx, yy, w, h, 14); x.clip();
+      x.fillStyle = '#3D2B12'; x.font = F(700, 34); x.fillText(fm(k.lo) + ' m', xx + 16, yy + h / 2 - 2);
+      x.fillStyle = '#6E5434'; x.font = F(500, 24); x.fillText(fm(k.ep) + '×' + fm(k.la), xx + 16, yy + h / 2 + 30);
       x.restore();
     }
-    function piste(items, yy) {
-      x.fillStyle = ROUGE; x.fillRect(trkX, yy, 5, rowH - 20);
-      var xx = trkX + 12;
-      items.forEach(function (it) {
-        var w = it.cm / maxLen * (trkW - 16) - 6;
-        if (!it.esp) colis(it.k, xx, yy, Math.max(w, 10), it.centre);
-        else if (it.cm >= 50 && w > 30) { x.save(); x.setLineDash([8, 6]); x.strokeStyle = '#9AA59E'; x.lineWidth = 2; rond(xx, yy, w, rowH - 20, 8); x.stroke(); x.restore(); x.fillStyle = MU; x.font = F(600, 20); x.textAlign = 'center'; x.fillText(fm(Math.round(it.cm) / 100) + ' m', xx + w / 2, yy + (rowH - 20) / 2 + 7); x.textAlign = 'left'; }
-        xx += w + 6;
+    function roue(cx0, cy0) { x.fillStyle = '#3D4541'; x.beginPath(); x.arc(cx0, cy0, 27, 0, 6.29); x.fill(); x.fillStyle = '#C3CBC6'; x.beginPath(); x.arc(cx0, cy0, 15, 0, 6.29); x.fill(); x.fillStyle = '#3D4541'; x.beginPath(); x.arc(cx0, cy0, 6, 0, 6.29); x.fill(); }
+    plans.forEach(function (p, ip) {
+      var v = p.v, r = p.r, rc = p.c, N = v.N, mx = Math.round(r.e1Max * 100), maxLen = mx;
+      v.ROWS.forEach(function (k2) { maxLen = Math.max(maxLen, v.rows[k2].ext || v.rows[k2].len); });
+      if (c.double) { var tr = 'Remorque ' + (ip + 1) + ' · ' + fm(c.double.lg[ip]) + ' m · ' + f2(rc.total_m3) + ' m³'; x.font = F(700, 44, true); var wtr = x.measureText(tr).width; x.fillStyle = VERT; rond(pad, y + 6, wtr + 44, 62, 31); x.fill(); x.fillStyle = '#fff'; x.fillText(tr, pad + 22, y + 52); y += 80; }
+      ['G', 'D'].forEach(function (s) {
+        stabilo(NOMS[s], pad + 10, y + 42, s === 'G' ? 'rgba(56,170,255,A)' : 'rgba(255,92,170,A)', 44);
+        var tv = f2(s === 'G' ? v.volG : v.volD) + ' m³'; x.font = F(600, 32); var wv = x.measureText(tv).width;
+        x.fillStyle = CARTE; rond(W - pad - wv - 30, y + 6, wv + 30, 50, 25); x.fill();
+        x.textAlign = 'right'; x.fillStyle = INK; x.fillText(tv, W - pad - 15, y + 42); x.textAlign = 'left';
+        y += 70; carte(y, hCote - 70);
+        var tx = pad + 170, tw = W - pad - 30 - tx, ry = y + 26, lu = tw / maxLen;
+        for (var f = N; f >= 1; f--) {
+          var ro = v.rows[s + f], c3 = v.rows['C' + N], occ = ro.ext + (f === N ? c3.len : 0);
+          var libre = (f > 1 ? Math.min(mx, v.rows[s + (f - 1)].ext) : mx) - occ;
+          x.fillStyle = 'rgba(255,255,255,.55)'; rond(tx, ry, tw, rowH, 12); x.fill();
+          x.fillStyle = MU; x.font = F(500, 26); x.fillText('É' + f, pad + 30, ry + 34);
+          x.fillStyle = ro.alerte ? '#C23A2B' : INK; x.font = F(600, 38); x.fillText(fm(Math.round(occ) / 100) + ' m', pad + 30, ry + 76);
+          if (libre >= 30) { x.fillStyle = '#2F6B3A'; x.font = F(700, 25); x.fillText(fm(Math.round(libre) / 100) + ' m libre', pad + 30, ry + 108); }
+          var xx = tx + 6, gg = gapsRow(rc, v, s + f);
+          if (f === N) c3.colis.forEach(function (k3) { var w = k3.cm * lu - 6; bois(xx, ry + 6, Math.max(w, 20), rowH - 12, k3, true); xx += w + 6; });
+          ro.colis.forEach(function (k3, i3) { xx += (gg[i3] || 0) * lu; var w = k3.cm * lu - 6; bois(xx, ry + 6, Math.max(w, 20), rowH - 12, k3, false); xx += w + 6; });
+          if (libre >= 30) { var lw2 = libre * lu - 10; if (lw2 > 16) { x.save(); x.setLineDash([12, 9]); x.strokeStyle = 'rgba(94,110,100,.6)'; x.lineWidth = 3; x.fillStyle = 'rgba(59,90,52,.06)'; rond(xx + 2, ry + 12, lw2, rowH - 24, 12); x.fill(); x.stroke(); x.restore(); } }
+          ry += rowH + 12;
+        }
+        // remorque : paroi + plancher + roues
+        x.fillStyle = '#5C6661'; x.fillRect(tx - 14, y + 20, 10, ry - y - 20 + 4); x.fillRect(tx - 14, ry, tw + 14, 18);
+        x.fillRect(tx + tw * 0.14, ry + 18, 34, 12);
+        var deux = rc.parentId && rc.rem === 1, wy = ry + 44;
+        [0, 1, 2].slice(0, deux ? 2 : 3).forEach(function (i4) { roue(tx + tw * 0.84 - i4 * 62, wy); });
+        if (deux) [0, 1].forEach(function (i4) { roue(tx + tw * 0.1 + i4 * 62, wy); });
+        stabilo('Arrière', W - pad - 170, y + hCote - 70 - 26, 'rgba(150,160,155,A)', 32);
+        y += hCote - 70 + 30;
       });
-    }
-    var y = 250;
-    function surligne(txt, coul, yy) {
-      x.font = F(700, 34); var tw = x.measureText(txt).width;
-      x.fillStyle = coul; x.save(); x.translate(pad - 6, yy - 26); x.transform(1, 0, -0.08, 1, 0, 0); x.fillRect(0, 0, tw + 14, 30); x.restore();
-      x.fillStyle = INK; x.fillText(txt, pad, yy);
-    }
-    ['G', 'D'].forEach(function (s) {
-      surligne(NOMS[s], s === 'G' ? 'rgba(56,170,255,.55)' : 'rgba(255,92,170,.50)', y + 40);
-      x.textAlign = 'right'; x.font = F(500, 26); x.fillStyle = MU; x.fillText(f2(s === 'G' ? v.volG : v.volD) + ' m³', W - pad, y + 40); x.textAlign = 'left';
-      x.fillStyle = '#F5F6F3'; rond(pad - 14, y + 62, larg + 28, N * (rowH + 14) + 60, 22); x.fill();
-      var yy = y + 80;
-      ETG.forEach(function (f) {
-        var ro = v.rows[s + f], items = [], lgAff = ro.m;
-        if (f === N) {
-          var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len), E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
-          if (c3.colis.length) c3.colis.forEach(function (k) { items.push({ k: k, cm: k.cm, centre: 1 }); });
-          var gg = gapsRow(c, v, s + f);
-          ro.colis.forEach(function (k, i) { if (gg[i] > 0) items.push({ esp: 1, cm: gg[i] }); items.push({ k: k, cm: k.cm }); });
-          lgAff = E / 100;
-        } else if (c.parentId) { var ggI = gapsRow(c, v, s + f); ro.colis.forEach(function (k, i) { if (ggI[i] > 0) items.push({ esp: 1, cm: ggI[i] }); items.push({ k: k, cm: k.cm }); }); lgAff = ro.ext / 100; }
-        else ro.colis.forEach(function (k) { items.push({ k: k, cm: k.cm }); });
-        x.font = F(500, 22); x.fillStyle = MU; x.fillText('É' + f, pad, yy + 26);
-        x.font = F(600, 28); x.fillStyle = ro.alerte ? ROUGE : INK; x.fillText(fm(Math.round(lgAff * 100) / 100) + ' m', pad, yy + 60);
-        piste(items, yy);
-        yy += rowH + 14;
-      });
-      x.font = F(600, 22); x.fillStyle = ROUGE; x.fillText('Cabine', trkX, yy + 10);
-      x.textAlign = 'right'; x.fillStyle = MU; x.font = F(500, 22); x.fillText('Arrière', W - pad, yy + 10); x.textAlign = 'left';
-      y += hCote + 30;
     });
-    if (v.rows['C' + N].colis.length) {
-      x.font = F(800, 22); var mw = x.measureText('MILIEU').width + 16; x.fillStyle = '#3B5A34'; rond(pad, y - 8, mw, 32, 7); x.fill();
-      x.fillStyle = '#fff'; x.fillText('MILIEU', pad + 8, y + 16);
-      x.font = F(500, 24); x.fillStyle = INK; x.fillText('= colis à cheval sur les 2 côtés, posé tout devant contre la cabine', pad + mw + 10, y + 16); y += 50;
-    }
-    if (v.cote.length) {
-      x.font = F(700, 28); x.fillStyle = ROUGE; x.fillText('De côté (pas dans le camion)', pad, y + 20);
-      piste(v.cote.map(function (k) { return { k: k, cm: k.cm }; }), y + 40); y += rowH + 80;
-    }
-    x.font = F(500, 26);
-    cv.finPlan = y; // fin du dessin du plan (pour la fiche chauffeur)
-    lignesMsg.forEach(function (m) { x.fillStyle = m[0]; x.fillText((m[2] ? '• ' : '   ') + m[1], pad, y + 20); y += 38; });
-    x.fillStyle = LINE; x.fillRect(pad, H - 74, larg, 2);
-    x.fillStyle = MU; x.font = F(500, 22);
-    if (LOGO.complete && LOGO.naturalWidth) { var lh = 52, lw = LOGO.naturalWidth * lh / LOGO.naturalHeight; x.drawImage(LOGO, pad, H - 64, lw, lh); }
-    else x.fillText('SDC – Les Scieries du Centre', pad, H - 34);
-    x.textAlign = 'right'; x.fillText('Camions SDC', W - pad, H - 34); x.textAlign = 'left';
+    // ---- remarques + logo ----
+    carte(y, hPied - 20);
+    var py = y + 4;
+    if (LOGO.complete && LOGO.naturalWidth) { var lh = 56, lw = LOGO.naturalWidth * lh / LOGO.naturalHeight; x.drawImage(LOGO, pad + 36, py + 4, lw, lh); }
+    x.textAlign = 'right'; x.fillStyle = MU; x.font = F(500, 26); x.fillText('Camions SDC', W - pad - 36, py + 42); x.textAlign = 'left';
     return cv;
   }
-
   function partagerImage(c) {
     if (!c.lignes.length) { toast('Aucun colis.'); return; }
     var cv = imagePlan(c), url = cv.toDataURL('image/png');
@@ -2037,7 +1988,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=53" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=53" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=54" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=54" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2168,7 +2119,7 @@
 
       '<div class="carte reg"><div class="g2"><button class="btn sec petit" id="exp" type="button">Sauvegarder mes données</button><button class="btn sec petit" id="imp" type="button">Restaurer</button></div>' +
       '<input type="file" id="impFichier" accept="application/json,.json" hidden>' +
-      '<p class="petit-txt">' + Object.keys(db.camions).filter(function (k) { return !db.camions[k].supprime && db.camions[k].statut === 'termine'; }).length + ' camions enregistrés · version ' + VERSION_APP + '</p></div>';
+      '<p class="petit-txt">' + Object.keys(db.camions).filter(function (k) { return !db.camions[k].supprime && db.camions[k].statut === 'termine'; }).length + ' camions enregistrés' + (estAdmin() ? ' · version ' + VERSION_APP : '') + '</p></div>';
     if (verrou) $$('#reglagesZone .verrouille input').forEach(function (x) { x.disabled = true; });
     lierReglages();
   }
@@ -2543,7 +2494,7 @@
   setInterval(function () { if (!document.hidden) Ambiance.appliquer(reg()); }, 60000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) Ambiance.appliquer(reg()); });
   try { // petit message après une mise à jour automatique
-    if (localStorage.getItem('csdc.version') && localStorage.getItem('csdc.version') !== VERSION_APP) setTimeout(function () { toast('Appli mise à jour : nouvelle version ' + VERSION_APP); }, 900);
+    if (localStorage.getItem('csdc.version') && localStorage.getItem('csdc.version') !== VERSION_APP) setTimeout(function () { toast(estAdmin() ? 'Appli mise à jour : nouvelle version ' + VERSION_APP : 'Appli mise à jour ✔'); }, 900);
     localStorage.setItem('csdc.version', VERSION_APP);
   } catch (e) {}
   history.replaceState({ v: 'accueil', d: 0 }, '');

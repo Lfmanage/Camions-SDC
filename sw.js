@@ -1,48 +1,39 @@
 /* Camions SDC — service worker (hors ligne). Changer VERSION à chaque mise à jour.
    Mise à jour automatique : la page est toujours redemandée au serveur, le nouveau service worker
    s'active tout de suite (skipWaiting + clients.claim) et l'appli se recharge seule. Rien à réinstaller. */
-const VERSION = 'camions-sdc-v53';
+const VERSION = 'camions-sdc-v54';
 const FICHIERS = [
   './',
   'index.html',
-  'barlow-regular.woff?v=53',
-  'barlow-medium.woff?v=53',
-  'barlow-semibold.woff?v=53',
-  'barlow-bold.woff?v=53',
-  'barlowcondensed-semibold.woff?v=53',
-  'barlowcondensed-bold.woff?v=53',
-  'style.css?v=53',
-  'plan.js?v=53',
-  'sync.js?v=53',
-  'app.js?v=53',
-  'manifest.webmanifest?v=53',
-  'icon-192.png?v=53',
-  'icon-512.png?v=53',
-  'icon-maskable-512.png?v=53',
-  'apple-touch-icon.png?v=53',
-  'favicon-32.png?v=53',
-  'logo-clair.png?v=53',
-  'logo-sombre.png?v=53',
-  'fond-1.jpg?v=53',
-  'mini-1.jpg?v=53',
-  'fond-2.jpg?v=53',
-  'mini-2.jpg?v=53',
-  'fond-3.jpg?v=53',
-  'mini-3.jpg?v=53',
-  'fond-4.jpg?v=53',
-  'mini-4.jpg?v=53',
-  'fond-5.jpg?v=53',
-  'mini-5.jpg?v=53',
-  'fond-6.jpg?v=53',
-  'mini-6.jpg?v=53',
-  'fond-7.jpg?v=53',
-  'mini-7.jpg?v=53',
-  'fond-8.jpg?v=53',
-  'mini-8.jpg?v=53',
-  'fond-9.jpg?v=53',
-  'mini-9.jpg?v=53',
-  'ambiance.js?v=53',
-  'feuilles.png?v=53'
+  'barlow-regular.woff?v=54',
+  'barlow-medium.woff?v=54',
+  'barlow-semibold.woff?v=54',
+  'barlow-bold.woff?v=54',
+  'barlowcondensed-semibold.woff?v=54',
+  'barlowcondensed-bold.woff?v=54',
+  'style.css?v=54',
+  'plan.js?v=54',
+  'sync.js?v=54',
+  'app.js?v=54',
+  'manifest.webmanifest?v=54',
+  'icon-192.png?v=54',
+  'icon-512.png?v=54',
+  'icon-maskable-512.png?v=54',
+  'apple-touch-icon.png?v=54',
+  'favicon-32.png?v=54',
+  'logo-clair.png?v=54',
+  'logo-sombre.png?v=54',
+  'mini-1.jpg?v=54',
+  'mini-2.jpg?v=54',
+  'mini-3.jpg?v=54',
+  'mini-4.jpg?v=54',
+  'mini-5.jpg?v=54',
+  'mini-6.jpg?v=54',
+  'mini-7.jpg?v=54',
+  'mini-8.jpg?v=54',
+  'mini-9.jpg?v=54',
+  'ambiance.js?v=54',
+  'feuilles.png?v=54'
 ];
 
 self.addEventListener('install', (e) => {
@@ -67,6 +58,15 @@ self.addEventListener('fetch', (e) => {
       fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }).then((r) => { const copie = r.clone(); caches.open(VERSION).then((c) => c.put('index.html', copie)); return r; })
         .catch(() => caches.match('index.html').then((r) => r || caches.match('./')))
     );
+    return;
+  }
+
+  // Fonds d'écran en haute qualité : chargés une seule fois, gardés même après les mises à jour
+  if (url.origin === location.origin && /\/fond-\d+\.jpg$/.test(url.pathname)) {
+    e.respondWith(caches.open('csdc-fonds-int').then((c) => c.match(req, { ignoreSearch: true }).then((r) => r || fetch(req).then((rep) => {
+      if (rep.ok) c.put(req, rep.clone());
+      return rep;
+    }))));
     return;
   }
 
