@@ -963,3 +963,60 @@ img, svg, canvas { max-width: 100%; }
   #v-plan .pied.quatre .btn.gros { font-size: 15px; padding: 0 8px; }
   #v-plan .pied.quatre .btn.vider { font-size: 11px; padding: 0 7px; }
 }
+
+/* v47 — colis en pin doré plat (sans 3D) */
+.chip, .chip[data-bois] { color: #3D2B12;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='40'%3E%3Cg fill='none' stroke='%23a07a45' stroke-opacity='.22' stroke-width='1'%3E%3Cpath d='M0 8 C40 5 80 11 160 7'/%3E%3Cpath d='M0 17 C50 14 90 21 160 16'/%3E%3Cpath d='M0 27 C30 30 100 24 160 28'/%3E%3Cpath d='M0 35 C60 33 110 37 160 34'/%3E%3C/g%3E%3Cellipse cx='110' cy='21' rx='9' ry='3' fill='none' stroke='%23a07a45' stroke-opacity='.25'/%3E%3C/svg%3E") 0 0 / 160px 40px, linear-gradient(180deg, #F0DCAE, #DDBD85);
+  box-shadow: inset -5px 0 0 rgba(160, 110, 50, .25); border-radius: 6px; }
+.chip[data-bois="1"] { background-position: -50px -6px, 0 0; } .chip[data-bois="2"] { background-position: -100px -14px, 0 0; }
+.chip[data-bois="3"] { background-position: -25px -20px, 0 0; } .chip[data-bois="4"] { background-position: -130px -3px, 0 0; }
+.chip[data-bois="5"] { background-position: -75px -17px, 0 0; }
+.chip small { color: #6E5434; }
+.chip.centre { padding-top: 0; background: repeating-linear-gradient(135deg, rgba(59, 90, 52, .28) 0 6px, transparent 6px 12px), linear-gradient(180deg, #F0DCAE, #DDBD85) !important; box-shadow: inset 0 0 0 2px #3B5A34; }
+.chip.centre::before { content: 'MILIEU'; position: absolute; left: auto; right: 3px; top: 3px; height: auto; width: auto; background: #3B5A34; color: #E6F0DA; font: 800 7.5px/1 Inter, system-ui, sans-serif; letter-spacing: .04em; padding: 2px 4px; border-radius: 4px; }
+.chip.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
+.leg-mil span { background: #3B5A34 !important; color: #E6F0DA !important; }
+/* v47 — côtés surlignés au Stabilo : conducteur bleu, passager rose */
+.hl { position: relative; z-index: 0; background: none !important; padding: 0 6px; }
+.hl::before { content: ""; position: absolute; z-index: -1; left: -2px; right: -6px; bottom: 1px; height: 62%; border-radius: 3px 8px 4px 9px / 7px 3px 8px 4px; transform: rotate(-1.2deg) skewX(-6deg); opacity: .9; }
+.hl.bleu::before { background: linear-gradient(90deg, rgba(56,170,255,.55), rgba(56,170,255,.9) 12%, rgba(64,180,255,.85) 85%, rgba(56,170,255,.45)); }
+.hl.rose::before { background: linear-gradient(90deg, rgba(255,92,170,.55), rgba(255,92,170,.9) 12%, rgba(255,105,180,.85) 85%, rgba(255,92,170,.45)); }
+
+/* v47 — remorque : paroi côté cabine + plancher + roues, silhouette grise plate */
+:root { --ch: #5c6661; --pn: #3d4541; --ja: #c3cbc6; }
+:root[data-theme="sombre"] { --ch: #56635c; --pn: #2b342f; --ja: #9aa69f; }
+.trk { border-left: 0; margin-left: 4px; }
+.trk::before { content: ""; position: absolute; left: -6px; top: -4px; bottom: -4px; width: 4px; background: var(--ch); }
+.rang-ch { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 5px; height: 30px; }
+.chassis { position: relative; height: 30px; margin-left: 4px; }
+.chassis::before { content: ""; position: absolute; left: -6px; top: -4px; width: 4px; height: 6px; background: var(--ch); }
+.ch-sol { position: absolute; left: -6px; right: 0; top: 2px; height: 7px; background: var(--ch); border-radius: 0 3px 4px 4px; }
+.ch-cr { position: absolute; left: 14%; top: 9px; width: 14px; height: 5px; background: var(--ch); border-radius: 0 0 3px 3px; }
+.ch-roues { position: absolute; top: 5px; display: flex; gap: 2px; }
+.ch-roues.ar { right: 16%; } .ch-roues.av { left: 8%; }
+.roue { width: 20px; height: 20px; display: block; }
+.sens .hl { font-size: 11.5px; font-weight: 700; color: var(--text); }
+.hl.vert::before { background: linear-gradient(90deg, rgba(120,200,90,.5), rgba(120,200,90,.85) 12%, rgba(130,210,100,.8) 85%, rgba(120,200,90,.45)); }
+.hl.gris::before { background: linear-gradient(90deg, rgba(150,160,155,.5), rgba(150,160,155,.85) 12%, rgba(160,170,165,.8) 85%, rgba(150,160,155,.45)); }
+@media (min-width: 640px) { .rang-ch, .chassis { height: 32px; } .roue { width: 26px; height: 26px; } }
+
+/* v47 — double remorque */
+.lien-double { display: block; margin: 2px auto 10px; background: none; border: 0; color: var(--accent); font: 600 13.5px/1.2 inherit; font-family: inherit; padding: 6px 10px; opacity: .9; cursor: pointer; }
+.lg-dbl { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; align-items: center; }
+.lg-dbl button { min-width: 42px; padding: 9px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: 600 14px/1 inherit; font-family: inherit; }
+.lg-dbl button.actif { background: var(--accent); color: var(--bg, #fff); border-color: var(--accent); }
+:root[data-theme="sombre"] .lg-dbl button.actif { color: #17220f; }
+.lg-champ.petit { width: 92px; }
+.lg-champ.petit input { font-size: 15px; padding: 8px 26px 8px 10px; }
+.rem-tete { margin: 0 0 8px; }
+.rem-onglets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rem-onglets button { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 14px; padding: 8px 6px; font: 700 14px/1.15 inherit; font-family: inherit; }
+.rem-onglets button small { display: block; font-weight: 500; font-size: 11.5px; margin-top: 2px; }
+.rem-onglets button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+:root[data-theme="sombre"] .rem-onglets button.on { color: #17220f; }
+.rem-tot { margin: 6px 2px 0; font-size: 12.5px; color: var(--muted); text-align: center; }
+.rem-tot b { color: var(--text); }
+.barre-sel .bs-rem { white-space: nowrap; }
+.rem-etr { border: 1px dashed var(--accent); }
+.rem-h { margin: 12px 2px 4px; font-size: 14px; color: var(--accent); }
+.tag-dbl { font-style: normal; font-size: 10px; font-weight: 700; background: #3B5A34; color: #E6F0DA; border-radius: 5px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }

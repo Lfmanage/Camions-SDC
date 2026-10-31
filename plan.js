@@ -162,8 +162,9 @@
       for (f = 1; f < N; f++) {
         if (len[b + f] > len[b + f - 1]) { var dd = len[b + f] - len[b + f - 1]; c += DUR + 50 * dd + dd * dd / 10; }
       }
-      // étage 2 le plus plein possible (aussi long que l'étage 1)
-      var g = Math.max(0, l1 - len[b + 1]); c += g + g * g / 300;
+      // étages 1 et 2 au plus près de la longueur choisie (13 m, 12 m…), le 3e prend le reste
+      var g1 = Math.max(0, mx - l1), g2 = Math.max(0, mx - len[b + 1]);
+      c += 3 * (g1 + g2) + (g1 * g1 + g2 * g2) / 120;
     }
     // dernier étage : paires gauche/droite puis le centre ; le tout doit tenir sur l'étage du dessous
     var E = Math.max(len[N - 1], len[2 * N - 1]) + len[C], sup = Math.min(len[N - 2], len[2 * N - 2]);
@@ -362,7 +363,7 @@
   function noteVerif(v) {
     var e = v.erreurs.filter(function (m) { return !/^(Pas assez de colis|Trop de colis|Un seul colis)/.test(m); }).length;
     var lg = ecartLg(v); // écart de longueur gauche/droite : 0 visé, 75 cm toléré
-    return e * 1000 + (v.ecrase || 0) * 300 + (v.ecart < -0.005 ? 100 + -v.ecart * 10 : 0) + Math.abs(v.ecart) + (lg > ECART_LG ? 200 + Math.min(lg - ECART_LG, 700) : 0) + lg * 0.01;
+    return e * 1000 + (v.ecrase || 0) * 300 + (v.ecart < -0.005 ? 100 + -v.ecart * 10 : 0) + Math.abs(v.ecart) + (lg > ECART_LG ? 200 + Math.min(lg - ECART_LG, 700) : 0) + lg * 0.01 + (v.manque || 0) * 0.6;
   }
   // Le meilleur plan trouvé en ~2 s au plus : on s'arrête dès qu'un plan est parfait (règles + équilibre + longueurs égales)
   function meilleur(lignes, cfg, essaisMax, budgetMs) {
@@ -371,7 +372,7 @@
       var res = proposer(lignes, cfg, false, g), v = res.verif, note = noteVerif(v);
       if (!best || note < best.note) best = { plan: res.plan, verif: v, note: note };
       var bon = note < 1000 && !v.ecrase && v.ecart >= -0.005 && v.ecart <= em + 0.005;
-      if (bon && ecartLg(v) === 0) break;
+      if (bon && ecartLg(v) === 0 && (v.manque || 0) <= 20) break;
       if (g >= 1 && Date.now() - t0 > (budgetMs || 2000)) break;
     }
     return best;
@@ -396,6 +397,7 @@
       if ((v.ecrase || 0) > (ref.verif.ecrase || 0)) continue;
       if (deseq(v) > seuil) continue;
       if (ecartLg(v) > seuilLg) continue;
+      if ((v.manque || 0) > (ref.verif.manque || 0) + 40) continue;
       var sig = signature(lignes, res.plan);
       if (vus[sig]) continue;
       return { plan: res.plan, verif: v, signature: sig, graine: g + 1, note: noteVerif(v) };
@@ -444,6 +446,7 @@
     if (decal) [TOP, TOPD].forEach(function (k) { rows[k].colis.forEach(function (c) { rows[k].ext += Math.max(0, +decal[c.id] || 0); }); });
     var erreurs = [], avis = [];
     var mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
+    var manque = 0; ['G', 'D'].forEach(function (p) { manque += Math.max(0, mx - rows[p + '1'].len) + Math.max(0, mx - rows[p + '2'].len); });
     if (nonPlaces.length) erreurs.push(nonPlaces.length + (nonPlaces.length > 1 ? ' colis non placés.' : ' colis non placé.'));
     if (cote.length) erreurs.push(cote.length + ' colis de côté : remets-' + (cote.length > 1 ? 'les' : 'le') + ' dans le camion.');
     if (rows[CK].colis.length > 1) { rows[CK].alerte = true; erreurs.push('Un seul colis au milieu : il est à cheval sur les 2 côtés.'); }
@@ -516,12 +519,47 @@
     erreurs = uniq(erreurs); avis = uniq(avis);
     return {
       N: N, ROWS: RW, ecrase: ecrase, rows: rows, nonPlaces: nonPlaces, cote: cote, erreurs: erreurs, avis: avis,
-      volG: volG, volD: volD, ecart: ecart, total: total, etat: et, e3: E3 / 100, sup3: sup3 / 100,
+      volG: volG, volD: volD, ecart: ecart, manque: manque, total: total, etat: et, e3: E3 / 100, sup3: sup3 / 100,
       ok: erreurs.length === 0, parfait: erreurs.length === 0 && avis.length === 0
     };
   }
 
-  var Plan = { estFine: estFine, nbEtages: nbEtages, estPetit: estPetit, SECTIONS: SECTIONS, trouverSection: trouverSection, lgPlan: lgPlan, ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, ecartLg: ecartLg, ECART_LG: ECART_LG, autre: autre, signature: signature, verifier: verifier, f2: f2 };
+  // Double remorque : répartit les colis entre les 2 remorques (selon leur longueur), puis un plan par remorque.
+  // Renvoie [{ lignes, plan, verif, note }, { … }] ; les lignes gardent leur id (nb réparti).
+  function lignesDe(lignes, compte) {
+    var out = [];
+    lignes.forEach(function (l) { var n = compte[l.id] || 0; if (n > 0) { var x = Object.assign({}, l); x.nb = n; out.push(x); } });
+    return out;
+  }
+  function partager(lignes, lgs, cfg, graine) {
+    cfg = Object.assign({}, DEFAUT, cfg || {});
+    var colis = colisDe(lignes).filter(function (c) { return c.cm > 0 && c.vol > 0; });
+    var r = rng(colis.length * 31 + 7 + (graine || 0) * 7919), ecartE = cfg.e1Max - cfg.e1Min;
+    function cfgR(i) { var x = Object.assign({}, cfg); x.e1Max = lgs[i]; x.e1Min = Math.max(1, lgs[i] - ecartE); x.m3Min = 0; x.m3Max = 1e6; delete x._L; return x; }
+    function essai(bruit) {
+      var fill = [0, 0], compte = [{}, {}];
+      var ord = colis.slice().sort(function (a, b) { return (a.k - b.k) || (b.cm - a.cm) || (bruit ? r() - 0.5 : 0); });
+      ord.forEach(function (c) {
+        var q0 = (fill[0] + c.cm) / lgs[0], q1 = (fill[1] + c.cm) / lgs[1];
+        if (bruit) { q0 *= 1 + (r() - 0.5) * bruit; q1 *= 1 + (r() - 0.5) * bruit; }
+        var t = q0 <= q1 ? 0 : 1; fill[t] += c.cm; compte[t][c.ligneId] = (compte[t][c.ligneId] || 0) + 1;
+      });
+      return [lignesDe(lignes, compte[0]), lignesDe(lignes, compte[1])];
+    }
+    var best = null, t0 = Date.now();
+    for (var e = 0; e < 8 && (e < 2 || Date.now() - t0 < 1500); e++) {
+      var parts = essai(e === 0 && !graine ? 0 : 0.25), note = 0;
+      parts.forEach(function (lg, i) { if (lg.length) note += noteVerif(proposer(lg, cfgR(i), true, e).verif); });
+      if (!best || note < best.note) best = { parts: parts, note: note };
+    }
+    return best.parts.map(function (lg, i) {
+      if (!lg.length) return { lignes: [], plan: {}, verif: null, note: 0, cfg: cfgR(i) };
+      var m = meilleur(lg, cfgR(i), 12, 1500);
+      return { lignes: lg, plan: m.plan, verif: m.verif, note: m.note, cfg: cfgR(i) };
+    });
+  }
+
+  var Plan = { partager: partager, estFine: estFine, nbEtages: nbEtages, estPetit: estPetit, SECTIONS: SECTIONS, trouverSection: trouverSection, lgPlan: lgPlan, ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, ecartLg: ecartLg, ECART_LG: ECART_LG, autre: autre, signature: signature, verifier: verifier, f2: f2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = Plan;
   else root.Plan = Plan;
 })(typeof window !== 'undefined' ? window : this);

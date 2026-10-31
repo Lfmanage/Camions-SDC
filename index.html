@@ -10,13 +10,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=46">
-<link rel="icon" href="favicon-32.png?v=46" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=46">
+<link rel="manifest" href="manifest.webmanifest?v=47">
+<link rel="icon" href="favicon-32.png?v=47" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=47">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=46">
+<link rel="stylesheet" href="style.css?v=47">
 </head>
 <body>
 <div id="fondForet" aria-hidden="true"><i class="ff-img"></i><i class="ff-voile"></i></div>
@@ -25,11 +25,12 @@
 
   <!-- ============ ACCUEIL ============ -->
   <section class="vue active" id="v-accueil">
-    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=46" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=46" alt=""></span></header>
+    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=47" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=47" alt=""></span></header>
     <button class="hero-go" id="btnCommencer" type="button">
       <span class="hg-txt"><small>Nouveau camion</small><b>Charger un camion</b></span>
       <span class="hg-fl" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
     </button>
+    <button class="lien-double" id="btnDouble" type="button">⇄ Double remorque</button>
     <div class="tuiles">
       <button class="tuile" data-go="calcul" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg><b>Calcul m³</b><small>Paquet par paquet</small></button>
       <button class="tuile" data-go="historique" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><b>Historique</b><small id="accNbJour">—</small></button>
@@ -60,7 +61,7 @@
 
   <!-- ============ ÉTAPE 1 : CLIENT ============ -->
   <section class="vue" id="v-client">
-    <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Nouveau camion</h1><span></span></header>
+    <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1 id="titreClient">Nouveau camion</h1><span></span></header>
     <div class="etapes"><span class="on"><i></i>Client</span><span class=""><i></i>Colis</span><span class=""><i></i>Plan</span></div>
     <div class="carte etape-carte">
       <p class="sous">Client et n° de commande sont facultatifs.</p>
@@ -73,11 +74,14 @@
       <datalist id="listeClients"></datalist>
     </div>
     <div class="carte etape-carte">
+      <div id="cfgSimple">
       <div class="cfg-ligne"><span class="cfg-t">Longueur de chargement</span><small id="lgDefaut">Par défaut 13 m</small></div>
       <div class="lg-zone">
         <label class="lg-champ"><input id="lgMax" inputmode="decimal" autocomplete="off" value="13"><i>m</i></label>
         <div class="lg-rapides" id="lgRapides"><button type="button" data-l="12">12</button><button type="button" data-l="12,5">12,5</button><button type="button" data-l="13">13</button><button type="button" data-l="13,6">13,6</button></div>
       </div>
+      </div>
+      <div id="cfgDouble" hidden></div>
       <div class="cfg-ligne"><span class="cfg-t">Volume du camion</span></div>
       <div class="seg seg2" id="segVol"><button type="button" data-m="plage" class="actif">Entre 39 et 41 m³</button><button type="button" data-m="exact">Volume exact</button></div>
       <div id="volExactZone" hidden><label class="lg-champ"><input id="volExact" inputmode="decimal" autocomplete="off" placeholder="ex. 40"><i>m³</i></label><p class="sous">Tolérance ± 0,25 m³.</p></div>
@@ -171,8 +175,8 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=46"></script>
-<script src="sync.js?v=46"></script>
-<script src="app.js?v=46"></script>
+<script src="plan.js?v=47"></script>
+<script src="sync.js?v=47"></script>
+<script src="app.js?v=47"></script>
 </body>
 </html>

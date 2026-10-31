@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '46';
+  var VERSION_APP = '47';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -53,6 +53,8 @@
   function cfgC(c) {
     var r = Object.assign({}, db.reglages);
     if (c && c.lgMax) { r.e1Max = c.lgMax; r.e1Min = Math.max(1, c.lgMax - (db.reglages.e1Max - db.reglages.e1Min)); }
+    if (c && c.double && c.double.lg) { r.e1Max = c.double.lg[0] + c.double.lg[1]; r.e1Min = Math.max(1, r.e1Max - (db.reglages.e1Max - db.reglages.e1Min)); }
+    if (c && c.parentId) { var pp = db.camions[c.parentId], rp = pp ? cfgC(pp) : r; r.m3Min = 0; r.m3Max = 1e6; r.cible = rp.cible; return r; }
     if (c && c.volMode === 'exact' && c.volExact > 0) { r.m3Min = c.volExact - TOL_EXACT; r.m3Max = c.volExact + TOL_EXACT; r.cible = c.volExact; }
     else r.cible = r.m3Max;
     return r;
@@ -66,7 +68,37 @@
     return c;
   }
   var edition = null; // camion de l'historique ouvert dans le plan
+  // Double remorque : dans le plan, le camion « courant » est la remorque affichée
   function courant() {
+    var c = courantBase();
+    if (c.double && (vueActive === 'plan' || vueActive === 'ajout')) { var s = remDe(c); if (s) return s; }
+    return c;
+  }
+  function remDe(p) {
+    if (!p.double || !p.double.r) return null;
+    var s = p.double.r[p.double.actif || 0]; if (!s) return null;
+    if (p.auteur) { s.auteur = p.auteur; s.auteur_prenom = p.auteur_prenom; } else { delete s.auteur; delete s.auteur_prenom; }
+    s.parentId = p.id; s.client = p.client; s.reference = p.reference; s.termine_le = p.termine_le; s.maj_le = p.maj_le; s.statut = p.statut; return s;
+  }
+  function sigLignes(l) { return l.map(function (x) { return x.id + ':' + (x.nb || 1) + ':' + x.ep + 'x' + x.la + 'x' + x.lo + 'x' + x.pi; }).sort().join('|'); }
+  function unionLignes(p) {
+    var m = {}, out = [];
+    p.double.r.forEach(function (s) { s.lignes.forEach(function (l) { if (m[l.id]) m[l.id].nb = (m[l.id].nb || 1) + (l.nb || 1); else { m[l.id] = Object.assign({}, l, { nb: l.nb || 1 }); out.push(m[l.id]); } }); });
+    var pos = {}; p.lignes.forEach(function (l, i) { pos[l.id] = i; });
+    out.sort(function (a, b) { return (pos[a.id] != null ? pos[a.id] : 1e6) - (pos[b.id] != null ? pos[b.id] : 1e6); });
+    return out;
+  }
+  function besoinSplit(p) { return p.double && p.lignes.length && (!p.double.r || p.double.sig !== sigLignes(p.lignes)); }
+  function splitDouble(p) {
+    var res = P.partager(p.lignes, p.double.lg, Object.assign({}, db.reglages), p.double.graine || 0);
+    p.double.r = res.map(function (x, i) {
+      return { id: p.id + '~' + i, parentId: p.id, rem: i, lgMax: p.double.lg[i], lignes: x.lignes, plan: x.plan, ordre: null, decal: null,
+        planDepart: { plan: JSON.parse(JSON.stringify(x.plan)), note: x.note }, planCalcule: true, planManuel: false, planVariante: false, plansVus: null, graineAutre: 1,
+        total_m3: Math.round(P.totalM3(x.lignes) * 1000) / 1000 };
+    });
+    p.double.actif = 0; p.double.sig = sigLignes(p.lignes);
+  }
+  function courantBase() {
     if (edition && db.camions[edition] && !db.camions[edition].supprime) return db.camions[edition];
     var c = db.camions[db.courant];
     if (!c || c.supprime || c.statut !== 'en_cours' || !estAMoi(c)) { c = nouveauCamion(); sauver(true); }
@@ -79,13 +111,20 @@
   }
   // Cherche le meilleur plan (jusqu'à ~2 s) ; il devient le « plan de départ »
   function calculerPlan(c) {
+    if (c.double) { if (besoinSplit(c)) splitDouble(c); return; }
     if (!c.lignes.length) { majPlan(c); return; }
     var res = P.meilleur(c.lignes, cfgC(c));
     c.plan = res.plan; c.decal = null; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
     c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
   }
-  function assurerPlan(c) { if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); if (estAMoi(c)) toucher(c); } }
+  function assurerPlan(c) { if (c.double) { if (besoinSplit(c)) { splitDouble(c); if (estAMoi(c)) toucher(c); } return; } if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); if (estAMoi(c)) toucher(c); } }
   function toucher(c) {
+    if (c.parentId) { // remorque d'un double : on met à jour le camion entier
+      c.total_m3 = Math.round(P.totalM3(c.lignes) * 1000) / 1000;
+      var p = db.camions[c.parentId];
+      if (p && p.double && p.double.r) { p.lignes = unionLignes(p); p.double.sig = sigLignes(p.lignes); c = p; }
+      else { sauver(); return; }
+    }
     c.total_m3 = Math.round(P.totalM3(c.lignes) * 1000) / 1000;
     c.etat = P.etat(c.total_m3, cfgC(c)).code;
     c.maj_le = maintenant();
@@ -359,7 +398,7 @@
     if (document.activeElement !== $('#reference')) $('#reference').value = c.reference || '';
     $('#listeClients').innerHTML = tousClients().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('');
     var rc = cfgC(c);
-    $('#cfgResume').textContent = fm(rc.e1Max) + ' m · ' + (c.volMode === 'exact' && c.volExact ? fm(c.volExact) + ' m³ exact' : fm(rc.m3Min) + '–' + fm(rc.m3Max) + ' m³');
+    $('#cfgResume').textContent = (c.double ? 'Double ' + fm(c.double.lg[0]) + ' + ' + fm(c.double.lg[1]) : fm(rc.e1Max)) + ' m · ' + (c.volMode === 'exact' && c.volExact ? fm(c.volExact) + ' m³ exact' : fm(rc.m3Min) + '–' + fm(rc.m3Max) + ' m³');
     $('#titreColis').textContent = c.client ? c.client + (c.reference ? ' · ' + c.reference : '') : (c.reference ? 'Commande ' + c.reference : 'Colis');
     rendreCompteur(c);
     rendreListe(c);
@@ -508,9 +547,46 @@
 
   $('#btnCommencer').addEventListener('click', function () {
     var c = courant();
-    if (c.lignes.length || c.client || c.reference) { nouveauCamion(); sauver(true); }
+    if (c.lignes.length || c.client || c.reference) { c = nouveauCamion(); sauver(true); }
+    delete c.double;
     viderForm(); aller('client');
     setTimeout(function () { $('#client').focus(); }, 120);
+  });
+  // Double remorque : même chose qu'un camion, avec 2 longueurs
+  $('#btnDouble').addEventListener('click', function () {
+    var c = courant();
+    if (c.lignes.length || c.client || c.reference) { c = nouveauCamion(); }
+    var dl = reg().dernDouble || [7.5, 7.5];
+    c.double = { lg: [dl[0], dl[1]], r: null, actif: 0 }; c.lgMax = null; sauver(true);
+    viderForm(); aller('client');
+    setTimeout(function () { $('#client').focus(); }, 120);
+  });
+  var LG_DBL = [5, 5.5, 6, 6.5, 7, 7.5, 8];
+  function rendreCfgDouble(c) {
+    var z = $('#cfgDouble'); z.hidden = !c.double; $('#cfgSimple').hidden = !!c.double;
+    $('#titreClient').textContent = c.double ? 'Double remorque' : 'Nouveau camion';
+    if (!c.double) { z.innerHTML = ''; return; }
+    if (z.contains(document.activeElement)) return;
+    z.innerHTML = [0, 1].map(function (i) {
+      var v = c.double.lg[i];
+      return '<div class="cfg-ligne"><span class="cfg-t">Remorque ' + (i + 1) + (i ? ' (arrière)' : ' (avant)') + '</span><small>' + fm(v) + ' m</small></div>' +
+        '<div class="lg-dbl" data-i="' + i + '">' + LG_DBL.map(function (x) { return '<button type="button" data-l="' + x + '"' + (Math.abs(x - v) < 1e-9 ? ' class="actif"' : '') + '>' + fm(x) + '</button>'; }).join('') +
+        '<label class="lg-champ petit"><input inputmode="decimal" autocomplete="off" placeholder="Autre" value="' + (LG_DBL.some(function (x) { return Math.abs(x - v) < 1e-9; }) ? '' : fm(v)) + '"><i>m</i></label></div>';
+    }).join('') + '<p class="sous">Les dernières longueurs sont gardées pour la prochaine fois.</p>';
+  }
+  function majLgDouble(i, v) {
+    var c = courant(); if (!c.double || !(v >= 3 && v <= 12)) return false;
+    c.double.lg[i] = v; c.double.r = null; reg().dernDouble = c.double.lg.slice(); sauver(true); toucher(c); return true;
+  }
+  $('#cfgDouble').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-l]'); if (!b) return;
+    if (majLgDouble(+b.closest('[data-i]').dataset.i, +b.dataset.l)) rendreCfgDouble(courant());
+  });
+  $('#cfgDouble').addEventListener('change', function (e) {
+    var inp = e.target.closest('input'); if (!inp) return;
+    var v = P.num(inp.value);
+    if (!majLgDouble(+inp.closest('[data-i]').dataset.i, v)) { toast('Longueur entre 3 et 12 m.'); }
+    inp.blur(); rendreCfgDouble(courant());
   });
   $('#v-accueil').addEventListener('click', function (e) {
     var g = e.target.closest('[data-go]'); if (g) { aller(g.dataset.go); return; }
@@ -614,6 +690,7 @@
     $$('#segVol button').forEach(function (b) { b.classList.toggle('actif', b.dataset.m === mode); });
     $('#segVol [data-m="plage"]').textContent = 'Entre ' + fm(r.m3Min) + ' et ' + fm(r.m3Max) + ' m³';
     $('#volExactZone').hidden = mode !== 'exact';
+    rendreCfgDouble(c);
     if (document.activeElement !== $('#volExact')) $('#volExact').value = c.volExact ? fm(c.volExact) : '';
     if (document.activeElement !== $('#client')) $('#client').value = c.client || '';
     if (document.activeElement !== $('#reference')) $('#reference').value = c.reference || '';
@@ -646,7 +723,28 @@
   });
 
   // Un autre bon plan, calculé instantanément sur le téléphone
-  $('#btnAutre').addEventListener('click', function () {
+  // Double : appui long sur « Autre plan » → refaire cette remorque ou les 2
+  var appuiLong = null, longFait = false;
+  $('#btnAutre').addEventListener('pointerdown', function () {
+    longFait = false; clearTimeout(appuiLong);
+    var b = courantBase(); if (!b.double || !estAMoi(b)) return;
+    appuiLong = setTimeout(function () {
+      longFait = true; var a = b.double.actif || 0;
+      var f = ouvrirFeuille('<div class="dialogue"><h2>Autre plan</h2>' +
+        '<button type="button" class="opt-part" data-ap="1"><span class="op-ic">↻</span><span><b>Refaire la remorque ' + (a + 1) + '</b><small>La remorque ' + (2 - a) + ' ne bouge pas</small></span></button>' +
+        '<button type="button" class="opt-part" data-ap="2"><span class="op-ic">⇄</span><span><b>Refaire les 2 remorques</b><small>Tous les colis sont redistribués</small></span></button>' +
+        '<button type="button" class="btn sec" data-ap="0" style="width:100%;margin-top:8px">Annuler</button></div>');
+      f.onclick = function (e) {
+        var x = e.target.closest('[data-ap]'); if (!x) return; var q = x.dataset.ap; fermerFeuille();
+        if (q === '1') setTimeout(function () { longFait = false; $('#btnAutre').click(); }, 80);
+        if (q === '2') { b.double.graine = (b.double.graine || 0) + 1; b.double.r = null; selection = null; toucher(b); setTimeout(rendrePlanVue, 80); }
+      };
+    }, 550);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { $('#btnAutre').addEventListener(ev, function () { clearTimeout(appuiLong); }); });
+  $('#btnAutre').addEventListener('contextmenu', function (e) { if (courantBase().double) e.preventDefault(); });
+  $('#btnAutre').addEventListener('click', function (e) {
+    if (longFait) { longFait = false; e.preventDefault(); return; }
     if (!estAMoi(courant())) return;
     if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
     var c = courant(), b = $('#btnAutre');
@@ -718,7 +816,8 @@
     return out;
   }
   function enregistrerCamion(c) {
-    if (vplan(c).cote.length) supprimerCote(c);
+    if (c.double && c.double.r) { c.double.r.forEach(function (s) { if (vplan(s).cote.length) supprimerCote(s); }); c.double.actif = 0; }
+    else if (vplan(c).cote.length) supprimerCote(c);
     if (edition) { // camion de l'historique : on enregistre et on revient
       toucher(c); sauver(true); selection = null; edition = null;
       retour(); toast('Plan enregistré ✔'); return;
@@ -734,10 +833,20 @@
   $('#btnTerminer').addEventListener('click', function () {
     if (!estAMoi(courant())) return;
     if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
-    var c = courant();
+    var base = courantBase(), c = courant(), pb;
+    if (base.double) {
+      if (!base.double.r) return;
+      if (!(base.double.actif || 0)) { changerRem(1); return; } // page 1 : « 2ème plan → »
+      c = base; pb = [];
+      base.double.r.forEach(function (s, i) { problemesCamion(s).forEach(function (x) { pb.push([x[0], 'Remorque ' + (i + 1) + ' : ' + x[1], x[2]]); }); });
+      var ev = P.etat(base.total_m3, cfgC(base)), rv = cfgC(base);
+      if (ev.code !== 'ok') pb.push(['⚠', 'Volume ' + f2(base.total_m3) + ' m³', 'hors limites ' + fm(rv.m3Min) + '–' + fm(rv.m3Max) + ' m³']);
+    } else {
+      if (!c.lignes.length) { toast('Aucun colis à enregistrer.'); return; }
+      assurerPlan(c);
+      pb = problemesCamion(c);
+    }
     if (!c.lignes.length) { toast('Aucun colis à enregistrer.'); return; }
-    assurerPlan(c);
-    var pb = problemesCamion(c);
     if (!pb.length) { enregistrerCamion(c); return; }
     var f = ouvrirFeuille('<div class="dialogue verif-fin"><h2>Vérifie avant de valider</h2>' +
       pb.map(function (p) { return '<div class="avert"><span>' + p[0] + '</span><span><b>' + esc(p[1]) + '</b>' + (p[2] ? ' · ' + esc(p[2]) : '') + '</span></div>'; }).join('') +
@@ -816,12 +925,7 @@
     var cs = v.rows[k].colis, d = c.decal || {};
     if (!cs.length) return [];
     if (cs.some(function (x) { return d[x.id] != null; })) return cs.map(function (x) { return Math.max(0, +d[x.id] || 0); });
-    var N = v.N, g = cs.map(function () { return 0; });
-    if (!v.rows['C' + N].colis.length) {
-      var E = Math.max(v.rows['G' + N].len, v.rows['D' + N].len), sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
-      if (sup - E > 2) g[0] = Math.round((sup - E) / 2 / 5) * 5;
-    }
-    return g;
+    return cs.map(function () { return 0; }); // plan proposé : colis collés à la cabine, aucun vide
   }
   // Petits messages rouges (courts) : ce qui ne va pas dans le plan
   function alertesCourtes(c, v) {
@@ -852,6 +956,14 @@
     v.cote.forEach(function (x) { o.push(x.id); });
     c.ordre = o; return v;
   }
+  // Dessin de la remorque sous le plan : châssis acier, garde-boue et roues (3 essieux à l'arrière ; 2ème remorque : 2 devant + 2 derrière)
+  var ROUE = '<svg class="roue" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11.5" fill="var(--pn)"/><circle cx="12" cy="12" r="6.5" fill="var(--ja)"/><circle cx="12" cy="12" r="2.4" fill="var(--pn)"/></svg>';
+  function roues(n, cl) { var t = ''; for (var i = 0; i < n; i++) t += ROUE; return '<span class="ch-roues ' + cl + '">' + t + '</span>'; }
+  function remorqueHtml(c) {
+    var deux = c.parentId && c.rem === 1;
+    return '<div class="rang-ch" aria-hidden="true"><span></span><div class="chassis"><i class="ch-sol"></i>' +
+      (deux ? roues(2, 'av') : '<i class="ch-cr"></i>') + roues(deux ? 2 : 3, 'ar') + '</div></div>';
+  }
   function hashBois(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; }
   function htmlPlan(c, opts) {
     var r = cfgC(c), v = vplan(c), st = statutPlan(v, r);
@@ -859,7 +971,7 @@
     v.ROWS.forEach(function (k) { maxLen = Math.max(maxLen, v.rows[k].len); });
     var N = v.N, ETG = []; for (var e0 = N; e0 >= 1; e0--) ETG.push(e0);
     var edit = !opts.lecture, selCote = edit && selection && v.cote.some(function (k) { return k.id === selection; });
-    var place = edit && selection ? 36 : 0; // place gardée pour le bouton « + » en bout d'étage
+    var place = edit && (selection || selEtr) ? 36 : 0; // place gardée pour le bouton « + » en bout d'étage
     planGeo = { maxLen: maxLen, place: place };
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
     var glisse = edit && !apercu;
@@ -868,7 +980,7 @@
         '<b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>';
     }
     function htmlVide(cm, attr) { return '<i class="vide" ' + attr + ' style="' + styleVide(cm) + '">' + txtVide(cm) + '</i>'; }
-    var h = '<div class="sum ' + st.cls + '"><span class="sum-g"><span class="tot">' + f2(v.total) + '<small>/ ' + fm(r.cible) + ' m³</small></span><span class="etq">' + esc(st.etq) + '</span></span>' +
+    var h = '<div class="sum ' + st.cls + '"><span class="sum-g"><span class="tot">' + f2(v.total) + '<small>' + (c.parentId ? ' m³ · remorque ' + (c.rem + 1) : '/ ' + fm(r.cible) + ' m³') + '</small></span><span class="etq">' + esc(st.etq) + '</span></span>' +
       '<span class="gd">Gauche <b>' + f2(v.volG) + '</b><br>Droite <b>' + f2(v.volD) + '</b></span></div>';
     if (st.detail) h += (st.court && !opts.lecture)
       ? '<p class="statut-detail"><span class="court">' + esc(st.court) + '</span> <button type="button" class="pourquoi" data-pourquoi="1">Pourquoi ?</button><span class="detail-long">' + esc(st.detail) + '</span></p>'
@@ -878,7 +990,7 @@
         '<p><b>' + v.cote.length + ' colis de côté.</b> ' + (selCote ? 'Touche + au bout d\'un étage, ou un colis pour le poser devant.' : 'Touche-en un pour le reposer.') + '</p></div>';
     }
     ['G', 'D'].forEach(function (s) {
-      h += '<section class="cote"><div class="cote-t"><span class="hl ' + (s === 'G' ? 'rose' : 'bleu') + '">' + NOMS[s] + '</span><small>' + f2(s === 'G' ? v.volG : v.volD) + ' m³</small></div><div class="rangs">';
+      h += '<section class="cote"><div class="cote-t"><span class="hl ' + (s === 'G' ? 'bleu' : 'rose') + '">' + NOMS[s] + '</span><small>' + f2(s === 'G' ? v.volG : v.volD) + ' m³</small></div><div class="rangs">';
       ETG.forEach(function (f) {
         var ro = v.rows[s + f], lgAff = ro.m;
         h += '<div class="rang' + (ro.alerte ? ' ko' : '') + '"><div class="tag">É' + f + '<b>@LG@</b></div><div class="trk"><i class="lim" style="left:calc(2px + (100% - ' + (4 + place) + 'px) * ' + (r.e1Max * 100 / maxLen).toFixed(4) + ')"></i>';
@@ -887,15 +999,16 @@
           var E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
           if (c3.colis.length) c3.colis.forEach(function (k) { h += chip(k, true); }); // colis du milieu : tout devant, contre la cabine
           var gg = gapsRow(c, v, s + f), fin = c3.len;
-          ro.colis.forEach(function (k, i) { h += htmlVide(gg[i], 'data-gap="' + esc(k.id) + '"'); fin += gg[i] + k.cm; h += chip(k, false, false, true); });
-          if (ro.colis.length) h += htmlVide(Math.max(0, v.rows[s + (f - 1)].ext - fin), 'data-fin="' + s + f + '"');
+          var aMain = ro.colis.some(function (k) { return c.decal && c.decal[k.id] != null; }); // vides seulement si l'utilisateur en a fait
+          ro.colis.forEach(function (k, i) { if (aMain) h += htmlVide(gg[i], 'data-gap="' + esc(k.id) + '"'); fin += gg[i] + k.cm; h += chip(k, false, false, true); });
+          if (ro.colis.length && aMain) h += htmlVide(Math.max(0, v.rows[s + (f - 1)].ext - fin), 'data-fin="' + s + f + '"');
           lgAff = E / 100;
         } else ro.colis.forEach(function (k) { h += chip(k, false); });
-        if (edit && selection) h += '<button type="button" class="poser" data-poser="' + s + f + '" aria-label="Poser ici">' + (selCote && !ro.colis.length ? 'Poser ici' : '+') + '</button>';
+        if (edit && (selection || selEtr)) h += '<button type="button" class="poser" data-poser="' + s + f + '" aria-label="Poser ici">' + (selCote && !ro.colis.length ? 'Poser ici' : '+') + '</button>';
         h = h.replace('@LG@', fm(Math.round(lgAff * 100) / 100) + ' m');
         h += '</div></div>';
       });
-      h += '<div class="sens"><span class="c">Cabine</span><span>Arrière</span></div></div></section>';
+      h += remorqueHtml(c) + '<div class="sens"><span class="hl vert">' + (c.parentId && c.rem ? 'Remorque 1' : 'Cabine') + '</span><span class="hl gris">Arrière</span></div></div></section>';
     });
     var legMil = v.rows['C' + N].colis.length ? '<span class="leg-mil"><span>MILIEU</span> = colis à cheval sur les 2 côtés</span>' : '';
     if (!edit && legMil) h += '<p class="aide-l">' + legMil + '</p>';
@@ -906,6 +1019,7 @@
       else if (sel && !selCote) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b></span>' +
         (auMil ? '<button type="button" class="btn sec petit" data-decote="1">Sortir</button>'
                : '<button type="button" class="btn petit btn-mil" data-milieu="1">' + (dejaMil ? 'Échanger avec le milieu' : 'Milieu') + '</button><button type="button" class="btn sec petit" data-decote="1">De côté</button>') +
+        (c.parentId ? '<button type="button" class="btn sec petit bs-rem" data-verem="1">' + (c.rem ? '← Rem. 1' : '→ Rem. 2') + '</button>' : '') +
         '<button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button>' +
         '<button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
@@ -919,7 +1033,19 @@
   var planGeo = { maxLen: 1300, place: 0 };
   function styleVide(cm) { return cm > 0 ? 'width:calc((100% - ' + (4 + planGeo.place) + 'px) * ' + (cm / planGeo.maxLen).toFixed(4) + ' - 2px)' : 'width:0;margin-left:-2px'; }
   function txtVide(cm) { if (cm < 100) return ''; var t = fm(Math.round(cm) / 100) + ' m'; return cm >= 160 ? t + ' libre' : t; }
+  var selRem = null, selEtr = false; // double : remorque où le colis choisi a été pris
   function rendrePlanVue() {
+    var base = courantBase(), dbl = base.double;
+    $('#v-plan h1').textContent = dbl ? 'Remorque ' + ((dbl.actif || 0) + 1) : 'Plan';
+    $('#btnTerminer').textContent = dbl && !(dbl.actif || 0) ? '2ème plan →' : 'Terminer';
+    if (dbl && besoinSplit(base)) {
+      $('#planZone').innerHTML = '<div class="calcul-plan"><span class="spin"></span>Calcul des 2 remorques…</div>';
+      setTimeout(function () { splitDouble(base); toucher(base); selection = null; selRem = null; if (vueActive === 'plan') rendrePlanVue(); }, 40);
+      return;
+    }
+    if (dbl && selection && selRem == null) selRem = dbl.actif || 0;
+    if (!selection) selRem = null;
+    selEtr = !!(dbl && selection && selRem !== (dbl.actif || 0));
     var c = courant(), ro = !estAMoi(c);
     document.body.classList.toggle('plan-ro', ro);
     $('#piedRo').hidden = !ro; $('#piedPlan').hidden = ro;
@@ -932,8 +1058,70 @@
       setTimeout(function () { calculerPlan(c); toucher(c); if (vueActive === 'plan') { $('#planZone').innerHTML = htmlPlan(c, {}); ajusterPlan(); } }, 40);
       return;
     }
-    $('#planZone').innerHTML = htmlPlan(c, {});
+    $('#planZone').innerHTML = htmlPlanVue(c, base);
     ajusterPlan();
+  }
+  // Plan affiché : pour un double, onglets des 2 remorques + total, et le colis pris dans l'autre remorque
+  function htmlPlanVue(c, base) {
+    if (!base.double) return htmlPlan(c, {});
+    var dbl = base.double, a = dbl.actif || 0, sel = selection, h = '';
+    h += '<div class="rem-tete"><div class="rem-onglets">' + [0, 1].map(function (i) { return '<button type="button" data-rem="' + i + '" class="' + (i === a ? 'on' : '') + '">Remorque ' + (i + 1) + '<small>' + fm(dbl.lg[i]) + ' m · ' + f2(dbl.r[i].total_m3 || 0) + ' m³</small></button>'; }).join('') + '</div>' +
+      '<p class="rem-tot">Total 2 remorques <b>' + f2(base.total_m3) + ' m³</b> / ' + fm(cfgC(base).cible) + ' · glisse pour changer</p></div>';
+    if (selEtr) {
+      var o = dbl.r[selRem], k = o && P.colisDe(o.lignes).filter(function (x) { return x.id === sel; })[0];
+      h += '<div class="barre-sel bs1 rem-etr"><span class="bs-t"><b>' + (k ? esc(libColis(k)) : 'Colis') + '</b> (remorque ' + (selRem + 1) + ') · touche un colis pour échanger, ou + pour le poser</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
+      selection = null;
+    }
+    h += htmlPlan(c, {});
+    selection = sel;
+    return h;
+  }
+  function changerRem(i) {
+    var base = courantBase(); if (!base.double || !base.double.r) return;
+    if (apercu) finApercu(courant(), false);
+    base.double.actif = i; sauver(true);
+    rendrePlanVue(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  // Colis d'une remorque à l'autre
+  function infoColis(s, id) {
+    var k = P.colisDe(s.lignes).filter(function (x) { return x.id === id; })[0]; if (!k) return null;
+    if (!s.ordre) fixerOrdre(s);
+    return { ligne: s.lignes.filter(function (l) { return l.id === k.ligneId; })[0], row: (s.plan || {})[id], pos: s.ordre.indexOf(id), k: k };
+  }
+  function poserDans(s, ligne, row, pos) {
+    if (!s.ordre) fixerOrdre(s);
+    var l = s.lignes.filter(function (x) { return x.id === ligne.id; })[0], nid;
+    if (l) { nid = l.id + '#' + (l.nb || 1); l.nb = (l.nb || 1) + 1; }
+    else { var x = Object.assign({}, ligne); x.nb = 1; s.lignes.push(x); nid = x.id + '#0'; }
+    s.plan = Object.assign({}, s.plan || {}); s.plan[nid] = row;
+    if (!(pos >= 0) || pos > s.ordre.length) pos = s.ordre.length;
+    s.ordre.splice(pos, 0, nid); s.planManuel = true;
+    return nid;
+  }
+  function deplacerVersAutre(base, from, id) {
+    var A = base.double.r[from], B = base.double.r[1 - from], ia = infoColis(A, id); if (!ia) return;
+    supprimerColis(A, function (x) { return x === id; });
+    var nid = poserDans(B, ia.ligne, 'X', -1); toucher(B);
+    base.double.actif = 1 - from; selection = nid; selRem = 1 - from;
+    rendrePlanVue(); window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast('Colis passé en remorque ' + (2 - from) + ' : touche + pour le poser');
+  }
+  function echangerEntre(base, ra, ida, rb, idb) {
+    var A = base.double.r[ra], B = base.double.r[rb], ia = infoColis(A, ida), ib = infoColis(B, idb);
+    if (!ia || !ib) { selection = null; return; }
+    supprimerColis(A, function (x) { return x === ida; }); supprimerColis(B, function (x) { return x === idb; });
+    var pb = ib.row === 'X' ? -1 : ib.pos, pa = ia.row === 'X' ? -1 : ia.pos;
+    poserDans(B, ia.ligne, ib.row, pb); poserDans(A, ib.ligne, ia.row, pa);
+    if (A.decal) A.decal = null; if (B.decal) B.decal = null;
+    toucher(A); toucher(B); selection = null; selRem = null;
+    var msg = []; [A, B].forEach(function (s) { alertesCourtes(s, vplan(s)).forEach(function (t) { msg.push('Remorque ' + (s.rem + 1) + ' : ' + t); }); });
+    if (msg.length) toastRouge(msg[0]); else toast('Colis échangés entre les 2 remorques ✔');
+  }
+  function poserVenantDe(base, from, id, row) {
+    var A = base.double.r[from], B = courant(), ia = infoColis(A, id); if (!ia) return;
+    supprimerColis(A, function (x) { return x === id; });
+    var nid = poserDans(B, ia.ligne, 'X', -1); selRem = null;
+    placer(B, nid, row);
   }
   // Le plan tient sur un écran : hauteur des étages calculée selon la place du téléphone, textes resserrés si besoin
   var RH_MAX = 48, RH_MIN = 30, RH_GRAND = 64;
@@ -1046,6 +1234,18 @@
     if (!estAMoi(c)) return; // camion d'un collègue : lecture seule
     if (glisseFini) { glisseFini = false; return; }
     if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
+    var base = courantBase(), dbl = base.double;
+    if (dbl) {
+      var tr = e.target.closest('[data-rem]'); if (tr) { changerRem(+tr.dataset.rem); return; }
+      if (e.target.closest('[data-verem]') && selection && !apercu) { deplacerVersAutre(base, dbl.actif || 0, selection); return; }
+      if (selEtr && selection && !apercu) { // colis choisi dans l'autre remorque
+        var poE = e.target.closest('[data-poser]'), chE = e.target.closest('.chip');
+        if (poE) { poserVenantDe(base, selRem, selection, poE.dataset.poser); rendrePlanVue(); return; }
+        if (chE) { echangerEntre(base, selRem, selection, dbl.actif || 0, chE.dataset.c); rendrePlanVue(); return; }
+        return;
+      }
+    }
+    var selAvant = selection;
     if (e.target.closest('[data-suppr]') && selection && !apercu) {
       var idS = selection, kS = P.colisDe(c.lignes).filter(function (k) { return k.id === idS; })[0], ph = photoCamion(c);
       if (!c.ordre) fixerOrdre(c);
@@ -1082,8 +1282,26 @@
     else if (plan[id] === 'X') selection = id;                                  // on choisit un autre colis de côté
     else if (plan[selection] === 'X') placer(c, selection, plan[id], id);      // on pose devant ce colis
     else echanger(c, selection, id);
+    if (dbl && selection && selection !== selAvant) selRem = dbl.actif || 0;
     rendrePlanVue();
   });
+  // Double : glisser à gauche / à droite pour changer de remorque
+  (function () {
+    var t0 = null;
+    $('#planZone').addEventListener('touchstart', function (e) {
+      var b = courantBase(); t0 = null;
+      if (!b.double || e.touches.length !== 1 || e.target.closest('.chip.gl')) return;
+      var t = e.touches[0]; if (t.clientX < 30) return;
+      t0 = { x: t.clientX, y: t.clientY };
+    }, { passive: true });
+    $('#planZone').addEventListener('touchend', function (e) {
+      if (!t0 || gl) { t0 = null; return; }
+      var t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y; t0 = null;
+      if (Math.abs(dx) < 70 || Math.abs(dy) > 50) return;
+      var b = courantBase(), a = b.double.actif || 0;
+      if (dx < 0 && a === 0) changerRem(1); else if (dx > 0 && a === 1) changerRem(0);
+    }, { passive: true });
+  })();
   // ---------- Dernier étage : glisser un colis vers la cabine ou l'arrière (pas de 50 cm) ----------
   var gl = null, glisseFini = false;
   $('#planZone').addEventListener('pointerdown', function (e) {
@@ -1103,6 +1321,11 @@
       if (Math.abs(dx) < 8) return;
       if (Math.abs(e.clientY - gl.y0) > Math.abs(dx)) { gl = null; return; }
       gl.actif = true; gl.ch.classList.add('glisse'); try { gl.ch.setPointerCapture(gl.pid); } catch (er) {}
+      if (!$('[data-gap]', gl.trk)) { // 1er glissement sur cet étage : on fait apparaître les vides
+        var der = null;
+        gl.cs.forEach(function (x, j) { var el = $('.chip.gl[data-c="' + cssEsc(x.id) + '"]', gl.trk); if (!el) return; var iv = document.createElement('i'); iv.className = 'vide'; iv.setAttribute('data-gap', x.id); iv.setAttribute('style', styleVide(gl.g0[j])); el.parentNode.insertBefore(iv, el); der = el; });
+        if (der) { var fv = document.createElement('i'); fv.className = 'vide'; fv.setAttribute('data-fin', gl.k); var rs = Math.max(0, gl.finSup - gl.fin0); fv.setAttribute('style', styleVide(rs)); fv.textContent = txtVide(rs); der.parentNode.insertBefore(fv, der.nextSibling); }
+      }
     }
     e.preventDefault();
     var d = Math.round(dx / gl.lu / 50) * 50;
@@ -1184,7 +1407,17 @@
       if (sc && !$('#aPi').dataset.main) $('#aPi').value = sc.pi;
       lgsSection(); apercuAj();
     }
-    ['#aEp', '#aLa'].forEach(function (s) { $(s).addEventListener('input', function () { $('#aPi').dataset.main = ''; majSecAj(); }); });
+    ['#aEp', '#aLa'].forEach(function (s, i) { $(s).addEventListener('input', function () {
+      $('#aPi').dataset.main = ''; majSecAj();
+      // comme au début d'un chargement : on passe tout seul au champ suivant
+      if (i === 0 && epComplete($(s).value)) $('#aLa').focus();
+      if (i === 1 && laComplete($('#aEp').value, $(s).value)) $($('#aPi').value ? '#aLo' : '#aPi').focus();
+    }); });
+    ['#aEp', '#aLa', '#aPi', '#aLo'].forEach(function (s, i, t) { $(s).addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return; e.preventDefault();
+      if (i === 1 && $('#aPi').value && !$('#aPi').dataset.main) $('#aLo').focus();
+      else if (i < 3) $(t[i + 1]).focus(); else $('#ajOk').click();
+    }); });
     $('#aPi').addEventListener('input', function () { this.dataset.main = '1'; apercuAj(); });
     $('#aLo').addEventListener('input', function () { lgsSection(); apercuAj(); });
     if ($('#ajSecs')) $('#ajSecs').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; $('#aEp').value = fm(+b.dataset.ep); $('#aLa').value = fm(+b.dataset.la); $('#aPi').value = b.dataset.pi; $('#aPi').dataset.main = ''; $$('#ajSecs button').forEach(function (x) { x.classList.toggle('actif', x === b); }); lgsSection(); apercuAj(); if (!$('#aLo').value) $('#aLo').focus(); };
@@ -1208,7 +1441,7 @@
     lgsSection();
   }
 
-  $('#btnPartager').addEventListener('click', function () { var c = courant(); if (!c.lignes.length) { toast('Aucun colis.'); return; } assurerPlan(c); choixPartage(c); });
+  $('#btnPartager').addEventListener('click', function () { var c = courantBase(); if (!c.lignes.length) { toast('Aucun colis.'); return; } assurerPlan(c); choixPartage(c); });
   // ---------- Partager : fiche chauffeur (texte + image), image seule, texte copié ----------
   function texteChauffeur(c) {
     var v = vplan(c), d = new Date(c.termine_le || c.maj_le || Date.now());
@@ -1223,7 +1456,7 @@
   }
   // Fiche de chargement : en-tête, chiffres clés, tableau par section, puis le plan
   function ficheCanvas(c) {
-    if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) c.plan = P.meilleur(c.lignes, cfgC(c)).plan;
+    if (c.lignes.length && !c.double && (!c.plan || !Object.keys(c.plan).length)) c.plan = P.meilleur(c.lignes, cfgC(c)).plan;
     var v = vplan(c), W = 1080, pad = 56, larg = W - 2 * pad;
     var INK = '#13221A', MU = '#5E6E64', VERT = '#3B5A34';
     var F = function (w, px) { return w + ' ' + px + 'px "Inter Tight", Inter, system-ui, sans-serif'; };
@@ -1366,7 +1599,30 @@
 
   // ---------- Image du plan (partage) ----------
   var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=26';
+  // Double remorque : les 2 plans l'un sous l'autre, avec le total du camion en haut
   function imagePlan(c) {
+    if (!c.double) return imagePlan1(c);
+    assurerPlan(c);
+    var A = imagePlan1(remDeN(c, 0)), B = imagePlan1(remDeN(c, 1)), W = A.width, top = 230, tH = 70;
+    var fa = A.finPlan || A.height, fb = B.finPlan || B.height;
+    var cv = document.createElement('canvas'), x = cv.getContext('2d');
+    cv.width = W; cv.height = top + 2 * tH + (fa - top) + (fb - top) + 30;
+    x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, W, cv.height);
+    x.drawImage(A, 0, 0, W, top, 0, 0, W, top);
+    x.fillStyle = '#FFFFFF'; x.fillRect(W / 2, 40, W / 2, 120); // total : celui des 2 remorques
+    var F = function (w, px) { return w + ' ' + px + 'px "Inter Tight", Inter, system-ui, sans-serif'; };
+    x.textAlign = 'right'; x.fillStyle = '#141A17'; x.font = F(600, 64); x.fillText(f2(c.total_m3) + ' m³', W - 56, 132); x.textAlign = 'left';
+    x.fillStyle = '#FFFFFF'; x.fillRect(0, 180, W, 48);
+    x.font = F(600, 28); x.fillStyle = '#141A17'; x.fillText('Double remorque · ' + fm(c.double.lg[0]) + ' m + ' + fm(c.double.lg[1]) + ' m', 56, 216);
+    var y = top;
+    [[A, fa, 0], [B, fb, 1]].forEach(function (z) {
+      x.fillStyle = '#3B5A34'; x.font = F(800, 34); x.fillText('Remorque ' + (z[2] + 1) + ' · ' + fm(c.double.lg[z[2]]) + ' m · ' + f2(c.double.r[z[2]].total_m3) + ' m³', 56, y + 48);
+      y += tH; x.drawImage(z[0], 0, top, W, z[1] - top, 0, y, W, z[1] - top); y += z[1] - top;
+    });
+    cv.finPlan = y; return cv;
+  }
+  function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
+  function imagePlan1(c) {
     var r = cfgC(c), v = vplan(c);
     var W = 1080, pad = 56, larg = W - 2 * pad, rowH = 92, tagW = 120;
     var INK = '#141A17', MU = '#6E7570', LINE = '#E3E6E1', ROUGE = '#C23A2B';
@@ -1403,11 +1659,11 @@
     var trkX = pad + tagW, trkW = larg - tagW;
     function rond(a, b, w, h, rr) { x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
     function colis(k, xx, yy, w, centre) {
-      x.fillStyle = centre ? '#F3D488' : '#E7D6B8'; rond(xx, yy, w, rowH - 20, 8); x.fill();
-      if (centre) { x.save(); rond(xx, yy, w, rowH - 20, 8); x.clip(); x.strokeStyle = 'rgba(190,130,20,.30)'; x.lineWidth = 6; for (var t = -rowH; t < w; t += 18) { x.beginPath(); x.moveTo(xx + t, yy + rowH); x.lineTo(xx + t + rowH, yy - 20); x.stroke(); } x.restore(); }
-      x.fillStyle = '#C9AC7E'; x.fillRect(xx + w - 7, yy + 4, 5, rowH - 28);
-      x.strokeStyle = centre ? '#D18A0E' : 'rgba(0,0,0,.10)'; x.lineWidth = centre ? 4 : 2; rond(xx, yy, w, rowH - 20, 8); x.stroke();
-      if (centre) { x.font = F(800, 17); var bw = x.measureText('MILIEU').width + 14; x.fillStyle = '#D18A0E'; rond(xx + w - bw - 10, yy - 12, bw, 24, 6); x.fill(); x.fillStyle = '#fff'; x.fillText('MILIEU', xx + w - bw - 3, yy + 6); }
+      x.fillStyle = '#EBCF9C'; rond(xx, yy, w, rowH - 20, 8); x.fill();
+      if (centre) { x.save(); rond(xx, yy, w, rowH - 20, 8); x.clip(); x.strokeStyle = 'rgba(59,90,52,.28)'; x.lineWidth = 6; for (var t = -rowH; t < w; t += 18) { x.beginPath(); x.moveTo(xx + t, yy + rowH); x.lineTo(xx + t + rowH, yy - 20); x.stroke(); } x.restore(); }
+      x.fillStyle = 'rgba(160,110,50,.25)'; x.fillRect(xx + w - 7, yy + 4, 5, rowH - 28);
+      x.strokeStyle = centre ? '#3B5A34' : 'rgba(120,80,30,.14)'; x.lineWidth = centre ? 4 : 2; rond(xx, yy, w, rowH - 20, 8); x.stroke();
+      if (centre) { x.font = F(800, 17); var bw = x.measureText('MILIEU').width + 14; x.fillStyle = '#3B5A34'; rond(xx + w - bw - 10, yy - 12, bw, 24, 6); x.fill(); x.fillStyle = '#fff'; x.fillText('MILIEU', xx + w - bw - 3, yy + 6); }
       x.save(); x.beginPath(); x.rect(xx, yy, w - 8, rowH - 20); x.clip();
       x.fillStyle = '#2B2216'; x.font = F(700, 28); x.fillText(fm(k.lo) + ' m', xx + 14, yy + 34);
       x.fillStyle = '#6A5536'; x.font = F(500, 21); x.fillText(fm(k.ep) + '×' + fm(k.la), xx + 14, yy + 62);
@@ -1430,7 +1686,7 @@
       x.fillStyle = INK; x.fillText(txt, pad, yy);
     }
     ['G', 'D'].forEach(function (s) {
-      surligne(NOMS[s], s === 'G' ? 'rgba(255,92,170,.45)' : 'rgba(64,150,255,.38)', y + 40);
+      surligne(NOMS[s], s === 'G' ? 'rgba(56,170,255,.55)' : 'rgba(255,92,170,.50)', y + 40);
       x.textAlign = 'right'; x.font = F(500, 26); x.fillStyle = MU; x.fillText(f2(s === 'G' ? v.volG : v.volD) + ' m³', W - pad, y + 40); x.textAlign = 'left';
       x.fillStyle = '#F5F6F3'; rond(pad - 14, y + 62, larg + 28, N * (rowH + 14) + 60, 22); x.fill();
       var yy = y + 80;
@@ -1453,7 +1709,7 @@
       y += hCote + 30;
     });
     if (v.rows['C' + N].colis.length) {
-      x.font = F(800, 22); var mw = x.measureText('MILIEU').width + 16; x.fillStyle = '#D18A0E'; rond(pad, y - 8, mw, 32, 7); x.fill();
+      x.font = F(800, 22); var mw = x.measureText('MILIEU').width + 16; x.fillStyle = '#3B5A34'; rond(pad, y - 8, mw, 32, 7); x.fill();
       x.fillStyle = '#fff'; x.fillText('MILIEU', pad + 8, y + 16);
       x.font = F(500, 24); x.fillStyle = INK; x.fillText('= colis à cheval sur les 2 côtés, posé tout devant contre la cabine', pad + mw + 10, y + 16); y += 50;
     }
@@ -1508,7 +1764,7 @@
   function ligneCam(c, enCours) {
     var qui = c.client || 'Sans client';
     return glisse(c.id, '<button class="cam" type="button" data-id="' + esc(c.id) + '"><span class="h">' + heure(enCours ? c.maj_le : c.termine_le) + '</span>' +
-      '<span class="qui"><b>' + esc(qui) + '</b><small>' + (enEquipe() ? '<i class="qui-p' + (estAMoi(c) ? ' moi' : '') + '">' + esc(prenomDe(c)) + '</i>' : '') + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small></span>' +
+      '<span class="qui"><b>' + esc(qui) + (c.double ? ' <i class="tag-dbl">Double</i>' : '') + '</b><small>' + (enEquipe() ? '<i class="qui-p' + (estAMoi(c) ? ' moi' : '') + '">' + esc(prenomDe(c)) + '</i>' : '') + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small></span>' +
       '<span class="m3 ' + (enCours ? 'cours' : c.etat) + '" title="' + (enCours ? 'En cours' : LIB[c.etat]) + '">' + f2(c.total_m3) + '</span></button>');
   }
   // ---------- Glisser une ligne : à gauche supprimer, à droite ouvrir ----------
@@ -1696,7 +1952,7 @@
 
   // Copie à mon nom (Dupliquer un de mes camions, ou Récupérer celui d'un collègue)
   function copierCamion(c, recup) {
-    var copie = JSON.parse(JSON.stringify({ client: c.client, reference: c.reference, lignes: c.lignes, plan: c.plan, ordre: c.ordre || null, planManuel: !!c.planManuel, lgMax: c.lgMax || null, volMode: c.volMode || 'plage', volExact: c.volExact || null }));
+    var copie = JSON.parse(JSON.stringify({ client: c.client, reference: c.reference, lignes: c.lignes, plan: c.plan, ordre: c.ordre || null, planManuel: !!c.planManuel, lgMax: c.lgMax || null, volMode: c.volMode || 'plage', volExact: c.volExact || null, double: c.double ? { lg: c.double.lg.slice(), r: null, actif: 0 } : null }));
     var n = nouveauCamion(copie); toucher(n); edition = null;
     viderForm(); setTimeout(function () { aller('camion'); }, 60);
     toast(recup ? 'Copie à ton nom : elle est ouverte.' : 'Camion dupliqué : il est ouvert.');
@@ -1728,7 +1984,7 @@
         : (enCours ? '<button class="btn" data-a="reprendre" type="button">Reprendre</button>' : '<button class="btn" data-a="dupliquer" type="button">Dupliquer</button>') +
           '<button class="btn sec" data-a="image" type="button">Partager</button>') + '</div>' +
       (!aMoi ? '<p class="verrou">🔒 Camion de ' + esc(prenomDe(c)) + ' : tu peux le voir et le partager, pas le modifier. « Récupérer » en fait une copie à ton nom.</p>' : '') +
-      (c.lignes.length ? '<div class="plan-histo">' + htmlPlan(c, { lecture: true }) + '<button class="btn-lien plan-grand" data-a="plan" type="button">Ouvrir le plan en grand ›</button></div>' : '') +
+      (c.lignes.length ? '<div class="plan-histo">' + (c.double && c.double.r ? [0, 1].map(function (i) { return '<h3 class="rem-h">Remorque ' + (i + 1) + ' · ' + fm(c.double.lg[i]) + ' m</h3>' + htmlPlan(remDeN(c, i), { lecture: true }); }).join('') : htmlPlan(c, { lecture: true })) + '<button class="btn-lien plan-grand" data-a="plan" type="button">Ouvrir le plan en grand ›</button></div>' : '') +
       (c.lignes.length ? '<details class="pli carte"><summary><span>Colis</span><small>' + nbColis + ' colis · ' + gl.length + ' section' + (gl.length > 1 ? 's' : '') + '</small></summary>' + lignes + '</details>' : '<div class="carte"><div class="vide">Aucun colis</div></div>') +
       '<div class="grille-btns' + (peutSupprimer(c) ? '' : ' un') + '">' + (peutSupprimer(c) ? '<button class="btn danger" data-a="suppr" type="button">Supprimer</button>' : '') + '<button class="btn sec" data-a="fermer" type="button">Fermer</button></div>');
     selection = sel;
@@ -1784,7 +2040,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=46" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=46" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=47" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=47" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
