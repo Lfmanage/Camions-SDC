@@ -10,13 +10,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=45">
-<link rel="icon" href="favicon-32.png?v=45" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=45">
+<link rel="manifest" href="manifest.webmanifest?v=46">
+<link rel="icon" href="favicon-32.png?v=46" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=46">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=45">
+<link rel="stylesheet" href="style.css?v=46">
 </head>
 <body>
 <div id="fondForet" aria-hidden="true"><i class="ff-img"></i><i class="ff-voile"></i></div>
@@ -25,7 +25,7 @@
 
   <!-- ============ ACCUEIL ============ -->
   <section class="vue active" id="v-accueil">
-    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=45" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=45" alt=""></span></header>
+    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=46" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=46" alt=""></span></header>
     <button class="hero-go" id="btnCommencer" type="button">
       <span class="hg-txt"><small>Nouveau camion</small><b>Charger un camion</b></span>
       <span class="hg-fl" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -123,7 +123,13 @@
     <div class="etapes"><span class="on"><i></i>Client</span><span class="on"><i></i>Colis</span><span class="on"><i></i>Plan</span></div>
     <div id="planZone"></div>
     <div class="pied pied-ro" id="piedRo" hidden><button class="btn gros" id="btnRecupPlan" type="button">Récupérer (copie à mon nom)</button></div>
-    <div class="pied trois" id="piedPlan"><button class="btn gros sec vider" id="btnVider" type="button">Tout<br>enlever</button><button class="btn gros sec" id="btnAutre" type="button">Autre plan</button><button class="btn gros noir" id="btnTerminer" type="button">Terminer</button></div>
+    <div class="pied trois quatre" id="piedPlan"><button class="btn gros sec plus-colis" id="btnAjoutColis" type="button" aria-label="Ajouter un colis" title="Ajouter un colis">+</button><button class="btn gros sec vider" id="btnVider" type="button">Tout<br>enlever</button><button class="btn gros sec" id="btnAutre" type="button">Autre plan</button><button class="btn gros noir" id="btnTerminer" type="button">Terminer</button></div>
+  </section>
+
+  <!-- ============ AJOUTER UN COLIS (depuis le plan) ============ -->
+  <section class="vue" id="v-ajout">
+    <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Ajouter un colis</h1><button class="lien fermer-x" data-retour type="button" aria-label="Fermer">✕</button></header>
+    <div id="ajoutZone"></div>
   </section>
 
   <!-- ============ HISTORIQUE ============ -->
@@ -165,8 +171,8 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=45"></script>
-<script src="sync.js?v=45"></script>
-<script src="app.js?v=45"></script>
+<script src="plan.js?v=46"></script>
+<script src="sync.js?v=46"></script>
+<script src="app.js?v=46"></script>
 </body>
 </html>

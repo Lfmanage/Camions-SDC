@@ -417,7 +417,7 @@
   // Vérifie un plan (calculé ou modifié à la main). Messages en français.
   // ordre (facultatif) : liste d'ids qui fixe l'ordre des colis dans chaque rangée (cabine → arrière)
   // plan[id] === 'X' : colis mis de côté par l'utilisateur
-  function verifier(lignes, plan, cfg, ordre) {
+  function verifier(lignes, plan, cfg, ordre, decal) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var L = dispoDe(lignes, cfg), N = L.N, RW = L.ROWS, CK = 'C' + N, TOP = 'G' + N, TOPD = 'D' + N;
     var colis = colisDe(lignes);
@@ -439,7 +439,9 @@
       });
       cote = cote.map(function (c, i) { return [rang(c, i), c]; }).sort(function (a, b) { return a[0] - b[0]; }).map(function (x) { return x[1]; });
     }
-    RW.forEach(function (k) { rows[k].m = rows[k].len / 100; rows[k].alerte = false; });
+    RW.forEach(function (k) { rows[k].m = rows[k].len / 100; rows[k].alerte = false; rows[k].ext = rows[k].len; });
+    // dernier étage : espaces laissés à la main entre les colis (decal[id] = vide devant ce colis, en cm)
+    if (decal) [TOP, TOPD].forEach(function (k) { rows[k].colis.forEach(function (c) { rows[k].ext += Math.max(0, +decal[c.id] || 0); }); });
     var erreurs = [], avis = [];
     var mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     if (nonPlaces.length) erreurs.push(nonPlaces.length + (nonPlaces.length > 1 ? ' colis non placés.' : ' colis non placé.'));
@@ -455,11 +457,12 @@
       else if (r2.len > mx) { r2.alerte = true; erreurs.push('Étage 2 ' + COTE[s] + ' : ' + f2(r2.m) + ' m, plus de ' + f2(cfg.e1Max) + ' m.'); }
       for (var f = 3; f <= N; f++) {
         var ra = rows[p + f], rb = rows[p + (f - 1)];
-        if (ra.len > rb.len) { ra.alerte = true; erreurs.push('Étage ' + f + ' ' + COTE[s] + ' : ' + f2(ra.m) + ' m, plus long que l\'étage ' + (f - 1) + ' (' + f2(rb.m) + ' m).'); }
+        if (ra.ext > rb.ext) { ra.alerte = true; erreurs.push('Étage ' + f + ' ' + COTE[s] + ' : ' + f2(ra.ext / 100) + ' m, plus long que l\'étage ' + (f - 1) + ' (' + f2(rb.ext / 100) + ' m).'); }
+        else if (ra.ext > mx) { ra.alerte = true; erreurs.push('Étage ' + f + ' ' + COTE[s] + ' : ' + f2(ra.ext / 100) + ' m, plus de ' + f2(cfg.e1Max) + ' m.'); }
       }
     });
     // dernier étage avec le centre : doit tenir sur les deux piles de l'étage du dessous
-    var E3 = Math.max(rows[TOP].len, rows[TOPD].len) + rows[CK].len, sup3 = Math.min(rows['G' + (N - 1)].len, rows['D' + (N - 1)].len);
+    var E3 = Math.max(rows[TOP].ext, rows[TOPD].ext) + rows[CK].len, sup3 = Math.min(rows['G' + (N - 1)].len, rows['D' + (N - 1)].len);
     if (rows[CK].colis.length && E3 > sup3) { rows[CK].alerte = rows[TOP].alerte = rows[TOPD].alerte = true; erreurs.push('Étage ' + N + ' : ' + f2(E3 / 100) + ' m avec le colis du centre, plus long que l\'étage ' + (N - 1) + ' (' + f2(sup3 / 100) + ' m).'); }
     if (N === 4) {
       var gros = [TOP, TOPD, CK].reduce(function (a, k) { return a + rows[k].colis.filter(function (c) { return !estPetit(c); }).length; }, 0);

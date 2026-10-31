@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '45';
+  var VERSION_APP = '46';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -74,14 +74,14 @@
   }
   // Les colis ont changé : le plan sera recalculé (le meilleur possible) à l'ouverture du plan
   function majPlan(c) {
-    c.plan = null; c.planDepart = null; c.planCalcule = false; c.ordre = null;
+    c.plan = null; c.planDepart = null; c.planCalcule = false; c.ordre = null; c.decal = null;
     c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
   }
   // Cherche le meilleur plan (jusqu'à ~2 s) ; il devient le « plan de départ »
   function calculerPlan(c) {
     if (!c.lignes.length) { majPlan(c); return; }
     var res = P.meilleur(c.lignes, cfgC(c));
-    c.plan = res.plan; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
+    c.plan = res.plan; c.decal = null; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
     c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
   }
   function assurerPlan(c) { if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); if (estAMoi(c)) toucher(c); } }
@@ -146,6 +146,35 @@
   });
   var apresRetour = null; // action à faire une fois la feuille fermée (retour arrière fini)
   document.addEventListener('click', function (e) { if (e.target.closest('[data-retour]')) retour(); });
+  // Glisser depuis le bord gauche vers la droite = retour (comme sur iPhone), dans toutes les rubriques
+  (function () {
+    var g = null, BORD = 26;
+    function vueEl() { return $('.vue.active'); }
+    document.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      var t = e.touches[0];
+      if (t.clientX > BORD || verrouEquipe) return;
+      if ($('#feuille').hidden ? profondeur() <= 0 : false) return;
+      if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !estInstalle()) return; // Safari a déjà son geste
+      g = { x: t.clientX, y: t.clientY, dx: 0, ok: false };
+    }, { passive: true });
+    document.addEventListener('touchmove', function (e) {
+      if (!g) return;
+      var t = e.touches[0]; g.dx = t.clientX - g.x;
+      var dy = Math.abs(t.clientY - g.y);
+      if (!g.ok) { if (dy > 24 && dy > g.dx) { g = null; return; } if (g.dx > 12) g.ok = true; else return; }
+      var el = $('#feuille').hidden ? vueEl() : $('#feuille');
+      if (el) { el.style.transition = 'none'; el.style.transform = 'translateX(' + Math.max(0, g.dx * 0.5) + 'px)'; el.style.opacity = String(Math.max(0.55, 1 - g.dx / 700)); }
+    }, { passive: true });
+    function fin(annule) {
+      if (!g) return;
+      var go = g.ok && !annule && g.dx > 80; g = null;
+      [vueEl(), $('#feuille')].forEach(function (el) { if (el) { el.style.transition = 'transform .18s, opacity .18s'; el.style.transform = ''; el.style.opacity = ''; } });
+      if (go) { if (!$('#feuille').hidden) fermerFeuille(); else retour(); }
+    }
+    document.addEventListener('touchend', function () { fin(false); });
+    document.addEventListener('touchcancel', function () { fin(true); });
+  })();
   function majRetour() { var ok = profondeur() > 0; $$('[data-retour]').forEach(function (b) { b.style.visibility = ok ? 'visible' : 'hidden'; }); }
   $('#feuilleFond').addEventListener('click', function () { if (!$('#feuilleFond').onclick) fermerFeuille(); });
   function demander(o) {
@@ -170,13 +199,13 @@
   }
   // ---------- Navigation ----------
   var vueActive = 'accueil';
-  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', equipe: 'equipe', profil: 'equipe' };
+  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', ajout: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', equipe: 'equipe', profil: 'equipe' };
   function montrer(v) {
     vueActive = v; document.body.dataset.vue = v;
-    if (v !== 'plan') edition = null;
+    if (v !== 'plan' && v !== 'ajout') edition = null;
     if (apercu && v !== 'plan') { finApercu(courant(), false); }
     $$('.vue').forEach(function (s) { s.classList.toggle('active', s.id === 'v-' + v); });
-    $$('.onglet').forEach(function (b) { b.classList.toggle('actif', b.dataset.vue === (v === 'plan' && edition ? 'historique' : ONGLET[v])); });
+    $$('.onglet').forEach(function (b) { b.classList.toggle('actif', b.dataset.vue === ((v === 'plan' || v === 'ajout') && edition ? 'historique' : ONGLET[v])); });
     window.scrollTo(0, 0);
     if (v === 'accueil') rendreAccueil();
     if (v === 'calcul') { prepCalc(); rendreCalc(); }
@@ -185,6 +214,7 @@
     if (v === 'plan') { rendrePlanVue(); requestAnimationFrame(ajusterPlan); }
     if (v === 'historique') { if (ongletHisto === 'stats') rendreStats(); else rendreHisto(); }
     if (v === 'reglages') rendreReglages();
+    if (v === 'ajout') rendreAjout();
     if (v === 'equipe') rendreEquipe();
     if (v === 'profil') rendreProfil();
     majRetour();
@@ -632,7 +662,7 @@
       }
       b.disabled = false; b.classList.remove('calcul'); b.innerHTML = 'Autre plan';
       if (!res) { toast('C\'est le seul bon plan avec ces colis.'); return; }
-      c.plan = res.plan; c.ordre = null; c.planManuel = false; c.planVariante = true; c.graineAutre = res.graine;
+      c.plan = res.plan; c.ordre = null; c.decal = null; c.planManuel = false; c.planVariante = true; c.graineAutre = res.graine;
       var mieux = c.planDepart && res.note < c.planDepart.note - 0.01;
       if (mieux) c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
       c.plansVus.push(res.signature); selection = null; toucher(c);
@@ -641,22 +671,25 @@
     }, 30);
   });
 
-  // Enlève du camion les colis mis de côté, sans toucher au reste du plan
-  function supprimerCote(c) {
-    var plan = c.plan || {}, nouveauPlan = {}, nouvelOrdre = [], ren = {};
+  // Enlève des colis du camion (ceux de côté, ou un colis choisi), sans toucher au reste du plan
+  function supprimerColis(c, enlever) {
+    var plan = c.plan || {}, nouveauPlan = {}, nouvelOrdre = [], ren = {}, dec = c.decal || {}, nouveauDec = {};
     c.lignes = c.lignes.filter(function (l) {
       var n = l.nb || 1, k2 = 0;
       for (var k = 0; k < n; k++) {
         var id = l.id + '#' + k;
-        if (plan[id] === 'X') continue;
-        ren[id] = l.id + '#' + k2; if (plan[id]) nouveauPlan[ren[id]] = plan[id]; k2++;
+        if (enlever(id, plan[id])) continue;
+        ren[id] = l.id + '#' + k2; if (plan[id]) nouveauPlan[ren[id]] = plan[id]; if (dec[id] != null) nouveauDec[ren[id]] = dec[id]; k2++;
       }
       l.nb = k2; return k2 > 0;
     });
     (c.ordre || []).forEach(function (id) { if (ren[id]) nouvelOrdre.push(ren[id]); });
-    c.plan = nouveauPlan; c.ordre = nouvelOrdre; c.planManuel = true; selection = null;
+    c.plan = nouveauPlan; c.ordre = nouvelOrdre; c.decal = c.decal ? nouveauDec : null; c.planManuel = true; selection = null;
     toucher(c);
   }
+  function supprimerCote(c) { supprimerColis(c, function (id, k) { return k === 'X'; }); }
+  function photoCamion(c) { return JSON.stringify({ l: c.lignes, p: c.plan, o: c.ordre, d: c.decal || null, m: c.planManuel }); }
+  function remettrePhoto(c, ph) { var o = JSON.parse(ph); c.lignes = o.l; c.plan = o.p; c.ordre = o.o; c.decal = o.d; c.planManuel = o.m; selection = null; toucher(c); }
 
   $('#btnVider').addEventListener('click', function () {
     if (!estAMoi(courant())) return;
@@ -670,46 +703,47 @@
     toast('Tous les colis sont de côté', function () { c.plan = avant.plan; c.ordre = avant.ordre; c.planManuel = avant.man; toucher(c); rendrePlanVue(); }, 'Annuler');
   });
 
+  // Avant de valider : on liste ce qui ne va pas ; l'utilisateur corrige ou valide quand même
+  function problemesCamion(c) {
+    var r = cfgC(c), v = vplan(c), out = [];
+    if (v.cote.length) out.push(['⚠', v.cote.length + ' colis oublié' + (v.cote.length > 1 ? 's' : '') + ' de côté', v.cote.map(libColis).join(', ') + ' · ' + (v.cote.length > 1 ? 'ils seront retirés' : 'il sera retiré') + ' du camion']);
+    var e1 = ['G', 'D'].filter(function (s) { var l = v.rows[s + '1'].len; return l < Math.round(r.e1Min * 100) && l > 0; });
+    if (e1.length) out.push(['⚠', 'É1 trop court', e1.map(function (s) { return (s === 'G' ? 'conducteur ' : 'passager ') + fm(v.rows[s + '1'].m) + ' m'; }).join(' · ') + ' (mini ' + fm(r.e1Min) + ' m)']);
+    alertesCourtes(c, v).forEach(function (t) {
+      if (t === 'Pas équilibré') out.push(['⚠', 'Pas équilibré', 'conducteur ' + f2(v.volG) + ' m³ / passager ' + f2(v.volD) + ' m³' + (v.ecart < -0.005 ? ' (le passager est plus lourd)' : ' (écart ' + f2(Math.abs(v.ecart)) + ')')]);
+      else out.push(['⚠', t, '']);
+    });
+    var e = P.etat(c.total_m3, r);
+    if (e.code !== 'ok') out.push(['⚠', 'Volume ' + f2(c.total_m3) + ' m³', 'hors limites ' + fm(r.m3Min) + '–' + fm(r.m3Max) + ' m³']);
+    return out;
+  }
+  function enregistrerCamion(c) {
+    if (vplan(c).cote.length) supprimerCote(c);
+    if (edition) { // camion de l'historique : on enregistre et on revient
+      toucher(c); sauver(true); selection = null; edition = null;
+      retour(); toast('Plan enregistré ✔'); return;
+    }
+    c.statut = 'termine'; c.termine_le = maintenant();
+    if (c.client && db.clients.indexOf(c.client) < 0) db.clients.push(c.client);
+    toucher(c);
+    viderForm(); nouveauCamion(); sauver(true);
+    selection = null;
+    setTimeout(function () { revenirAuDebut('accueil'); }, 150);
+    toast('Camion enregistré ✔');
+  }
   $('#btnTerminer').addEventListener('click', function () {
     if (!estAMoi(courant())) return;
     if (apercu) { finApercu(courant(), false); rendrePlanVue(); }
     var c = courant();
     if (!c.lignes.length) { toast('Aucun colis à enregistrer.'); return; }
     assurerPlan(c);
-    var nCote = vplan(c).cote.length;
-    if (nCote) {
-      demander({
-        titre: nCote + ' colis de côté',
-        texte: 'Remets-' + (nCote > 1 ? 'les' : 'le') + ' dans le camion avant de terminer, ou supprime-' + (nCote > 1 ? 'les' : 'le') + ' du camion.',
-        oui: 'Supprimer du camion', non: 'Les remettre', danger: true
-      }).then(function (ok) {
-        if (!ok) return;
-        supprimerCote(c); rendrePlanVue();
-        toast(nCote + ' colis supprimé' + (nCote > 1 ? 's' : '') + ' du camion');
-        if (c.lignes.length) setTimeout(function () { $('#btnTerminer').click(); }, 350);
-      });
-      return;
-    }
-    if (edition) { // camion de l'historique : on enregistre et on revient
-      toucher(c); sauver(true); selection = null; edition = null;
-      retour(); toast('Plan enregistré ✔'); return;
-    }
-    var e = P.etat(c.total_m3, cfgC(c));
-    var go = e.code === 'ok' ? Promise.resolve(true) : demander({
-      titre: 'Camion hors limites',
-      html: '<p class="alerte-txt">' + esc(messageEtat(c.total_m3)) + '</p><p>Total : ' + f2(c.total_m3) + ' m³. Enregistrer quand même ?</p>',
-      oui: 'Enregistrer quand même', non: 'Revenir'
-    });
-    go.then(function (ok) {
-      if (!ok) return;
-      c.statut = 'termine'; c.termine_le = maintenant();
-      if (c.client && db.clients.indexOf(c.client) < 0) db.clients.push(c.client);
-      toucher(c);
-      viderForm(); nouveauCamion(); sauver(true);
-      selection = null;
-      setTimeout(function () { revenirAuDebut('accueil'); }, 150);
-      toast('Camion enregistré ✔');
-    });
+    var pb = problemesCamion(c);
+    if (!pb.length) { enregistrerCamion(c); return; }
+    var f = ouvrirFeuille('<div class="dialogue verif-fin"><h2>Vérifie avant de valider</h2>' +
+      pb.map(function (p) { return '<div class="avert"><span>' + p[0] + '</span><span><b>' + esc(p[1]) + '</b>' + (p[2] ? ' · ' + esc(p[2]) : '') + '</span></div>'; }).join('') +
+      '<div class="grille-btns"><button class="btn sec" data-r="0" type="button">Corriger</button><button class="btn" data-r="1" type="button">Valider quand même</button></div></div>');
+    $$('[data-r]', f).forEach(function (b) { b.onclick = function () { var ok = b.dataset.r === '1'; $('#feuilleFond').onclick = null; if (ok) { if (history.state && history.state.f) apresRetour = function () { enregistrerCamion(c); }; else setTimeout(function () { enregistrerCamion(c); }, 60); } fermerFeuille(); }; });
+    $('#feuilleFond').onclick = function () { $('#feuilleFond').onclick = null; fermerFeuille(); };
   });
 
   $('#btnPlan').addEventListener('click', function () {
@@ -776,7 +810,41 @@
     return { cls: 'o', etq: '✓ Équilibré' };
   }
 
-  function vplan(c, plan) { return P.verifier(c.lignes, plan || c.plan || {}, cfgC(c), c.ordre); }
+  function vplan(c, plan) { return P.verifier(c.lignes, plan || c.plan || {}, cfgC(c), c.ordre, c.decal); }
+  // Dernier étage : vide (cm) devant chaque colis. Réglé à la main en glissant ; sinon centré comme avant.
+  function gapsRow(c, v, k) {
+    var cs = v.rows[k].colis, d = c.decal || {};
+    if (!cs.length) return [];
+    if (cs.some(function (x) { return d[x.id] != null; })) return cs.map(function (x) { return Math.max(0, +d[x.id] || 0); });
+    var N = v.N, g = cs.map(function () { return 0; });
+    if (!v.rows['C' + N].colis.length) {
+      var E = Math.max(v.rows['G' + N].len, v.rows['D' + N].len), sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
+      if (sup - E > 2) g[0] = Math.round((sup - E) / 2 / 5) * 5;
+    }
+    return g;
+  }
+  // Petits messages rouges (courts) : ce qui ne va pas dans le plan
+  function alertesCourtes(c, v) {
+    var r = cfgC(c), mx = Math.round(r.e1Max * 100), N = v.N, out = [];
+    function aj(t) { if (out.indexOf(t) < 0) out.push(t); }
+    ['G', 'D'].forEach(function (s) {
+      for (var f = 1; f <= N; f++) {
+        var ro = v.rows[s + f], ext = f === N ? ro.ext + v.rows['C' + N].len : ro.ext;
+        if (ext > mx) aj('Dépasse ' + fm(r.e1Max) + ' m');
+        if (f > 1) {
+          var dessous = v.rows[s + (f - 1)].ext;
+          if (ext > dessous && ro.colis.length + (f === N ? v.rows['C' + N].colis.length : 0)) aj('É' + f + ' plus long que É' + (f - 1));
+        }
+      }
+    });
+    if (P.deseq(v) > r.ecartMax + 0.005) aj('Pas équilibré');
+    return out;
+  }
+  function alerterApres(c, avant, okMsg) {
+    var v = vplan(c), apres = alertesCourtes(c, v).filter(function (t) { return avant.indexOf(t) < 0; });
+    if (apres.length) toastRouge('⚠ ' + apres.join(' · '), 2600);
+    else if (okMsg) toast(okMsg);
+  }
   // ordre d'affichage complet (cabine → arrière) tiré du plan actuel
   function fixerOrdre(c) {
     var v = vplan(c), o = [];
@@ -792,11 +860,14 @@
     var N = v.N, ETG = []; for (var e0 = N; e0 >= 1; e0--) ETG.push(e0);
     var edit = !opts.lecture, selCote = edit && selection && v.cote.some(function (k) { return k.id === selection; });
     var place = edit && selection ? 36 : 0; // place gardée pour le bouton « + » en bout d'étage
+    planGeo = { maxLen: maxLen, place: place };
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
-    function chip(k, centre, libre) {
-      return '<button type="button" title="' + esc(libColis(k)) + '" data-bois="' + (Math.abs(hashBois(k.id)) % 6) + '" class="chip' + (centre ? ' centre' : '') + (selection === k.id && edit ? ' sel' : '') + (apercu && apercu.bouges.indexOf(k.id) >= 0 ? ' bouge' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
+    var glisse = edit && !apercu;
+    function chip(k, centre, libre, gl) {
+      return '<button type="button" title="' + esc(libColis(k)) + '" data-bois="' + (Math.abs(hashBois(k.id)) % 6) + '" class="chip' + (centre ? ' centre' : '') + (gl && glisse ? ' gl' : '') + (selection === k.id && edit ? ' sel' : '') + (apercu && apercu.bouges.indexOf(k.id) >= 0 ? ' bouge' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
         '<b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>';
     }
+    function htmlVide(cm, attr) { return '<i class="vide" ' + attr + ' style="' + styleVide(cm) + '">' + txtVide(cm) + '</i>'; }
     var h = '<div class="sum ' + st.cls + '"><span class="sum-g"><span class="tot">' + f2(v.total) + '<small>/ ' + fm(r.cible) + ' m³</small></span><span class="etq">' + esc(st.etq) + '</span></span>' +
       '<span class="gd">Gauche <b>' + f2(v.volG) + '</b><br>Droite <b>' + f2(v.volD) + '</b></span></div>';
     if (st.detail) h += (st.court && !opts.lecture)
@@ -815,8 +886,9 @@
           var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len);
           var E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
           if (c3.colis.length) c3.colis.forEach(function (k) { h += chip(k, true); }); // colis du milieu : tout devant, contre la cabine
-          else if (sup - E > 2) h += '<i class="esp" style="' + w((sup - E) / 2) + '"></i>';
-          ro.colis.forEach(function (k) { h += chip(k, false); });
+          var gg = gapsRow(c, v, s + f), fin = c3.len;
+          ro.colis.forEach(function (k, i) { h += htmlVide(gg[i], 'data-gap="' + esc(k.id) + '"'); fin += gg[i] + k.cm; h += chip(k, false, false, true); });
+          if (ro.colis.length) h += htmlVide(Math.max(0, v.rows[s + (f - 1)].ext - fin), 'data-fin="' + s + f + '"');
           lgAff = E / 100;
         } else ro.colis.forEach(function (k) { h += chip(k, false); });
         if (edit && selection) h += '<button type="button" class="poser" data-poser="' + s + f + '" aria-label="Poser ici">' + (selCote && !ro.colis.length ? 'Poser ici' : '+') + '</button>';
@@ -834,15 +906,19 @@
       else if (sel && !selCote) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b></span>' +
         (auMil ? '<button type="button" class="btn sec petit" data-decote="1">Sortir</button>'
                : '<button type="button" class="btn petit btn-mil" data-milieu="1">' + (dejaMil ? 'Échanger avec le milieu' : 'Milieu') + '</button><button type="button" class="btn sec petit" data-decote="1">De côté</button>') +
+        '<button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button>' +
         '<button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else h += '<div class="aide-l">' + (legMil || '<span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer.</span>') +
+      else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
+      else h += '<div class="aide-l">' + (legMil || '<span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer. Glisse ceux du dernier étage.</span>') +
         ((c.planManuel || c.planVariante) ? '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>' : '') + '</div>';
       if (sel && (c.planManuel || c.planVariante)) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>';
     }
     return h;
   }
 
+  var planGeo = { maxLen: 1300, place: 0 };
+  function styleVide(cm) { return cm > 0 ? 'width:calc((100% - ' + (4 + planGeo.place) + 'px) * ' + (cm / planGeo.maxLen).toFixed(4) + ' - 2px)' : 'width:0;margin-left:-2px'; }
+  function txtVide(cm) { if (cm < 100) return ''; var t = fm(Math.round(cm) / 100) + ' m'; return cm >= 160 ? t + ' libre' : t; }
   function rendrePlanVue() {
     var c = courant(), ro = !estAMoi(c);
     document.body.classList.toggle('plan-ro', ro);
@@ -884,21 +960,19 @@
 
   function echanger(c, a, b) {
     var plan = Object.assign({}, c.plan || {}), ra = plan[a], rb = plan[b];
-    if (!ra || !rb || ra === rb) { selection = null; return toast(ra === rb ? 'Ces deux colis sont sur le même étage : touche + pour le déplacer.' : 'Échange impossible.'); }
+    if (!ra || !rb) { selection = null; return toast('Échange impossible.'); }
+    var avant = alertesCourtes(c, vplan(c));
     plan[a] = rb; plan[b] = ra;
-    var v1 = vplan(c), v2 = vplan(c, plan);
-    var lg = v2.erreurs.filter(function (m) { return /^Étage/.test(m); });
-    if (lg.length && P.noteVerif(v2) > P.noteVerif(v1)) { selection = null; return toast('Échange refusé : ' + lg[0]); }
-    if (P.deseq(v2) > Math.max(reg().ecartMax, P.deseq(v1)) + 0.001) { selection = null; return toast('Échange refusé : le camion serait déséquilibré.'); }
-    if (P.ecartLg(v2) > Math.max(P.ECART_LG, P.ecartLg(v1))) { selection = null; return toast('Échange refusé : trop d\'écart de longueur entre gauche et droite.'); }
     if (!c.ordre) fixerOrdre(c);
     var ia = c.ordre.indexOf(a), ib = c.ordre.indexOf(b); c.ordre[ia] = b; c.ordre[ib] = a; // chacun prend la place de l'autre
+    if (c.decal) { var da = c.decal[a], dbb = c.decal[b]; delete c.decal[a]; delete c.decal[b]; if (dbb != null) c.decal[a] = dbb; if (da != null) c.decal[b] = da; }
     c.plan = plan; c.planManuel = true; selection = null; toucher(c);
-    toast('Colis échangés');
+    alerterApres(c, avant, 'Colis échangés');
   }
   // place le colis id dans la rangée k, juste avant le colis avant (ou au bout de la rangée)
   function placer(c, id, k, avant) {
-    var v = c.ordre ? vplan(c) : fixerOrdre(c);
+    var v = c.ordre ? vplan(c) : fixerOrdre(c), al = alertesCourtes(c, v);
+    if (c.decal) delete c.decal[id];
     c.plan = Object.assign({}, c.plan); c.plan[id] = k;
     var o = c.ordre.filter(function (x) { return x !== id; });
     if (avant) o.splice(o.indexOf(avant), 0, id);
@@ -907,6 +981,7 @@
       if (der) o.splice(o.indexOf(der.id) + 1, 0, id); else o.push(id);
     }
     c.ordre = o; c.planManuel = true; selection = null; toucher(c);
+    alerterApres(c, al);
   }
 
   // Met le colis au milieu (à cheval sur les 2 côtés, au dernier étage, tout devant)
@@ -948,7 +1023,7 @@
     var lg = P.ecartLg(v); if (lg > P.ECART_LG) return f2(lg / 100) + ' m d\'écart de longueur gauche/droite';
     return '';
   }
-  function appliquerMilieu(c, plan, ordre, msg) { c.plan = plan; c.ordre = ordre; c.planManuel = true; toucher(c); toast(msg); }
+  function appliquerMilieu(c, plan, ordre, msg) { c.decal = null; c.plan = plan; c.ordre = ordre; c.planManuel = true; toucher(c); toast(msg); }
   function raisonMilieu(v) {
     var e = v.erreurs[0];
     if (e) return e.replace(/\.$/, '') + '.';
@@ -957,11 +1032,11 @@
     if (P.ecartLg(v) > P.ECART_LG) return 'trop d\'écart de longueur entre gauche et droite.';
     return 'le plan ne serait plus bon.';
   }
-  function toastRouge(msg) { toast(msg); $('#toast').classList.add('rouge'); setTimeout(function () { $('#toast').classList.remove('rouge'); }, 4200); clearTimeout(toastMin); toastMin = setTimeout(function () { $('#toast').hidden = true; }, 4200); }
+  function toastRouge(msg, ms) { ms = ms || 4200; toast(msg); $('#toast').classList.add('rouge'); setTimeout(function () { $('#toast').classList.remove('rouge'); }, ms); clearTimeout(toastMin); toastMin = setTimeout(function () { $('#toast').hidden = true; }, ms); }
   function finApercu(c, garder) {
     if (!apercu) return;
     c = apercu.c;
-    if (garder) { toucher(c); toast('Colis mis au MILIEU ✔'); }
+    if (garder) { c.decal = null; toucher(c); toast('Colis mis au MILIEU ✔'); }
     else { c.plan = apercu.avant.plan; c.ordre = apercu.avant.ordre; c.planManuel = apercu.avant.man; }
     apercu = null;
   }
@@ -969,10 +1044,20 @@
   $('#planZone').addEventListener('click', function (e) {
     var c = courant();
     if (!estAMoi(c)) return; // camion d'un collègue : lecture seule
+    if (glisseFini) { glisseFini = false; return; }
     if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
+    if (e.target.closest('[data-suppr]') && selection && !apercu) {
+      var idS = selection, kS = P.colisDe(c.lignes).filter(function (k) { return k.id === idS; })[0], ph = photoCamion(c);
+      if (!c.ordre) fixerOrdre(c);
+      supprimerColis(c, function (x) { return x === idS; });
+      rendrePlanVue();
+      toast('Colis supprimé' + (kS ? ' : ' + libColis(kS) : ''), function () { remettrePhoto(c, ph); rendrePlanVue(); }, 'Annuler');
+      return;
+    }
     var pq = e.target.closest('[data-pourquoi]');
     if (pq) { var sd = pq.closest('.statut-detail'); sd.classList.toggle('ouvert'); pq.textContent = sd.classList.contains('ouvert') ? 'Masquer' : 'Pourquoi ?'; ajusterPlan(); return; }
     if (e.target.closest('[data-recalc]')) {
+      c.decal = null;
       if (c.planDepart) { c.plan = JSON.parse(JSON.stringify(c.planDepart.plan)); c.ordre = null; c.planManuel = false; c.planVariante = false; c.planCalcule = true; }
       else calculerPlan(c);
       toucher(c); selection = null; rendrePlanVue(); toast('Meilleur plan remis'); return;
@@ -985,7 +1070,7 @@
     if (e.target.closest('[data-milieu]') && selection) { auMilieu(c, selection); rendrePlanVue(); return; }
     if (e.target.closest('[data-decote]') && selection) {
       if (!c.ordre) fixerOrdre(c);
-      c.plan = Object.assign({}, c.plan); c.plan[selection] = 'X'; c.planManuel = true; selection = null; toucher(c);
+      c.plan = Object.assign({}, c.plan); c.plan[selection] = 'X'; if (c.decal) delete c.decal[selection]; c.planManuel = true; selection = null; toucher(c);
       rendrePlanVue(); return;
     }
     var po = e.target.closest('[data-poser]');
@@ -999,6 +1084,130 @@
     else echanger(c, selection, id);
     rendrePlanVue();
   });
+  // ---------- Dernier étage : glisser un colis vers la cabine ou l'arrière (pas de 50 cm) ----------
+  var gl = null, glisseFini = false;
+  $('#planZone').addEventListener('pointerdown', function (e) {
+    var ch = e.target.closest('.chip.gl'); if (!ch || apercu) return;
+    var c = courant(); if (!estAMoi(c)) return;
+    var v = vplan(c), id = ch.dataset.c, k = c.plan && c.plan[id]; if (!k || !v.rows[k]) return;
+    var cs = v.rows[k].colis, i = cs.map(function (x) { return x.id; }).indexOf(id); if (i < 0) return;
+    var trk = ch.parentNode, lu = (trk.clientWidth - 4 - planGeo.place) / planGeo.maxLen; // px par cm
+    var gaps = gapsRow(c, v, k), fin = v.rows['C' + v.N].len + cs.reduce(function (a2, x, j) { return a2 + x.cm + gaps[j]; }, 0);
+    var finSup = v.rows[k.charAt(0) + (v.N - 1)].ext;
+    gl = { c: c, k: k, id: id, i: i, cs: cs, g0: gaps, fin0: fin, finSup: finSup, x0: e.clientX, y0: e.clientY, lu: lu, d: 0, actif: false, ch: ch, pid: e.pointerId, trk: trk };
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!gl || e.pointerId !== gl.pid) return;
+    var dx = e.clientX - gl.x0;
+    if (!gl.actif) {
+      if (Math.abs(dx) < 8) return;
+      if (Math.abs(e.clientY - gl.y0) > Math.abs(dx)) { gl = null; return; }
+      gl.actif = true; gl.ch.classList.add('glisse'); try { gl.ch.setPointerCapture(gl.pid); } catch (er) {}
+    }
+    e.preventDefault();
+    var d = Math.round(dx / gl.lu / 50) * 50;
+    var r = nouveauxVides(gl, d); if (r.d === gl.d) return;
+    gl.d = r.d; gl.gg = r.gg;
+    var trk = gl.trk;
+    gl.cs.forEach(function (x, j) { var el = $('[data-gap="' + cssEsc(x.id) + '"]', trk); if (el) { el.setAttribute('style', styleVide(r.gg[j])); el.textContent = txtVide(r.gg[j]); } });
+    var fe = $('[data-fin]', trk), reste = Math.max(0, gl.finSup - r.fin);
+    if (fe) { fe.setAttribute('style', styleVide(reste)); fe.textContent = txtVide(reste); }
+  }, { passive: false });
+  // Vers l'arrière : le colis prend d'abord le vide devant le suivant, puis pousse les suivants.
+  // Vers la cabine : seul ce colis avance, les suivants ne bougent pas.
+  function nouveauxVides(g, d) {
+    var gg = g.g0.slice(), i = g.i, n = gg.length, lim = Math.max(planGeo.maxLen, g.fin0);
+    if (d < 0) { d = Math.max(d, -gg[i]); gg[i] += d; if (i + 1 < n) gg[i + 1] -= d; }
+    else if (d > 0) {
+      var libre = i + 1 < n ? gg[i + 1] : 0, pousse = Math.min(Math.max(0, d - libre), lim - g.fin0);
+      d = Math.min(d, libre + pousse); gg[i] += d; if (i + 1 < n) gg[i + 1] -= Math.min(d, libre);
+    }
+    var fin = g.fin0 + gg.reduce(function (s, x) { return s + x; }, 0) - g.g0.reduce(function (s, x) { return s + x; }, 0);
+    return { d: d, gg: gg, fin: fin };
+  }
+  function finGlisse(e) {
+    if (!gl || (e && e.pointerId !== gl.pid)) return;
+    var g = gl; gl = null;
+    if (!g.actif) return;
+    glisseFini = true; setTimeout(function () { glisseFini = false; }, 400);
+    g.ch.classList.remove('glisse');
+    if (!g.d) { rendrePlanVue(); return; }
+    var c = g.c, al = alertesCourtes(c, vplan(c)), dec = Object.assign({}, c.decal || {}), gg = g.gg || g.g0;
+    g.cs.forEach(function (x, j) { dec[x.id] = gg[j]; });
+    if (!c.ordre) fixerOrdre(c);
+    c.decal = dec; c.planManuel = true; selection = null; toucher(c);
+    rendrePlanVue(); alerterApres(c, al);
+  }
+  window.addEventListener('pointerup', finGlisse);
+  window.addEventListener('pointercancel', function (e) { if (gl && e.pointerId === gl.pid) { var g = gl; gl = null; if (g.actif) { g.ch.classList.remove('glisse'); rendrePlanVue(); } } });
+  function cssEsc(s) { return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&'); }
+  // ---------- Ajouter un colis depuis le plan (page à part) ----------
+  var ajout = { nb: 1 };
+  $('#btnAjoutColis').addEventListener('click', function () {
+    var c = courant(); if (!estAMoi(c)) return;
+    if (apercu) { finApercu(c, false); }
+    selection = null; ajout = { nb: 1 }; aller('ajout');
+  });
+  function rendreAjout() {
+    var c = courant(), vus = {}, secs = [], lgs = [];
+    c.lignes.forEach(function (l) {
+      var k = l.ep + 'x' + l.la; if (!vus[k]) { vus[k] = 1; secs.push(l); }
+      if (lgs.indexOf(l.lo) < 0) lgs.push(l.lo);
+    });
+    lgs.sort(function (x, y) { return x - y; });
+    $('#ajoutZone').innerHTML = '<div class="carte ajout-carte">' +
+      (secs.length ? '<p class="aj-t">Sections de ce camion</p><div class="aj-puces" id="ajSecs">' + secs.map(function (l) { return '<button type="button" data-ep="' + l.ep + '" data-la="' + l.la + '" data-pi="' + l.pi + '">' + fm(l.ep) + '×' + fm(l.la) + '</button>'; }).join('') + '</div>' : '') +
+      '<div class="grille4">' +
+      '<label class="champ"><span>Épaiss.</span><input id="aEp" inputmode="decimal" placeholder="mm" autocomplete="off"></label>' +
+      '<label class="champ"><span>Largeur</span><input id="aLa" inputmode="decimal" placeholder="mm" autocomplete="off"></label>' +
+      '<label class="champ"><span>Pièces</span><input id="aPi" inputmode="numeric" autocomplete="off"></label>' +
+      '<label class="champ"><span>Long.</span><input id="aLo" inputmode="decimal" placeholder="m" autocomplete="off"></label></div>' +
+      '<div class="aj-puces" id="ajLgs"></div>' +
+      '<div class="apercu" id="ajApercu">Ce colis : <b>—</b></div>' +
+      '<div class="ligne-btns"><div class="pas"><button type="button" id="ajMoins" aria-label="Moins">−</button><span><b id="ajNb">' + ajout.nb + '</b> colis</span><button type="button" id="ajPlus" aria-label="Plus">+</button></div>' +
+      '<button type="button" class="btn" id="ajOk">Ajouter au plan</button></div>' +
+      '<p class="petit-txt">Le colis arrive « de côté » : touche + dans le plan pour le poser où tu veux.</p></div>';
+    function val(s) { return P.num($(s).value); }
+    function lgsSection() {
+      var sc = P.trouverSection(reg().sections, val('#aEp'), val('#aLa')), t = lgs.slice();
+      if (sc && sc.lg) sc.lg.forEach(function (x) { if (t.indexOf(x) < 0) t.push(x); });
+      (reg().longueurs || []).forEach(function (x) { if (t.indexOf(x) < 0) t.push(x); });
+      t.sort(function (x, y) { return x - y; });
+      $('#ajLgs').innerHTML = t.map(function (x) { return '<button type="button" data-lo="' + x + '"' + (Math.abs(val('#aLo') - x) < 1e-9 ? ' class="actif"' : '') + '>' + fLong(x) + ' m</button>'; }).join('');
+    }
+    function apercuAj() {
+      var l = { ep: val('#aEp'), la: val('#aLa'), pi: val('#aPi'), lo: val('#aLo') }, vo = P.volLigne(l);
+      $('#ajApercu').innerHTML = 'Ce colis : <b>' + (isFinite(vo) && vo > 0 ? f3(vo * ajout.nb) + ' m³' : '—') + '</b>';
+    }
+    function majSecAj() {
+      var sc = P.trouverSection(reg().sections, val('#aEp'), val('#aLa'));
+      if (sc && !$('#aPi').dataset.main) $('#aPi').value = sc.pi;
+      lgsSection(); apercuAj();
+    }
+    ['#aEp', '#aLa'].forEach(function (s) { $(s).addEventListener('input', function () { $('#aPi').dataset.main = ''; majSecAj(); }); });
+    $('#aPi').addEventListener('input', function () { this.dataset.main = '1'; apercuAj(); });
+    $('#aLo').addEventListener('input', function () { lgsSection(); apercuAj(); });
+    if ($('#ajSecs')) $('#ajSecs').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; $('#aEp').value = fm(+b.dataset.ep); $('#aLa').value = fm(+b.dataset.la); $('#aPi').value = b.dataset.pi; $('#aPi').dataset.main = ''; $$('#ajSecs button').forEach(function (x) { x.classList.toggle('actif', x === b); }); lgsSection(); apercuAj(); if (!$('#aLo').value) $('#aLo').focus(); };
+    $('#ajLgs').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; $('#aLo').value = fLong(+b.dataset.lo); lgsSection(); apercuAj(); };
+    $('#ajMoins').onclick = function () { ajout.nb = Math.max(1, ajout.nb - 1); $('#ajNb').textContent = ajout.nb; apercuAj(); };
+    $('#ajPlus').onclick = function () { ajout.nb = Math.min(20, ajout.nb + 1); $('#ajNb').textContent = ajout.nb; apercuAj(); };
+    $('#ajOk').onclick = function () {
+      var v = [val('#aEp'), val('#aLa'), val('#aPi'), val('#aLo')], bad = false;
+      ['#aEp', '#aLa', '#aPi', '#aLo'].forEach(function (s, i) { var ok = isFinite(v[i]) && v[i] > 0 && (i !== 2 || Math.round(v[i]) === v[i]); $(s).classList.toggle('erreur', !ok); if (!ok && !bad) { bad = true; $(s).focus(); } });
+      if (bad) { toast('Remplis épaisseur, largeur, pièces et longueur.'); return; }
+      var c2 = courant(); assurerPlan(c2); if (!c2.ordre) fixerOrdre(c2);
+      var l = { id: petitId(), ep: v[0], la: v[1], pi: v[2], lo: v[3], nb: ajout.nb };
+      c2.lignes.push(l); c2.plan = Object.assign({}, c2.plan);
+      for (var k = 0; k < ajout.nb; k++) { c2.plan[l.id + '#' + k] = 'X'; c2.ordre.push(l.id + '#' + k); }
+      c2.planManuel = true; toucher(c2);
+      var premier = l.id + '#0', n = ajout.nb;
+      apresRetour = function () { selection = premier; rendrePlanVue(); toast(n > 1 ? n + ' colis ajoutés de côté : touche + pour les poser' : 'Colis ajouté de côté : touche + pour le poser'); };
+      retour();
+    };
+    setTimeout(function () { if (vueActive === 'ajout' && !secs.length) $('#aEp').focus(); }, 120);
+    lgsSection();
+  }
+
   $('#btnPartager').addEventListener('click', function () { var c = courant(); if (!c.lignes.length) { toast('Aucun colis.'); return; } assurerPlan(c); choixPartage(c); });
   // ---------- Partager : fiche chauffeur (texte + image), image seule, texte copié ----------
   function texteChauffeur(c) {
@@ -1016,7 +1225,7 @@
   function ficheCanvas(c) {
     if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) c.plan = P.meilleur(c.lignes, cfgC(c)).plan;
     var v = vplan(c), W = 1080, pad = 56, larg = W - 2 * pad;
-    var INK = '#13221A', MU = '#5E6E64', VERT = '#1F4D38';
+    var INK = '#13221A', MU = '#5E6E64', VERT = '#3B5A34';
     var F = function (w, px) { return w + ' ' + px + 'px "Inter Tight", Inter, system-ui, sans-serif'; };
     // regroupement par section
     var grp = {}, ordre = [];
@@ -1210,6 +1419,7 @@
       items.forEach(function (it) {
         var w = it.cm / maxLen * (trkW - 16) - 6;
         if (!it.esp) colis(it.k, xx, yy, Math.max(w, 10), it.centre);
+        else if (it.cm >= 50 && w > 30) { x.save(); x.setLineDash([8, 6]); x.strokeStyle = '#9AA59E'; x.lineWidth = 2; rond(xx, yy, w, rowH - 20, 8); x.stroke(); x.restore(); x.fillStyle = MU; x.font = F(600, 20); x.textAlign = 'center'; x.fillText(fm(Math.round(it.cm) / 100) + ' m', xx + w / 2, yy + (rowH - 20) / 2 + 7); x.textAlign = 'left'; }
         xx += w + 6;
       });
     }
@@ -1229,8 +1439,8 @@
         if (f === N) {
           var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len), E = maxPaire + c3.len, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
           if (c3.colis.length) c3.colis.forEach(function (k) { items.push({ k: k, cm: k.cm, centre: 1 }); });
-          else if (sup - E > 2) items.push({ esp: 1, cm: (sup - E) / 2 });
-          ro.colis.forEach(function (k) { items.push({ k: k, cm: k.cm }); });
+          var gg = gapsRow(c, v, s + f);
+          ro.colis.forEach(function (k, i) { if (gg[i] > 0) items.push({ esp: 1, cm: gg[i] }); items.push({ k: k, cm: k.cm }); });
           lgAff = E / 100;
         } else ro.colis.forEach(function (k) { items.push({ k: k, cm: k.cm }); });
         x.font = F(500, 22); x.fillStyle = MU; x.fillText('É' + f, pad, yy + 26);
@@ -1554,11 +1764,9 @@
       '<label class="champ"><span>Ton prénom</span><input id="rjPrenom" class="maj" autocapitalize="characters" autocomplete="given-name" value="' + esc(Sync.moi().prenom || '') + '" placeholder="ex. Sylvano"></label>' +
       '<button class="btn" id="rjOk" type="button">Rejoindre</button>' +
       '<p class="petit-txt rj-info">Tes camions déjà dans ce téléphone sont envoyés à l\'équipe : rien n\'est effacé.<br>Nouveau téléphone ? Retape le même prénom : tu retrouves ton compte.</p>' +
-      '<button class="btn sec" id="rjSauv" type="button">Sauvegarder mes données d\'abord</button>' +
       '</div>';
   }
   function lierRejoindre(apres) {
-    $('#rjSauv').onclick = sauvegarderFichier;
     $('#rjOk').onclick = function () {
       var code = $('#rjCode').value.trim(), pr = $('#rjPrenom').value.trim(), b = this;
       if (!code) { toast('Écris le code de l\'équipe.'); return; }
@@ -1576,7 +1784,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=45" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=45" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=46" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=46" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

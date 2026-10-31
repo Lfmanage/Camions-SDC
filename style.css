@@ -856,3 +856,110 @@ input.maj { text-transform: uppercase; }
 #reglagesZone .carte { padding: 8px 10px; }
 #reglagesZone { gap: 6px; }
 .reg-ouvrir b { font-size: 14px; }
+
+/* ======================================================================
+   v46 — plan libre (glisser au dernier étage, supprimer, ajouter),
+   vert un peu kaki, retour en glissant, vrai site sur grand écran
+   ====================================================================== */
+:root { --accent: #3B5A34; --accent-soft: rgba(59, 90, 52, .11); }
+:root[data-theme="sombre"] { --accent: #B4CE9A; --on-accent: #142010; --accent-soft: rgba(180, 206, 154, .13); }
+.toast button { color: #C6DBA6; }
+:root[data-theme="sombre"] .toast button { color: #3B5A34; }
+
+/* Dernier étage : vides entre les colis, colis à glisser */
+.trk .vide { flex: 0 0 auto; height: 100%; border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; font-size: 10.5px; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); box-sizing: border-box; }
+.trk .vide[style*="width:0"] { border: 0; padding: 0; }
+.chip.gl { touch-action: pan-y; cursor: grab; }
+.chip.gl::after { content: "⇠⇢"; position: absolute; right: 3px; bottom: 1px; font-size: 8px; opacity: .45; }
+.chip { position: relative; }
+.chip.glisse { cursor: grabbing; box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent), 0 6px 14px rgba(0, 0, 0, .25); z-index: 2; }
+
+/* Pied du plan : petit « + » discret */
+.pied.trois.quatre { grid-template-columns: 48px auto 1fr 1.3fr; }
+.btn.plus-colis { padding: 0; font-size: 26px; font-weight: 400; line-height: 1; border-radius: 50% !important; width: 48px; height: 48px; min-height: 48px !important; align-self: center; color: var(--accent); }
+.barre-sel { flex-wrap: wrap; row-gap: 6px; }
+.barre-sel .bs-sup { color: #E07A6C !important; border-color: rgba(224, 122, 108, .5) !important; }
+
+/* Page « Ajouter un colis » */
+.top .fermer-x { justify-self: end; font-size: 18px; width: 44px; text-align: center; }
+.ajout-carte { display: flex; flex-direction: column; gap: 10px; }
+.aj-t { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.aj-puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.aj-puces:empty { display: none; }
+.aj-puces button { min-height: 36px; padding: 0 12px; border-radius: 999px; background: var(--field); border: 1px solid var(--line); font-family: var(--num); font-weight: 600; font-size: 14px; color: var(--text); }
+.aj-puces button.actif { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* Fenêtre « Vérifie avant de valider » */
+.verif-fin .avert { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; margin: 6px 0; border-radius: 12px; background: var(--orange-bg); border: 1px solid color-mix(in srgb, var(--orange) 35%, transparent); font-size: 13.5px; line-height: 1.35; }
+.verif-fin .avert b { color: var(--orange); }
+.verif-fin .grille-btns { margin-top: 12px; }
+
+/* Tous les téléphones : rien ne dépasse */
+img, svg, canvas { max-width: 100%; }
+.vue > * { min-width: 0; }
+@media (max-width: 350px) {
+  .pied.trois.quatre { grid-template-columns: 42px auto 1fr 1.2fr; gap: 6px; }
+  .btn.plus-colis { width: 42px; height: 42px; min-height: 42px !important; }
+}
+
+/* Tablette : un peu plus large */
+@media (min-width: 640px) and (max-width: 959px) {
+  #app { max-width: 640px; }
+}
+
+/* Grand écran : vrai site web (menu à gauche, contenu centré, plan côte à côte) */
+@media (min-width: 960px) {
+  :root { --nav-h: 0px; }
+  body { padding-left: 252px; }
+  #app { max-width: 1100px; padding: 0 28px; }
+  .vue { padding: 26px 0 48px !important; gap: 14px; }
+  .barre { left: 16px !important; right: auto; top: 16px; bottom: 16px !important; transform: none !important; width: 220px; max-width: none;
+    display: flex !important; flex-direction: column; justify-content: flex-start; gap: 4px; padding: 18px 10px; border-radius: 24px; min-height: 0; }
+  .barre::before { content: "Camions SDC"; display: block; padding: 4px 14px 16px; font-family: var(--num); font-weight: 700; font-size: 18px; color: var(--text); }
+  .onglet { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 14px; font-size: 15px; min-height: 48px; width: 100%; border-radius: 14px; }
+  .onglet .ico { width: 26px; height: 26px; }
+  .onglet:hover { background: var(--accent-soft); }
+  .toast { left: calc(50% + 126px); top: 22px; }
+  .feuille { left: calc(50% + 126px); right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%); width: min(580px, calc(100vw - 300px)); max-height: 86vh; border-radius: 26px; border: 1px solid var(--edge); }
+  .feuille .poignee { display: none; }
+  .top { grid-template-columns: 120px 1fr 120px; }
+  .top h1 { font-size: 22px; }
+  #v-accueil, #v-calcul, #v-client, #v-camion, #v-ajout, #v-equipe, #v-profil { max-width: 820px; width: 100%; margin: 0 auto; }
+  .tuiles, .stats { gap: 14px; }
+  #histo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; align-items: start; }
+  #histo > .legende, #histo > .vide { grid-column: 1 / -1; }
+  #stats { display: grid !important; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  #stats[hidden] { display: none !important; }
+  #stats > #segPer, #stats > .kpi, #stats > .st-tot, #stats > .vide { grid-column: 1 / -1; }
+  #reglagesZone { display: grid !important; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  #planZone { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-content: start; }
+  #planZone > * { grid-column: 1 / -1; }
+  #planZone > section.cote { grid-column: auto; }
+  #planZone .barre-sel { position: static; }
+  #v-plan .pied { max-width: 720px; width: 100%; margin-left: auto; }
+  .hero-go { min-height: 120px; }
+  .barre-sel { bottom: 12px; }
+}
+@media (min-width: 1400px) {
+  #app { max-width: 1240px; }
+  #histo { grid-template-columns: 1fr 1fr 1fr; }
+}
+/* v46 — finitions */
+.hero-go { background: linear-gradient(135deg, rgba(66, 96, 56, .92), rgba(36, 58, 30, .95)); box-shadow: 0 18px 40px rgba(30, 44, 20, .32), inset 0 1px 0 rgba(255, 255, 255, .2); }
+:root[data-theme="sombre"] .hero-go { background: linear-gradient(135deg, rgba(110, 140, 80, .5), rgba(40, 58, 30, .78)); }
+.hg-fl { color: #3B5A34; }
+.st-ch em { background: linear-gradient(180deg, #8DAA6E, #3B5A34); }
+.trk .vide { font-style: normal; }
+@media (min-width: 960px) {
+  .barre .onglet > span:last-child { font-size: 15px !important; }
+  #histo > :not(.jour) { grid-column: 1 / -1; }
+}
+.ajout-carte .ligne-btns { display: flex !important; gap: 8px; align-items: stretch; }
+.ajout-carte .ligne-btns .btn { flex: 1 1 auto; white-space: nowrap; }
+#v-plan .pied.quatre > .btn { min-width: 0; }
+@media (max-width: 380px) {
+  .pied.trois.quatre { grid-template-columns: 40px auto minmax(0, 1fr) minmax(0, 1.25fr); gap: 6px; }
+  .btn.plus-colis { width: 40px; height: 40px; min-height: 40px !important; font-size: 22px; }
+  #v-plan .pied.quatre .btn.gros { font-size: 15px; padding: 0 8px; }
+  #v-plan .pied.quatre .btn.vider { font-size: 11px; padding: 0 7px; }
+}
