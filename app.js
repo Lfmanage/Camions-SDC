@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '52';
+  var VERSION_APP = '53';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -241,7 +241,7 @@
   }
   // ---------- Navigation ----------
   var vueActive = 'accueil';
-  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', ajout: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', equipe: 'equipe', profil: 'equipe' };
+  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', ajout: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', equipe: 'equipe', profil: 'equipe', fonds: 'reglages', ambiance: 'reglages' };
   function montrer(v) {
     vueActive = v; document.body.dataset.vue = v;
     if (v !== 'plan' && v !== 'ajout') edition = null;
@@ -259,6 +259,8 @@
     if (v === 'ajout') rendreAjout();
     if (v === 'equipe') rendreEquipe();
     if (v === 'profil') rendreProfil();
+    if (v === 'fonds') rendreFonds();
+    if (v === 'ambiance') rendreAmbiance();
     majRetour();
   }
   $$('.onglet').forEach(function (b) { b.addEventListener('click', function () {
@@ -517,25 +519,13 @@
     var m3 = jour.reduce(function (a, c) { return a + c.total_m3; }, 0);
     $('#accStats').innerHTML = '<button type="button" class="stat-bande" data-camions="1"><span class="sb-c"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></span><i class="sb-sep"></i><span class="sb-c"><small>Camions</small><b>' + jour.length + '</b></span><span class="sb-go">Voir ›</span></button>';
     $('#accNbJour').textContent = 'Tous les camions';
-    $('#accSous').textContent = salutation(d);
+    var mEv = Ambiance.message(reg(), d);
+    $('#accSous').textContent = mEv || (Ambiance.cfg(reg()).ambiance.msgAuto === false ? '' : salutation(d));
     var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && estAMoi(c); }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
     $('#accEnCours').innerHTML = cours.length ? '<p class="titre-sec cours-t"><span>En cours</span><small>' + cours.length + '</small></p><div class="carte liste-cours">' + cours.map(function (c) {
       return glisse(c.id, '<button type="button" class="en-cours-l" data-reprendre="' + esc(c.id) + '"><span><b>' + esc(c.client || 'Sans client') + '</b><small>' + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + f2(c.total_m3) + ' m³</small></span><span class="go">Reprendre</span></button>');
     }).join('') + '<p class="astuce-in">← Glisse pour supprimer · Glisse pour ouvrir →</p></div>' : '';
   }
-  // ---------- Feuilles d'automne qui tombent (décor, ne bloque jamais un appui) ----------
-  function feuillesAutomne() {
-    var z = $('#feuillesZone'); if (!z || z.childNodes.length) return;
-    var h = '', n = 11;
-    for (var i = 0; i < n; i++) {
-      var prof = Math.random(), taille = Math.round(16 + prof * 26), duree = (14 - prof * 5 + Math.random() * 6).toFixed(1);
-      var flou = prof > 0.86 ? 2.2 : (prof < 0.2 ? 0.8 : 0);
-      h += '<i class="fe' + (i >= 5 ? ' fe-plus' : '') + '" style="left:' + (Math.random() * 96).toFixed(1) + '%;--d:' + duree + 's;--r:' + (-Math.random() * duree).toFixed(1) + 's;--b:' + (2 + Math.random() * 3).toFixed(1) + 's;--x:' + Math.round(20 + Math.random() * 50) + 'px">' +
-        '<i style="width:' + taille + 'px;height:' + taille + 'px;background-size:' + taille * 10 + 'px ' + taille + 'px;background-position:' + (-(i % 10) * taille) + 'px 0;filter:blur(' + flou + 'px) drop-shadow(0 ' + Math.round(2 + prof * 5) + 'px ' + Math.round(3 + prof * 6) + 'px rgba(40,20,0,.22));--t:' + (3 + Math.random() * 4).toFixed(1) + 's"></i></i>';
-    }
-    z.innerHTML = h;
-  }
-
   // ---------- Installer l'appli (Android : vraie installation ; iPhone : explication) ----------
   var invite = null;
   function estInstalle() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
@@ -583,7 +573,7 @@
       return '<div class="cfg-ligne"><span class="cfg-t">Remorque ' + (i + 1) + (i ? ' (arrière)' : ' (avant)') + '</span><small>' + fm(v) + ' m</small></div>' +
         '<div class="lg-dbl" data-i="' + i + '">' + LG_DBL.map(function (x) { return '<button type="button" data-l="' + x + '"' + (Math.abs(x - v) < 1e-9 ? ' class="actif"' : '') + '>' + fm(x) + '</button>'; }).join('') +
         '<label class="lg-champ petit"><input inputmode="decimal" autocomplete="off" placeholder="Autre" value="' + (LG_DBL.some(function (x) { return Math.abs(x - v) < 1e-9; }) ? '' : fm(v)) + '"><i>m</i></label></div>';
-    }).join('') + '<p class="sous">Les dernières longueurs sont gardées pour la prochaine fois.</p>';
+    }).join('');
   }
   function majLgDouble(i, v) {
     var c = courant(); if (!c.double || !(v >= 3 && v <= 12)) return false;
@@ -886,41 +876,6 @@
   // ---------- Plan de chargement ----------
   var selection = null;
   var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
-  // ---------- Camion en photo ----------
-  var nSvg = 0, detailsOuverts = false;
-  var PH = { W: 1672, H: 570, x0: 48, xd: 1213, deck: 378, img: 'camion.jpg?v=17', bois: 'bois.jpg?v=17' };
-  PH.k = (PH.xd - PH.x0) / 13.6;
-  var PIQUETS = [105, 238, 370, 578, 722, 960, 1082];
-  function cielDefs(u) {
-    return '<linearGradient id="ciel' + u + '" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="380">' +
-      '<stop offset="0" stop-color="#A3C1E0"/><stop offset=".35" stop-color="#BBCEDF"/><stop offset=".5" stop-color="#CBD4DD"/><stop offset="1" stop-color="#E4DDD5"/></linearGradient>' +
-      '<linearGradient id="piq' + u + '" x1="0" x2="1"><stop offset="0" stop-color="#8E979F"/><stop offset=".45" stop-color="#F1F3F4"/><stop offset="1" stop-color="#7D868E"/></linearGradient>';
-  }
-  // Rangées de la photo (camion d'accueil) : on dévoile le chargement de l'avant vers l'arrière
-  var RANGS_HERO = [{ x1: 48, x2: 1213, y1: 278, y2: 378 }, { x1: 85, x2: 1213, y1: 158, y2: 280 }];
-
-  function heroPhoto(c, r, trop) {
-    var f = Math.max(0, Math.min(1, c.total_m3 / r.m3Max));
-    var parts = [Math.min(1, f * 2), Math.max(0, Math.min(1, f * 2 - 1))];
-    var zone = $('#heroCamion');
-    var svg = zone.querySelector('svg[data-photo]');
-    if (!svg) {
-      var u = 'h' + (++nSvg);
-      var h = '<svg class="camion-photo" data-photo="1" viewBox="0 92 1672 470" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Camion en cours de chargement"><defs>' + cielDefs(u) + '</defs>' +
-        '<image href="' + PH.img + '" x="0" y="0" width="1672" height="570" preserveAspectRatio="none"/>';
-      RANGS_HERO.forEach(function (g, i) {
-        h += '<rect class="vide-rang" data-i="' + i + '" x="' + g.x1 + '" y="' + g.y1 + '" width="' + (g.x2 - g.x1) + '" height="' + (g.y2 - g.y1) + '" fill="url(#ciel' + u + ')"/>';
-        h += '<rect class="vide-trait" data-i="' + i + '" x="' + (g.x1 + 4) + '" y="' + (g.y1 + 4) + '" width="' + (g.x2 - g.x1 - 8) + '" height="' + (g.y2 - g.y1 - 8) + '" rx="8"/>';
-      });
-      h += '<rect class="trop-voile" x="85" y="158" width="1128" height="122"/></svg>';
-      zone.innerHTML = h;
-      svg = zone.querySelector('svg[data-photo]');
-    }
-    $$('.vide-rang', svg).forEach(function (el, i) { el.style.transform = 'scaleX(' + (1 - parts[i]).toFixed(4) + ')'; });
-    $$('.vide-trait', svg).forEach(function (el, i) { el.style.opacity = parts[i] >= 1 ? 0 : 1; el.style.transform = 'scaleX(' + (1 - parts[i]).toFixed(4) + ')'; });
-    svg.classList.toggle('trop', !!trop);
-  }
-
   // ---------- Plan : barres modernes, sens de chargement réel ----------
   function libColis(k) { return fm(k.lo) + ' m · ' + fm(k.ep) + '×' + fm(k.la); }
 
@@ -1806,7 +1761,7 @@
   function ligneCam(c, enCours) {
     var qui = c.client || 'Sans client';
     return glisse(c.id, '<button class="cam" type="button" data-id="' + esc(c.id) + '"><span class="h">' + heure(enCours ? c.maj_le : c.termine_le) + '</span>' +
-      '<span class="qui"><b>' + esc(qui) + (c.double ? ' <i class="tag-dbl">Double</i>' : '') + '</b><small>' + (enEquipe() ? '<i class="qui-p' + (estAMoi(c) ? ' moi' : '') + '">' + esc(prenomDe(c)) + '</i>' : '') + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small></span>' +
+      '<span class="qui"><b>' + esc(qui) + (c.double ? ' <i class="tag-dbl">Double</i>' : '') + (enEquipe() && Sync.moi().admin && c.auteur === Sync.moi().uid ? ' <i class="lock-p">🔒 privé</i>' : '') + '</b><small>' + (enEquipe() ? '<i class="qui-p' + (estAMoi(c) ? ' moi' : '') + '">' + esc(prenomDe(c)) + '</i>' : '') + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small></span>' +
       '<span class="m3 ' + (enCours ? 'cours' : c.etat) + '" title="' + (enCours ? 'En cours' : LIB[c.etat]) + '">' + f2(c.total_m3) + '</span></button>');
   }
   // ---------- Glisser une ligne : à gauche supprimer, à droite ouvrir ----------
@@ -2082,7 +2037,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=52" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=52" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=53" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=53" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2200,7 +2155,7 @@
         '<input type="color" value="' + (cur || PRESETS[k][0]) + '" aria-label="Couleur libre"></div></div>';
     }).join('');
     if (r.couleurs && Object.keys(r.couleurs).length) { r.couleurs = {}; appliquerTheme(); }
-    $('#reglagesZone').innerHTML = blocEquipe() +
+    $('#reglagesZone').innerHTML = blocEquipe() + (estAdmin() ? blocAdmin() : '') +
       '<div class="carte reg' + (verrou ? ' verrouille' : '') + '"><h2>Limites du camion</h2>' + (verrou ? '<p class="petit-txt">Réglages communs à toute l\'équipe.</p>' : '') +
       '<div class="g3">' + champNum('rMin', 'Vol min', r.m3Min) + champNum('rMax', 'Vol max', r.m3Max) + champNum('rEcart', 'Écart G/D', r.ecartMax) + champNum('rE1Min', 'Ét.1 min', r.e1Min) + champNum('rE1Max', 'Ét.1 max', r.e1Max) + '</div>' +
       '</div>' +
@@ -2239,13 +2194,203 @@
       var b = e.target.closest('[data-g],[data-retirer]'); if (!b) return;
       if (b.dataset.g === 'fermer') fermerFeuille();
       if (b.dataset.g === 'code') { fermerFeuille(); setTimeout(function () { demanderTexte('Nouveau code d\'équipe', '', 'Les téléphones déjà dans l\'équipe ne sont pas déconnectés.').then(function (v) { if (v) Sync.changerCode(v).then(function () { toast('Code d\'équipe changé ✔'); }).catch(function (er) { toast(er.message); }); }); }, 120); }
-      if (b.dataset.g === 'secret') { fermerFeuille(); setTimeout(function () { demanderTexte('Mon code secret', '', 'Tu le choisis, il ne change plus. 6 caractères minimum. Il sert à retrouver ton compte admin sur un nouveau téléphone.').then(function (v) { if (v) Sync.definirSecret(v).then(function () { toast('Code secret enregistré ✔'); }).catch(function (er) { toast(er.message); }); }); }, 120); }
+      if (b.dataset.g === 'secret') { fermerFeuille(); setTimeout(function () { demanderTexte('Mon code secret', '', 'Tu le choisis, il ne change plus. 4 caractères minimum. Il sert à retrouver ton compte admin sur un nouveau téléphone.').then(function (v) { if (v) Sync.definirSecret(v).then(function () { toast('Code secret enregistré ✔'); }).catch(function (er) { toast(er.message); }); }); }, 120); }
       if (b.dataset.retirer) {
         if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Confirmer'; return; }
         Sync.retirer(b.dataset.retirer, false).then(function () { toast('Retiré de l\'équipe'); fermerFeuille(); setTimeout(ouvrirGestion, 150); }).catch(function (er) { toast(er.message); });
       }
     };
   }
+
+
+  // ---------- Fonds d'écran et ambiance : réservé à l'administrateur (invisible pour les autres) ----------
+  function estAdmin() { return enEquipe() && Sync.moi().admin; }
+  function sauverAmb(forcer) { Ambiance.preparer(reg()); db.sync = db.sync || {}; db.sync.reglagesSales = true; sauver(); Ambiance.appliquer(reg(), forcer); }
+  var EFFETS = [['aucun', 'Aucun'], ['feuilles', '🍂 Feuilles'], ['neige', '❄️ Neige'], ['petales', '🌸 Pétales'], ['poussieres', '✨ Poussières'], ['confettis', '🎊 Confettis']];
+  var EXTRAS = [['etoiles', '⭐ Étoiles dorées'], ['feux', '🎆 Feux d\'artifice']];
+  var FREQ = [['30m', '30 min'], ['1h', '1 h'], ['2h', '2 h'], ['4h', '4 h'], ['ouv', 'Ouverture'], ['fixe', 'Fixe']];
+  var MOIS_C = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  function nomDe(l, k) { var x = l.filter(function (y) { return y[0] === k; })[0]; return x ? x[1] : ''; }
+  function dateTxt(m) { return (+m.slice(3)) + (m.slice(3) === '01' ? 'er' : '') + ' ' + MOIS_C[+m.slice(0, 2) - 1]; }
+  function freqTxt(f) { return f.freq === 'fixe' ? 'image fixe' : (f.freq === 'ouv' ? 'change à chaque ouverture' : 'change toutes les ' + nomDe(FREQ, f.freq)); }
+  function dureeTxt(ms) { var m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + ('0' + (m % 60)).slice(-2) : m + ' min'; }
+  function segAdm(k, l, v) { return '<div class="seg adm-seg" data-k="' + k + '">' + l.map(function (x) { return '<button type="button" data-v="' + x[0] + '" class="' + (String(v) === x[0] ? 'actif' : '') + '">' + x[1] + '</button>'; }).join('') + '</div>'; }
+  function pucesAdm(k, l, sel) { return '<div class="chips adm-chips" data-k="' + k + '">' + l.map(function (x) { return '<button type="button" data-v="' + x[0] + '" class="' + (sel.indexOf(x[0]) >= 0 ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div>'; }
+  function curseurAdm(k, nomC, min, max, pas, v, suf) { return '<label class="adm-cur"><span>' + nomC + '</span><input type="range" data-k="' + k + '" min="' + min + '" max="' + max + '" step="' + pas + '" value="' + v + '"><b>' + v + suf + '</b></label>'; }
+  var NOTE_ADM = '<p class="adm-note">🔒 Visible par toi seul · s\'applique à toute l\'équipe</p>';
+  function etatAdm() { return db.sync && db.sync.reglagesSales ? 'Envoi à l\'équipe…' : '✓ Enregistré · envoyé à l\'équipe'; }
+  function blocAdmin() {
+    var c = Ambiance.cfg(reg()), e = Ambiance.evenement(reg()), ef = Ambiance.effetActuel(reg());
+    return '<div class="carte reg adm-carte"><button class="adm-l" data-adm="ambiance" type="button"><span><b>Ambiance <i class="lock-p">🔒 toi seul</i></b><small>' + esc((e ? e.emo + ' ' + e.nom : 'Aucune période') + ' · ' + nomDe(EFFETS, ef.effet)) + '</small></span><em>›</em></button>' +
+      '<button class="adm-l" data-adm="fonds" type="button"><span><b>Fonds d\'écran <i class="lock-p">🔒 toi seul</i></b><small>' + Ambiance.visibles(reg()).length + ' images · ' + freqTxt(c.fonds) + ' · flou ' + c.fonds.flou + '</small></span><em>›</em></button>' +
+      '<div class="adm-minis">' + c.fonds.liste.slice(0, 9).map(function (x) { return '<img src="' + esc(Ambiance.miniDe(x)) + '" alt="">'; }).join('') + '</div></div>';
+  }
+  function rendreFonds() {
+    var z = $('#fondsZone');
+    if (!estAdmin()) { z.innerHTML = ''; setTimeout(retour, 0); return; }
+    Ambiance.preparer(reg());
+    var f = reg().fonds, im = Ambiance.imageActuelle(reg()), masq = f.liste.filter(function (x) { return x.masque; }).length;
+    var proch = im.prochaine ? 'prochaine dans ' + dureeTxt(im.prochaine - Date.now()) : (f.freq === 'fixe' ? 'image fixe' : 'change à chaque ouverture');
+    z.innerHTML = NOTE_ADM +
+      '<div class="carte adm-apercu"><div class="adm-ph" id="admPh"><i></i><u></u><u></u></div><div><b>En ce moment</b><small>Image ' + (im.item ? f.liste.indexOf(im.item) + 1 : '–') + ' · ' + proch + '</small><small class="adm-ok">' + etatAdm() + '</small></div></div>' +
+      '<div class="carte"><div class="adm-lab"><span>Images (' + f.liste.length + ') · touche pour les options</span>' + (masq ? '<span>' + masq + ' masquée' + (masq > 1 ? 's' : '') + '</span>' : '') + '</div><div class="adm-grille">' +
+      f.liste.map(function (x, i) { return '<button type="button" class="adm-im' + (im.item && im.item.id === x.id ? ' on' : '') + (x.masque ? ' off' : '') + '" data-im="' + i + '" style="background-image:url(\'' + esc(Ambiance.miniDe(x)) + '\')"><em>' + (i + 1) + '</em></button>'; }).join('') +
+      '<button type="button" class="adm-im add" id="admAjout">＋<br>Ajouter</button></div><input type="file" id="admFichier" accept="image/*" hidden></div>' +
+      '<div class="carte adm-sl">' + curseurAdm('flou', 'Flou', 0, 10, 1, f.flou, '') + curseurAdm('voile', 'Voile', 0, 90, 5, f.voile, ' %') + '</div>' +
+      '<div class="carte"><div class="adm-lab"><span>Changer d\'image</span></div>' + segAdm('freq', FREQ, f.freq) +
+      '<div class="adm-lab" style="margin-top:10px"><span>Ordre</span></div>' + segAdm('ordre', [['hasard', 'Au hasard'], ['ordre', 'Dans l\'ordre']], f.ordre) + '</div>' +
+      '<button class="lien adm-reset" id="admReset" type="button">Remettre les images d\'origine</button>';
+    if (im.item) Ambiance.urlDe(im.item).then(function (u) { var p = $('#admPh'); if (u && p) { p.style.backgroundImage = 'url("' + u + '")'; p.style.setProperty('--fl', (f.flou * 0.6) + 'px'); p.style.setProperty('--vo', f.voile / 100); } });
+    $$('input[type=range]', z).forEach(function (r) {
+      r.oninput = function () { f[r.dataset.k] = +r.value; r.nextElementSibling.textContent = r.value + (r.dataset.k === 'voile' ? ' %' : ''); Ambiance.majFond(reg()); var p = $('#admPh'); if (p) { p.style.setProperty('--fl', (f.flou * 0.6) + 'px'); p.style.setProperty('--vo', f.voile / 100); } };
+      r.onchange = function () { sauverAmb(); };
+    });
+    z.onclick = function (e) {
+      var sb = e.target.closest('.adm-seg button'), b = e.target.closest('[data-im]');
+      if (sb) { var k = sb.parentNode.dataset.k; f[k] = sb.dataset.v; if (k === 'freq' && sb.dataset.v === 'fixe' && !f.fixe && im.item) f.fixe = im.item.id; f.ancre = null; sauverAmb(); rendreFonds(); return; }
+      if (b) { ouvrirImage(+b.dataset.im); return; }
+      if (e.target.closest('#admAjout')) { $('#admFichier').click(); return; }
+      if (e.target.closest('#admReset')) {
+        var r0 = e.target.closest('#admReset'); if (!r0.dataset.ok) { r0.dataset.ok = '1'; r0.textContent = 'Touche encore pour confirmer'; return; }
+        var ids = f.liste.map(function (x) { return x.id; });
+        Ambiance.defFonds().liste.forEach(function (x) { if (ids.indexOf(x.id) < 0) f.liste.push(x); });
+        f.liste.forEach(function (x) { x.masque = false; }); sauverAmb(); rendreFonds(); toast('Images d\'origine remises');
+      }
+    };
+    $('#admFichier').onchange = function () {
+      var fi = this.files[0]; this.value = ''; if (!fi) return;
+      preparerImage(fi).then(function (o) {
+        var fe = ouvrirFeuille('<h2>Ajouter une image</h2><p class="petit-txt">Elle est allégée automatiquement et envoyée à toute l\'équipe.</p><div class="adm-big" style="background-image:url(\'' + o.data + '\')"></div>' +
+          '<div class="grille-btns"><button class="btn sec" data-a="non" type="button">Annuler</button><button class="btn" data-a="oui" type="button">Ajouter</button></div>');
+        fe.onclick = function (ev) {
+          var bb = ev.target.closest('[data-a]'); if (!bb) return;
+          if (bb.dataset.a === 'non') { fermerFeuille(); return; }
+          bb.disabled = true; bb.textContent = 'Envoi…';
+          var id = 'x' + Date.now().toString(36);
+          Sync.ajouterFond(id, o.data).then(function () { return Ambiance.garderExt(id, o.data); }).then(function () {
+            reg().fonds.liste.push({ id: id, ext: true, th: o.th }); sauverAmb(); fermerFeuille(); setTimeout(rendreFonds, 80); toast('Image ajoutée ✔');
+          }).catch(function (er) { bb.disabled = false; bb.textContent = 'Ajouter'; toast(er.message || 'Envoi impossible.'); });
+        };
+      }).catch(function () { toast('Image non reconnue.'); });
+    };
+  }
+  function preparerImage(fi) {
+    return new Promise(function (ok, ko) {
+      var u = URL.createObjectURL(fi), im = new Image();
+      im.onload = function () {
+        function rendu(max, q) { var k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', q); }
+        var d = rendu(1400, 0.8); if (d.length > 2400000) d = rendu(1100, 0.7);
+        URL.revokeObjectURL(u); ok({ data: d, th: rendu(180, 0.7) });
+      };
+      im.onerror = function () { URL.revokeObjectURL(u); ko(); };
+      im.src = u;
+    });
+  }
+  function ouvrirImage(i) {
+    var f = reg().fonds, x = f.liste[i]; if (!x) return;
+    var fe = ouvrirFeuille('<div class="adm-big" id="admBig"></div><div class="sec-tete"><h2>Image ' + (i + 1) + '</h2><span class="petit-txt">' + (i + 1) + (i ? 'ᵉ' : 'ʳᵉ') + ' sur ' + f.liste.length + '</span></div>' +
+      '<div class="grille-btns"><button class="btn" data-a="voir" type="button">Afficher maintenant</button><button class="btn sec" data-a="masque" type="button">' + (x.masque ? 'Afficher dans la liste' : 'Masquer') + '</button>' +
+      '<button class="btn sec" data-a="g" type="button"' + (i ? '' : ' disabled') + '>◀ Avancer</button><button class="btn sec" data-a="d" type="button"' + (i < f.liste.length - 1 ? '' : ' disabled') + '>Reculer ▶</button></div>' +
+      '<button class="btn danger" data-a="suppr" type="button" style="width:100%;margin-top:8px">Supprimer l\'image</button>');
+    Ambiance.urlDe(x).then(function (u) { var b = $('#admBig'); if (u && b) b.style.backgroundImage = 'url("' + u + '")'; });
+    fe.onclick = function (e) {
+      var b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
+      var a = b.dataset.a, msg = '';
+      if (a === 'voir') { x.masque = false; f.fixe = x.id; f.ancre = { id: x.id, t: Date.now() }; if (f.freq === 'ouv') f.freq = 'fixe'; msg = 'Image affichée sur tous les téléphones'; }
+      if (a === 'masque') { x.masque = !x.masque; msg = x.masque ? 'Image masquée' : 'Image remise dans la liste'; }
+      if (a === 'g') { f.liste.splice(i, 1); f.liste.splice(i - 1, 0, x); }
+      if (a === 'd') { f.liste.splice(i, 1); f.liste.splice(i + 1, 0, x); }
+      if (a === 'suppr') {
+        if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Touche encore pour supprimer'; return; }
+        f.liste.splice(i, 1); if (x.ext) Sync.supprimerFond(x.id); msg = 'Image supprimée';
+        if (!f.liste.length) f.liste = Ambiance.defFonds().liste;
+      }
+      if (!f.liste.some(function (y) { return !y.masque; })) { f.liste[0].masque = false; }
+      sauverAmb(); fermerFeuille(); setTimeout(rendreFonds, 80); if (msg) toast(msg);
+    };
+  }
+  function rendreAmbiance() {
+    var z = $('#ambianceZone');
+    if (!estAdmin()) { z.innerHTML = ''; setTimeout(retour, 0); return; }
+    Ambiance.preparer(reg());
+    var a = reg().ambiance, ev = Ambiance.evenement(reg());
+    var lst = a.evts.map(function (e, i) {
+      return '<button type="button" class="adm-ev" data-ev="' + i + '"><span class="e">' + esc(e.emo || '•') + '</span><span class="t"><b>' + esc(e.nom) + '</b><small>' + dateTxt(e.du) + ' → ' + dateTxt(e.au) + ' · ' + nomDe(EFFETS, e.effet) +
+        (e.extras && e.extras.length ? ' + ' + e.extras.map(function (k) { return nomDe(EXTRAS, k); }).join(', ') : '') + (e.msg ? ' · « ' + esc(e.msg.replace('{annee}', new Date().getFullYear())) + ' »' : '') + '</small></span>' + (ev === e ? '<i class="now">EN COURS</i>' : '<em>›</em>') + '</button>';
+    }).join('');
+    z.innerHTML = NOTE_ADM +
+      '<div class="carte"><div class="adm-lab"><span>Mode</span></div>' + segAdm('mode', [['auto', 'Auto (calendrier)'], ['force', 'Forcer un effet'], ['aucun', 'Aucun']], a.mode) +
+      (a.mode === 'force' ? '<div class="adm-lab" style="margin-top:10px"><span>Effet forcé</span></div>' + pucesAdm('fEffet', EFFETS, [a.force.effet]) + '<div class="adm-lab" style="margin-top:8px"><span>En plus</span></div>' + pucesAdm('fExtras', EXTRAS, a.force.extras || []) : '') +
+      '<div class="adm-lab" style="margin-top:10px"><span>Quantité</span></div>' + segAdm('quantite', [['1', 'Peu'], ['2', 'Moyen'], ['3', 'Beaucoup']], String(a.quantite)) + '</div>' +
+      '<div class="carte"><div class="adm-lab"><span>Calendrier · ' + a.evts.length + ' périodes</span><span>Aujourd\'hui : ' + (ev ? esc(ev.nom) : '—') + '</span></div>' + lst +
+      '<button type="button" class="adm-ev add" data-ev="-1"><span class="e">＋</span><span class="t"><b>Ajouter un événement</b><small>Fête, anniversaire, période spéciale…</small></span></button></div>' +
+      '<div class="carte"><div class="reg-l" style="border:0;padding:0"><span><b>Message d\'accueil auto</b><br><small class="petit-txt">Bonne journée, bon week-end, bonne soirée… quand l\'événement n\'a pas de message</small></span><button type="button" class="adm-tog' + (a.msgAuto !== false ? ' on' : '') + '" id="admMsg" aria-label="Message d\'accueil auto"></button></div></div>' +
+      '<button class="lien adm-reset" id="admResetCal" type="button">Remettre le calendrier d\'origine</button>';
+    z.onclick = function (e) {
+      var sb = e.target.closest('.adm-seg button'), pu = e.target.closest('.adm-chips button'), b = e.target.closest('[data-ev]');
+      if (sb) { var k = sb.parentNode.dataset.k; a[k] = k === 'quantite' ? +sb.dataset.v : sb.dataset.v; sauverAmb(); rendreAmbiance(); return; }
+      if (pu) {
+        var kk = pu.parentNode.dataset.k;
+        if (kk === 'fEffet') a.force.effet = pu.dataset.v;
+        else { var l = a.force.extras || (a.force.extras = []), j = l.indexOf(pu.dataset.v); if (j >= 0) l.splice(j, 1); else l.push(pu.dataset.v); }
+        sauverAmb(); rendreAmbiance(); return;
+      }
+      if (b) { editerEvt(+b.dataset.ev); return; }
+      if (e.target.closest('#admMsg')) { a.msgAuto = a.msgAuto === false; sauverAmb(); rendreAmbiance(); return; }
+      if (e.target.closest('#admResetCal')) {
+        var r0 = e.target.closest('#admResetCal'); if (!r0.dataset.ok) { r0.dataset.ok = '1'; r0.textContent = 'Touche encore pour confirmer'; return; }
+        a.evts = Ambiance.defEvts(); sauverAmb(true); rendreAmbiance(); toast('Calendrier d\'origine remis');
+      }
+    };
+  }
+  function selDate(id, v) {
+    var j = +v.slice(3), m = +v.slice(0, 2), h = '<div class="adm-date" id="' + id + '"><select data-p="j">';
+    for (var d = 1; d <= 31; d++) h += '<option value="' + d + '"' + (d === j ? ' selected' : '') + '>' + d + '</option>';
+    h += '</select><select data-p="m">' + MOIS_C.map(function (n, i) { return '<option value="' + (i + 1) + '"' + (i + 1 === m ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></div>';
+    return h;
+  }
+  function lireDate(id) { var z = $('#' + id); return ('0' + $('[data-p="m"]', z).value).slice(-2) + '-' + ('0' + $('[data-p="j"]', z).value).slice(-2); }
+  function editerEvt(i) {
+    var a = reg().ambiance, f = reg().fonds, neuf = i < 0;
+    var e = neuf ? { id: 'e' + Date.now().toString(36), emo: '🎉', nom: '', du: md2(new Date()), au: md2(new Date()), msg: '', effet: 'confettis', extras: [], fonds: null } : JSON.parse(JSON.stringify(a.evts[i]));
+    var choix = Array.isArray(e.fonds) && e.fonds.length;
+    var fe = ouvrirFeuille('<div class="adm-edit"><h2>' + (neuf ? 'Nouvel événement' : esc(e.emo + ' ' + e.nom)) + '</h2>' +
+      '<div class="adm-2"><label class="champ" style="flex:0 0 64px"><span>Icône</span><input id="evEmo" value="' + esc(e.emo || '') + '" maxlength="4"></label><label class="champ" style="flex:1"><span>Nom</span><input id="evNom" value="' + esc(e.nom) + '" placeholder="ex. Anniversaire SDC"></label></div>' +
+      '<div class="adm-2"><div style="flex:1"><div class="adm-lab"><span>Du</span></div>' + selDate('evDu', e.du) + '</div><div style="flex:1"><div class="adm-lab"><span>Au</span></div>' + selDate('evAu', e.au) + '</div></div>' +
+      '<label class="champ"><span>Message sous « Bonjour » (vide = message auto · {annee} = l\'année)</span><input id="evMsg" value="' + esc(e.msg || '') + '" placeholder="ex. Joyeuses fêtes 🎄"></label>' +
+      '<div class="adm-lab"><span>Effet</span></div>' + pucesAdm('effet', EFFETS, [e.effet]) +
+      '<div class="adm-lab" style="margin-top:8px"><span>En plus</span></div>' + pucesAdm('extras', EXTRAS, e.extras || []) +
+      '<div class="adm-lab" style="margin-top:8px"><span>Fonds d\'écran pendant cette période</span></div>' + segAdm('fch', [['tous', 'Tous'], ['choisir', 'Choisir']], choix ? 'choisir' : 'tous') +
+      '<div class="adm-grille petite" id="evFonds"' + (choix ? '' : ' hidden') + '>' + f.liste.map(function (x) { return '<button type="button" class="adm-im' + (choix && e.fonds.indexOf(x.id) >= 0 ? ' on' : ' off') + '" data-fid="' + esc(x.id) + '" style="background-image:url(\'' + esc(Ambiance.miniDe(x)) + '\')"></button>'; }).join('') + '</div>' +
+      '<div class="grille-btns" style="margin-top:12px">' + (neuf ? '<button class="btn sec" data-a="non" type="button">Annuler</button>' : '<button class="btn danger" data-a="suppr" type="button">Supprimer</button>') + '<button class="btn" data-a="ok" type="button">Enregistrer</button></div></div>');
+    $('#feuilleFond').onclick = null;
+    fe.onclick = function (ev) {
+      var pu = ev.target.closest('.adm-chips button'), sb = ev.target.closest('.adm-seg button'), fi = ev.target.closest('[data-fid]'), b = ev.target.closest('[data-a]');
+      if (pu) {
+        var k = pu.parentNode.dataset.k;
+        if (k === 'effet') { e.effet = pu.dataset.v; $$('button', pu.parentNode).forEach(function (x) { x.classList.toggle('on', x === pu); }); }
+        else { var l = e.extras || (e.extras = []), j = l.indexOf(pu.dataset.v); if (j >= 0) l.splice(j, 1); else l.push(pu.dataset.v); pu.classList.toggle('on', j < 0); }
+        return;
+      }
+      if (sb) { $$('button', sb.parentNode).forEach(function (x) { x.classList.toggle('actif', x === sb); }); $('#evFonds').hidden = sb.dataset.v !== 'choisir'; return; }
+      if (fi) { fi.classList.toggle('on'); fi.classList.toggle('off'); return; }
+      if (!b) return;
+      if (b.dataset.a === 'non') { $('#feuilleFond').onclick = null; fermerFeuille(); return; }
+      if (b.dataset.a === 'suppr') {
+        if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Confirmer'; return; }
+        a.evts.splice(i, 1); sauverAmb(true); fermerFeuille(); setTimeout(rendreAmbiance, 80); toast('Événement supprimé'); return;
+      }
+      if (b.dataset.a === 'ok') {
+        e.nom = $('#evNom').value.trim(); e.emo = $('#evEmo').value.trim() || '•'; e.msg = $('#evMsg').value.trim(); e.du = lireDate('evDu'); e.au = lireDate('evAu');
+        if (!e.nom) { toast('Donne un nom à l\'événement.'); $('#evNom').focus(); return; }
+        var fsel = $$('#evFonds .adm-im.on').map(function (x) { return x.dataset.fid; });
+        e.fonds = $('#evFonds').hidden || !fsel.length ? null : fsel;
+        if (neuf) a.evts.push(e); else a.evts[i] = e;
+        sauverAmb(true); fermerFeuille(); setTimeout(rendreAmbiance, 80); toast('Enregistré ✔ · appliqué à toute l\'équipe');
+      }
+    };
+  }
+  function md2(d) { return ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
 
   // ---------- Sections et quantités ----------
   function txtLg(lg) { return (lg || []).map(fm).join(' · '); }
@@ -2361,6 +2506,7 @@
       demanderTexte('Ton prénom', Sync.moi().prenom, '', true).then(function (v) { if (v) Sync.changerPrenom(v).then(function () { toast('Prénom changé'); rendreReglages(); }).catch(function (e) { toast(e.message); }); });
     };
     if ($('#regGestion')) $('#regGestion').onclick = ouvrirGestion;
+    $$('[data-adm]').forEach(function (b) { b.onclick = function () { aller(b.dataset.adm); }; });
     $('#exp').onclick = sauvegarderFichier;
     $('#imp').onclick = function () { $('#impFichier').click(); };
     $('#impFichier').onchange = function () {
@@ -2383,6 +2529,7 @@
     lire: function () { return db; },
     ecrire: function (d) { db = d; sauver(true); },
     changement: function (st, change) {
+      Ambiance.appliquer(reg());
       if (Sync.actif() && !Sync.rejoint() && !verrouEquipe && !st.attente) { setTimeout(proposerRejoindre, 200); }
       if (document.activeElement && document.activeElement.matches('input')) return; // on ne dérange pas une saisie
       if (vueActive === 'plan') { if (change && !apercu && !selection) rendrePlanVue(); return; }
@@ -2391,7 +2538,10 @@
     }
   });
   appliquerTheme();
-  feuillesAutomne();
+  Ambiance.chargeur(function (id) { return Sync.lireFond(id); });
+  Ambiance.appliquer(reg());
+  setInterval(function () { if (!document.hidden) Ambiance.appliquer(reg()); }, 60000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) Ambiance.appliquer(reg()); });
   try { // petit message après une mise à jour automatique
     if (localStorage.getItem('csdc.version') && localStorage.getItem('csdc.version') !== VERSION_APP) setTimeout(function () { toast('Appli mise à jour : nouvelle version ' + VERSION_APP); }, 900);
     localStorage.setItem('csdc.version', VERSION_APP);

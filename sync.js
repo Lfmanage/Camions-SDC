@@ -9,7 +9,7 @@
   // ⬆⬆⬆
 
   var CLE = 'csdc.equipe';
-  var PARTAGE = ['m3Min', 'm3Max', 'e1Min', 'e1Max', 'ecartMax', 'seuil4', 'sections', 'ajouts'];
+  var PARTAGE = ['m3Min', 'm3Max', 'e1Min', 'e1Max', 'ecartMax', 'seuil4', 'sections', 'ajouts', 'fonds', 'ambiance'];
   var st = lire(), hooks = {}, enCours = null, minuterie = null, etat = { erreur: '', derniere: null };
 
   function lire() { try { return JSON.parse(localStorage.getItem(CLE)) || {}; } catch (e) { return {}; } }
@@ -175,7 +175,7 @@
 
   // ---------- Rejoindre ----------
   var MSG = {
-    CODE: 'Code d\'équipe incorrect.', CODE_COURT: 'Code trop court (4 caractères minimum).', SECRET_COURT: 'Code secret trop court (6 caractères minimum).', PRENOM: 'Écris ton prénom.',
+    CODE: 'Code d\'équipe incorrect.', CODE_COURT: 'Code trop court (4 caractères minimum).', SECRET_COURT: 'Code secret trop court (4 caractères minimum).', IMAGE: 'Image trop lourde ou non reconnue.', PRENOM: 'Écris ton prénom.',
     RETIRE: 'Ce téléphone a été retiré de l\'équipe.', PRENOM_PRIS: 'Ce prénom est déjà utilisé dans l\'équipe.', CODE_PRIS: 'Ce code ne peut pas être utilisé.', ADMIN: 'Action non autorisée.',
     SOI_MEME: 'Impossible sur ce téléphone.'
   };
@@ -237,6 +237,13 @@
     definirSecret: function (c) { return rpc('definir_secret', { p_code: c }).catch(function (e) { throw new Error(message(e)); }); },
     nouveauSecret: function () { return rpc('nouveau_secret').catch(function (e) { throw new Error(message(e)); }); },
     retirer: function (uid, remettre) { return rpc('retirer_membre', { p_user: uid, p_actif: !!remettre }).then(membres).then(function () { notifier(true); }).catch(function (e) { throw new Error(message(e)); }); },
+    ajouterFond: function (id, data) { return rpc('ajouter_fond', { p_id: id, p_data: data }).catch(function (e) { throw new Error(message(e)); }); },
+    supprimerFond: function (id) { return rpc('supprimer_fond', { p_id: id }).catch(function () {}); },
+    lireFond: function (id) {
+      if (!rejoint()) return Promise.resolve(null);
+      return session().then(function () { return http('/rest/v1/fonds_images?select=data&id=eq.' + encodeURIComponent(id)); })
+        .then(function (l) { return l && l[0] ? l[0].data : null; }).catch(function () { return null; });
+    },
     changerPrenom: function (p) {
       return rpc('changer_prenom', { p_prenom: nom(p) }).then(function () { st.prenom = nom(p); st.depuis = null; garder(); return lancer(); })
         .catch(function (e) { throw new Error(message(e)); });
