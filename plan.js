@@ -160,7 +160,8 @@
       if (l1 < mn) { var d0 = mn - l1; c += DUR + 50 * d0 + d0 * d0 / 10; }
       if (l1 > mx) { var d1 = l1 - mx; c += DUR + 50 * d1 + d1 * d1 / 10; }
       for (f = 1; f < N; f++) {
-        if (len[b + f] > len[b + f - 1]) { var dd = len[b + f] - len[b + f - 1]; c += DUR + 50 * dd + dd * dd / 10; }
+        if (len[b + f] > len[b + f - 1]) { var dd = len[b + f] - len[b + f - 1]; c += cfg.relax ? 40 + 3 * dd : DUR + 50 * dd + dd * dd / 10; }
+        if (cfg.relax && len[b + f] > mx) { var dx = len[b + f] - mx; c += DUR + 50 * dx + dx * dx / 10; }
       }
       // étages 1 et 2 au plus près de la longueur choisie (13 m, 12 m…), le 3e prend le reste
       var g1 = Math.max(0, mx - l1), g2 = Math.max(0, mx - len[b + 1]);
@@ -168,7 +169,8 @@
     }
     // dernier étage : paires gauche/droite puis le centre ; le tout doit tenir sur l'étage du dessous
     var E = Math.max(len[N - 1], len[2 * N - 1]) + len[C], sup = Math.min(len[N - 2], len[2 * N - 2]);
-    if (E > sup) { var de = E - sup; c += DUR + 50 * de + de * de / 10; }
+    if (E > sup) { var de = E - sup; c += cfg.relax ? 40 + 3 * de : DUR + 50 * de + de * de / 10; }
+    if (cfg.relax && E > mx) { var ex = E - mx; c += DUR + 50 * ex + ex * ex / 10; }
     if (cnt[C] > 1) c += DUR * 2 * (cnt[C] - 1); // un seul colis au milieu (à cheval)
     c += 4 * cnt[C] + 0.05 * Math.abs(len[N - 1] - len[2 * N - 1]);
     // équilibre : le centre pèse à moitié de chaque côté ; l'écart doit être au dernier étage
@@ -445,7 +447,7 @@
     }
     RW.forEach(function (k) { rows[k].m = rows[k].len / 100; rows[k].alerte = false; rows[k].ext = rows[k].len; });
     // dernier étage : espaces laissés à la main entre les colis (decal[id] = vide devant ce colis, en cm)
-    if (decal) [TOP, TOPD].forEach(function (k) { rows[k].colis.forEach(function (c) { rows[k].ext += Math.max(0, +decal[c.id] || 0); }); });
+    if (decal) RW.forEach(function (k) { if (k.charAt(0) !== 'C') rows[k].colis.forEach(function (c) { rows[k].ext += Math.max(0, +decal[c.id] || 0); }); });
     var erreurs = [], avis = [];
     var mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     var manque = 0; ['G', 'D'].forEach(function (p) { manque += Math.max(0, mx - rows[p + '1'].len) + Math.max(0, mx - rows[p + '2'].len); });
@@ -454,21 +456,31 @@
     if (rows[CK].colis.length > 1) { rows[CK].alerte = true; erreurs.push('Un seul colis au milieu : il est à cheval sur les 2 côtés.'); }
     [0, 1].forEach(function (s) {
       var p = s === 0 ? 'G' : 'D', r1 = rows[p + '1'], r2 = rows[p + '2'];
-      if (r1.len < mn || r1.len > mx) {
-        if (r1.len > mx) r1.alerte = true; // trop court : pas grave si tout est chargé
-        erreurs.push('Étage 1 ' + COTE[s] + ' : ' + f2(r1.m) + ' m, il faut entre ' + f2(cfg.e1Min) + ' et ' + f2(cfg.e1Max) + ' m.');
+      if (r1.len < mn || r1.ext > mx) {
+        if (r1.ext > mx) r1.alerte = true; // trop court : pas grave si tout est chargé
+        erreurs.push('Étage 1 ' + COTE[s] + ' : ' + f2(r1.ext / 100) + ' m, il faut entre ' + f2(cfg.e1Min) + ' et ' + f2(cfg.e1Max) + ' m.');
       }
-      if (r2.len > r1.len) { r2.alerte = true; erreurs.push('Étage 2 ' + COTE[s] + ' : ' + f2(r2.m) + ' m, plus long que l\'étage 1 (' + f2(r1.m) + ' m).'); }
-      else if (r2.len > mx) { r2.alerte = true; erreurs.push('Étage 2 ' + COTE[s] + ' : ' + f2(r2.m) + ' m, plus de ' + f2(cfg.e1Max) + ' m.'); }
+      if (r2.ext > r1.ext && !cfg.relax) { r2.alerte = true; erreurs.push('Étage 2 ' + COTE[s] + ' : ' + f2(r2.ext / 100) + ' m, plus long que l\'étage 1 (' + f2(r1.ext / 100) + ' m).'); }
+      else if (r2.ext > mx) { r2.alerte = true; erreurs.push('Étage 2 ' + COTE[s] + ' : ' + f2(r2.ext / 100) + ' m, plus de ' + f2(cfg.e1Max) + ' m.'); }
+      else if (r2.ext > r1.ext) {
+        if (cfg.relax) avis.push('Étage 2 ' + COTE[s] + ' plus long que l\'étage 1 : seule solution pour tout charger.');
+        else { r2.alerte = true; erreurs.push('Étage 2 ' + COTE[s] + ' : ' + f2(r2.ext / 100) + ' m, plus long que l\'étage 1 (' + f2(r1.ext / 100) + ' m).'); }
+      }
       for (var f = 3; f <= N; f++) {
         var ra = rows[p + f], rb = rows[p + (f - 1)];
-        if (ra.ext > rb.ext) { ra.alerte = true; erreurs.push('Étage ' + f + ' ' + COTE[s] + ' : ' + f2(ra.ext / 100) + ' m, plus long que l\'étage ' + (f - 1) + ' (' + f2(rb.ext / 100) + ' m).'); }
+        if (ra.ext > rb.ext && !cfg.relax) { ra.alerte = true; erreurs.push('Étage ' + f + ' ' + COTE[s] + ' : ' + f2(ra.ext / 100) + ' m, plus long que l\'étage ' + (f - 1) + ' (' + f2(rb.ext / 100) + ' m).'); }
         else if (ra.ext > mx) { ra.alerte = true; erreurs.push('Étage ' + f + ' ' + COTE[s] + ' : ' + f2(ra.ext / 100) + ' m, plus de ' + f2(cfg.e1Max) + ' m.'); }
+        else if (ra.ext > rb.ext) {
+          if (cfg.relax) avis.push('Étage ' + f + ' ' + COTE[s] + ' plus long que l\'étage ' + (f - 1) + ' : seule solution pour tout charger.');
+          else { ra.alerte = true; erreurs.push('Étage ' + f + ' ' + COTE[s] + ' : ' + f2(ra.ext / 100) + ' m, plus long que l\'étage ' + (f - 1) + ' (' + f2(rb.ext / 100) + ' m).'); }
+        }
       }
     });
     // dernier étage avec le centre : doit tenir sur les deux piles de l'étage du dessous
     var E3 = Math.max(rows[TOP].ext, rows[TOPD].ext) + rows[CK].len, sup3 = Math.min(rows['G' + (N - 1)].len, rows['D' + (N - 1)].len);
-    if (rows[CK].colis.length && E3 > sup3) { rows[CK].alerte = rows[TOP].alerte = rows[TOPD].alerte = true; erreurs.push('Étage ' + N + ' : ' + f2(E3 / 100) + ' m avec le colis du centre, plus long que l\'étage ' + (N - 1) + ' (' + f2(sup3 / 100) + ' m).'); }
+    if (rows[CK].colis.length && cfg.relax && E3 > mx) { rows[CK].alerte = true; erreurs.push('Étage ' + N + ' : ' + f2(E3 / 100) + ' m avec le colis du centre, plus de ' + f2(cfg.e1Max) + ' m.'); }
+    else if (rows[CK].colis.length && E3 > sup3 && cfg.relax) avis.push('Étage ' + N + ' plus long que l\'étage ' + (N - 1) + ' avec le colis du centre : seule solution pour tout charger.');
+    else if (rows[CK].colis.length && E3 > sup3) { rows[CK].alerte = rows[TOP].alerte = rows[TOPD].alerte = true; erreurs.push('Étage ' + N + ' : ' + f2(E3 / 100) + ' m avec le colis du centre, plus long que l\'étage ' + (N - 1) + ' (' + f2(sup3 / 100) + ' m).'); }
     if (N === 4) {
       var gros = [TOP, TOPD, CK].reduce(function (a, k) { return a + rows[k].colis.filter(function (c) { return !estPetit(c); }).length; }, 0);
       if (gros) { [TOP, TOPD, CK].forEach(function (k) { if (rows[k].colis.some(function (c) { return !estPetit(c); })) rows[k].alerte = true; }); erreurs.push('Étage 4 : seuls les 18×100 peuvent monter au 4e étage (' + gros + ' colis à descendre).'); }
@@ -537,14 +549,21 @@
   function tient(v, cfg) {
     var mx = Math.round(cfg.e1Max * 100), ok = true;
     v.ROWS.forEach(function (k) { if (k.charAt(0) !== 'C' && v.rows[k].ext > mx) ok = false; });
-    ['G', 'D'].forEach(function (s) { for (var f = 2; f <= v.N; f++) if (v.rows[s + f].ext > v.rows[s + (f - 1)].ext) ok = false; });
-    if (v.rows['C' + v.N].colis.length && v.e3 > v.sup3 + 1e-9) ok = false;
+    if (!cfg.relax) ['G', 'D'].forEach(function (s) { for (var f = 2; f <= v.N; f++) if (v.rows[s + f].ext > v.rows[s + (f - 1)].ext) ok = false; });
+    if (v.rows['C' + v.N].colis.length && v.e3 > (cfg.relax ? mx / 100 : v.sup3) + 1e-9) ok = false;
     return ok && !v.nonPlaces.length;
   }
   // Meilleur plan où tout rentre ; sinon, le plus petit colis (m³) est mis de côté ('X'), et on recommence
-  function meilleurTient(lignes, cfg, budget) {
+  function meilleurTient(lignes, cfg, budget, relaxOk) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var res = meilleur(lignes, cfg, 12, budget || 2000), cote = [], cur = lignes;
+    if (relaxOk && (!tient(res.verif, cfg) || res.verif.ecrase)) {
+      // double : un étage du haut plus long est permis si c'est la seule façon de tout charger (ou de garder les fines en haut)
+      var cr = Object.assign({}, cfg, { relax: true }); delete cr._L;
+      var rr = meilleur(lignes, cr, 12, budget || 2000);
+      if (tient(rr.verif, cr) && (!tient(res.verif, cfg) || (rr.verif.ecrase || 0) < res.verif.ecrase)) { rr.relax = true; return rr; }
+      if (!tient(res.verif, cfg)) { cfg = cr; res = rr; }
+    }
     for (var n = 0; n < 6 && !tient(res.verif, cfg); n++) {
       var cs = colisDe(cur).filter(function (c) { return c.cm > 0 && c.vol > 0; });
       if (cs.length < 3) break;
@@ -554,12 +573,12 @@
       cote.push(pc.ligneId);
       res = meilleur(cur, cfg, 12, 1200);
     }
-    if (!cote.length) return res;
+    if (!cote.length) { if (cfg.relax) res.relax = true; return res; }
     // les colis de côté prennent les derniers numéros de leur ligne : les autres gardent leur id
     var plan = Object.assign({}, res.plan), restant = {};
     cur.forEach(function (l) { restant[l.id] = l.nb || 1; });
     lignes.forEach(function (l) { for (var k = restant[l.id] || 0; k < (l.nb || 1); k++) plan[l.id + '#' + k] = 'X'; });
-    return { plan: plan, verif: verifier(lignes, plan, cfg), note: res.note, cote: cote.length };
+    return { plan: plan, verif: verifier(lignes, plan, cfg), note: res.note, cote: cote.length, relax: !!cfg.relax };
   }
   function partager(lignes, lgs, cfg, graine) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
@@ -597,9 +616,9 @@
     }
     // toujours pas : le plus petit colis de côté dans la remorque concernée
     return res.map(function (x, i) {
-      if (!x.lignes.length || x.ok) return x;
-      var m = meilleurTient(x.lignes, cfgR(i), 1200);
-      return { lignes: x.lignes, plan: m.plan, verif: m.verif, note: m.note, cfg: cfgR(i), cote: m.cote || 0 };
+      if (!x.lignes.length || (x.ok && !x.verif.ecrase)) return x;
+      var m = meilleurTient(x.lignes, cfgR(i), 1200, true);
+      return { lignes: x.lignes, plan: m.plan, verif: m.verif, note: m.note, cfg: m.relax ? Object.assign(cfgR(i), { relax: true }) : cfgR(i), cote: m.cote || 0, relax: !!m.relax };
     });
   }
 

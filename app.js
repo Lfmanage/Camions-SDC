@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '51';
+  var VERSION_APP = '52';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -54,7 +54,7 @@
     var r = Object.assign({}, db.reglages);
     if (c && c.lgMax) { r.e1Max = c.lgMax; r.e1Min = Math.max(1, c.lgMax - (db.reglages.e1Max - db.reglages.e1Min)); }
     if (c && c.double && c.double.lg) { r.e1Max = c.double.lg[0] + c.double.lg[1]; r.e1Min = Math.max(1, r.e1Max - (db.reglages.e1Max - db.reglages.e1Min)); }
-    if (c && c.parentId) { var pp = db.camions[c.parentId], rp = pp ? cfgC(pp) : r; r.m3Min = 0; r.m3Max = 1e6; r.cible = rp.cible; return r; }
+    if (c && c.parentId) { var pp = db.camions[c.parentId], rp = pp ? cfgC(pp) : r; r.m3Min = 0; r.m3Max = 1e6; r.cible = rp.cible; if (c.relax) r.relax = true; return r; }
     if (c && c.volMode === 'exact' && c.volExact > 0) { r.m3Min = c.volExact - TOL_EXACT; r.m3Max = c.volExact + TOL_EXACT; r.cible = c.volExact; }
     else r.cible = r.m3Max;
     return r;
@@ -94,7 +94,7 @@
     p.double.r = res.map(function (x, i) {
       return { id: p.id + '~' + i, parentId: p.id, rem: i, lgMax: p.double.lg[i], lignes: x.lignes, plan: x.plan, ordre: null, decal: null,
         planDepart: { plan: JSON.parse(JSON.stringify(x.plan)), note: x.note }, planCalcule: true, planManuel: false, planVariante: false, plansVus: null, graineAutre: 1,
-        total_m3: Math.round(P.totalM3(x.lignes) * 1000) / 1000 };
+        total_m3: Math.round(P.totalM3(x.lignes) * 1000) / 1000, relax: !!x.relax };
     });
     p.double.actif = 0; p.double.sig = sigLignes(p.lignes); p.double.algo = 2;
   }
@@ -113,7 +113,9 @@
   function calculerPlan(c) {
     if (c.double) { if (besoinSplit(c)) splitDouble(c); return; }
     if (!c.lignes.length) { majPlan(c); return; }
-    var res = P.meilleurTient(c.lignes, cfgC(c));
+    var cf = cfgC(c); delete cf.relax;
+    var res = P.meilleurTient(c.lignes, cf, undefined, !!c.parentId);
+    if (c.parentId) c.relax = !!res.relax;
     c.tientEssaye = sigLignes(c.lignes);
     c.plan = res.plan; c.decal = null; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
     c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
@@ -937,6 +939,7 @@
     if (P.deseq(v) > r.ecartMax + 0.005) return { cls: 'a', etq: '≈ Équilibré au mieux', court: 'Écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³, le plus faible possible.', detail: 'Avec ces colis, écart de ' + f2(Math.min(P.deseq(v), 99)) + ' m³ entre gauche et droite : le plus faible possible.' };
     var lgM = v.avis.filter(function (m) { return /cm/.test(m); });
     if (lgM.length) return { cls: 'a', etq: '≈ Équilibré au mieux', court: 'Longueurs gauche/droite : le plus proche possible.', detail: lgM[0].replace(/\.$/, '') + ' : le plus petit écart possible avec ces colis.' };
+    if (v.avis.some(function (m) { return /seule solution/.test(m); })) return { cls: 'a', etq: '≈ Fait au mieux', court: 'Un étage du haut est plus long : seule solution pour tout charger.', detail: 'Pour tout faire rentrer (ou garder les sections fines en haut), un étage du haut est plus long que celui du dessous. Il ne dépasse jamais la remorque.' };
     return { cls: 'o', etq: '✓ Équilibré' };
   }
 
@@ -958,7 +961,7 @@
         if (ext > mx) aj('Dépasse ' + fm(r.e1Max) + ' m');
         if (f > 1) {
           var dessous = v.rows[s + (f - 1)].ext;
-          if (ext > dessous && ro.colis.length + (f === N ? v.rows['C' + N].colis.length : 0)) aj('É' + f + ' plus long que É' + (f - 1));
+          if (!r.relax && ext > dessous && ro.colis.length + (f === N ? v.rows['C' + N].colis.length : 0)) aj('É' + f + ' plus long que É' + (f - 1));
         }
       }
     });
@@ -1024,11 +1027,16 @@
           ro.colis.forEach(function (k, i) { if (aMain) h += htmlVide(gg[i], 'data-gap="' + esc(k.id) + '"'); fin += gg[i] + k.cm; h += chip(k, false, false, true); });
           if (ro.colis.length && aMain) h += htmlVide(Math.max(0, v.rows[s + (f - 1)].ext - fin), 'data-fin="' + s + f + '"');
           lgAff = E / 100;
+        } else if (c.parentId) { // double remorque : chaque étage se règle à la main en glissant
+          var ggD = gapsRow(c, v, s + f), finD = 0, aMainD = ro.colis.some(function (k) { return c.decal && c.decal[k.id] != null; });
+          ro.colis.forEach(function (k, i) { if (aMainD) h += htmlVide(ggD[i], 'data-gap="' + esc(k.id) + '"'); finD += ggD[i] + k.cm; h += chip(k, false, false, true); });
+          lgAff = ro.ext / 100;
+          if (ro.colis.length && aMainD) h += htmlVide(Math.max(0, (f > 1 ? Math.min(Math.round(r.e1Max * 100), v.rows[s + (f - 1)].ext) : Math.round(r.e1Max * 100)) - finD), 'data-fin="' + s + f + '"');
         } else ro.colis.forEach(function (k) { h += chip(k, false); });
         // place libre : É1 par rapport à la remorque, É2 par rapport à É1, É3 par rapport à É2
         var occ = ro.ext + (f === N ? v.rows['C' + N].len : 0);
         var libre = (f > 1 ? Math.min(Math.round(r.e1Max * 100), v.rows[s + (f - 1)].ext) : Math.round(r.e1Max * 100)) - occ;
-        var mainIci = f === N && ro.colis.some(function (k) { return c.decal && c.decal[k.id] != null; });
+        var mainIci = (f === N || c.parentId) && ro.colis.some(function (k) { return c.decal && c.decal[k.id] != null; });
         if (!(edit && (selection || selEtr)) && libre >= 30 && !mainIci) {
           h += '<i class="libre-txt" style="left:calc(2px + (100% - ' + (4 + place) + 'px) * ' + (occ / maxLen).toFixed(4) + ');width:calc((100% - ' + (4 + place) + 'px) * ' + (libre / maxLen).toFixed(4) + ' - 2px)"></i>';
           h = h.replace('@LIB@', '<em class="tag-libre">' + fm(Math.round(libre) / 100) + ' m libre</em>');
@@ -1055,7 +1063,7 @@
         '<button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button>' +
         '<button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else h += '<div class="aide-l">' + (legMil || '<span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer. Glisse ceux du dernier étage.</span>') + '<span class="leg-libre"><i></i>Place libre : jusqu\'au bout de l\'étage du dessous (É1 : jusqu\'au bout de la remorque)</span>' +
+      else h += '<div class="aide-l">' + (legMil || '<span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer. ' + (c.parentId ? 'Glisse-le pour le décaler.' : 'Glisse ceux du dernier étage.') + '</span>') + '<span class="leg-libre"><i></i>Place libre : jusqu\'au bout de l\'étage du dessous (É1 : jusqu\'au bout de la remorque)</span>' +
         ((c.planManuel || c.planVariante) ? '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>' : '') + '</div>';
       if (sel && (c.planManuel || c.planVariante)) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>';
     }
@@ -1342,8 +1350,9 @@
     var v = vplan(c), id = ch.dataset.c, k = c.plan && c.plan[id]; if (!k || !v.rows[k]) return;
     var cs = v.rows[k].colis, i = cs.map(function (x) { return x.id; }).indexOf(id); if (i < 0) return;
     var trk = ch.parentNode, lu = (trk.clientWidth - 4 - planGeo.place) / planGeo.maxLen; // px par cm
-    var gaps = gapsRow(c, v, k), fin = v.rows['C' + v.N].len + cs.reduce(function (a2, x, j) { return a2 + x.cm + gaps[j]; }, 0);
-    var finSup = v.rows[k.charAt(0) + (v.N - 1)].ext;
+    var fl = +k.slice(1), mxC = Math.round(cfgC(c).e1Max * 100);
+    var gaps = gapsRow(c, v, k), fin = (fl === v.N ? v.rows['C' + v.N].len : 0) + cs.reduce(function (a2, x, j) { return a2 + x.cm + gaps[j]; }, 0);
+    var finSup = fl > 1 ? (c.parentId ? Math.min(mxC, v.rows[k.charAt(0) + (fl - 1)].ext) : v.rows[k.charAt(0) + (v.N - 1)].ext) : mxC;
     gl = { c: c, k: k, id: id, i: i, cs: cs, g0: gaps, fin0: fin, finSup: finSup, x0: e.clientX, y0: e.clientY, lu: lu, d: 0, actif: false, ch: ch, pid: e.pointerId, trk: trk };
   });
   window.addEventListener('pointermove', function (e) {
@@ -1730,7 +1739,8 @@
           var gg = gapsRow(c, v, s + f);
           ro.colis.forEach(function (k, i) { if (gg[i] > 0) items.push({ esp: 1, cm: gg[i] }); items.push({ k: k, cm: k.cm }); });
           lgAff = E / 100;
-        } else ro.colis.forEach(function (k) { items.push({ k: k, cm: k.cm }); });
+        } else if (c.parentId) { var ggI = gapsRow(c, v, s + f); ro.colis.forEach(function (k, i) { if (ggI[i] > 0) items.push({ esp: 1, cm: ggI[i] }); items.push({ k: k, cm: k.cm }); }); lgAff = ro.ext / 100; }
+        else ro.colis.forEach(function (k) { items.push({ k: k, cm: k.cm }); });
         x.font = F(500, 22); x.fillStyle = MU; x.fillText('É' + f, pad, yy + 26);
         x.font = F(600, 28); x.fillStyle = ro.alerte ? ROUGE : INK; x.fillText(fm(Math.round(lgAff * 100) / 100) + ' m', pad, yy + 60);
         piste(items, yy);
@@ -2072,7 +2082,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=51" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=51" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=52" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=52" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
