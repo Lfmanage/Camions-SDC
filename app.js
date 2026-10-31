@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '55';
+  var VERSION_APP = '56';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -622,8 +622,10 @@
     $('#calcVol').parentNode.classList.toggle('vide', vol == null);
     var sv = $('#paveSuiv'); sv.classList.toggle('pret', pret);
     sv.innerHTML = pret ? 'Ajouter<small>et suivant</small>' : 'Suivant';
-    rendreSuivi();
+    var cc = courant(), sig = cc.id + '|' + cc.lignes.map(function (l) { return l.id + ':' + (l.nb || 1); }).join(',') + '|' + cc.total_m3 + '|' + cfgC(cc).cible + '|' + !!$('#calcSuivi').children.length;
+    if (sig !== sigSuivi) { sigSuivi = sig; rendreSuivi(); } // la liste n'est refaite que si les paquets changent (plus de saut en tapant)
   }
+  var sigSuivi = '';
   // Suivi du camion en cours dans le calcul m³ : total après chaque paquet
   function rendreSuivi() {
     var c = courant(), r = cfgC(c), tot = c.total_m3 || 0, e = P.etat(tot, r);
@@ -1535,7 +1537,7 @@
   }
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=55';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=56';
   function imagePlan(c) { return ficheJolie(c, 'plan'); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2020,7 +2022,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=55" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=55" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=56" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=56" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

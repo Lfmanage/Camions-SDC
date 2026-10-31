@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=55') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=55') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=55') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=55') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=55') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=55') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=56') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=56') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=56') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=56') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=56') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=56') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1174,3 +1174,28 @@ body { font-feature-settings: "tnum"; }
 #v-calcul .suivi { min-height: 120px; overflow: hidden; }
 #v-camion .liste { min-height: 90px; }
 .pave button { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+
+/* v56 — Calcul m³ compact : tout tient, les chiffres tapés toujours visibles, la liste a de la place */
+#v-calcul { gap: 6px; }
+#v-calcul .calc-res { padding: 0 2px; }
+#v-calcul .calc-v b { font-size: 34px; }
+#v-calcul .fd { padding: 6px 9px 7px; }
+#v-calcul .fd b { font-size: 21px; min-height: 26px; line-height: 26px; }
+#v-calcul .pave { gap: 5px; }
+#v-calcul .pave button:not(.suiv) { height: 44px; }
+#v-calcul .suivi { min-height: 170px; padding: 10px 12px 2px; gap: 6px; }
+#v-calcul .sv-h b { font-size: 24px; }
+#v-calcul .sv-liste > div { min-height: 44px; grid-template-columns: 22px minmax(0, 1fr) auto 58px; }
+#v-calcul .sv-liste em { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-height: 760px) {
+  #v-calcul .calc-v b { font-size: 28px; }
+  #v-calcul .pave button:not(.suiv) { height: 38px; font-size: 20px; }
+  #v-calcul .suivi { min-height: 150px; }
+}
+/* v56 — accueil : « Bonsoir » toujours lisible, quelle que soit l'image (carte en verre) */
+#v-accueil .acc-tete { background: rgba(247, 250, 245, .84); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, .6); border-radius: 24px; padding: 12px 16px !important; box-shadow: 0 8px 24px rgba(10, 30, 20, .14); align-items: center; }
+#v-accueil .acc-date, #v-accueil .acc-sous { color: #36503F !important; text-shadow: none; }
+#v-accueil .acc-titre { color: #102419 !important; }
+:root[data-theme="sombre"] #v-accueil .acc-tete { background: rgba(18, 30, 23, .82); border-color: rgba(255, 255, 255, .1); }
+:root[data-theme="sombre"] #v-accueil .acc-date, :root[data-theme="sombre"] #v-accueil .acc-sous { color: #B9D2C2 !important; }
+:root[data-theme="sombre"] #v-accueil .acc-titre { color: #F1F7F2 !important; }
