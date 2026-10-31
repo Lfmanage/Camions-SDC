@@ -531,6 +531,34 @@
     lignes.forEach(function (l) { var n = compte[l.id] || 0; if (n > 0) { var x = Object.assign({}, l); x.nb = n; out.push(x); } });
     return out;
   }
+  // Tout doit rentrer : aucun étage plus long que la longueur choisie, ni plus long que celui du dessous
+  function tient(v, cfg) {
+    var mx = Math.round(cfg.e1Max * 100), ok = true;
+    v.ROWS.forEach(function (k) { if (k.charAt(0) !== 'C' && v.rows[k].ext > mx) ok = false; });
+    ['G', 'D'].forEach(function (s) { for (var f = 2; f <= v.N; f++) if (v.rows[s + f].ext > v.rows[s + (f - 1)].ext) ok = false; });
+    if (v.rows['C' + v.N].colis.length && v.e3 > v.sup3 + 1e-9) ok = false;
+    return ok && !v.nonPlaces.length;
+  }
+  // Meilleur plan où tout rentre ; sinon, le plus petit colis (m³) est mis de côté ('X'), et on recommence
+  function meilleurTient(lignes, cfg, budget) {
+    cfg = Object.assign({}, DEFAUT, cfg || {});
+    var res = meilleur(lignes, cfg, 12, budget || 2000), cote = [], cur = lignes;
+    for (var n = 0; n < 6 && !tient(res.verif, cfg); n++) {
+      var cs = colisDe(cur).filter(function (c) { return c.cm > 0 && c.vol > 0; });
+      if (cs.length < 3) break;
+      cs.sort(function (a, b) { return a.vol - b.vol || a.cm - b.cm; });
+      var pc = cs[0];
+      cur = cur.map(function (l) { if (l.id !== pc.ligneId) return l; var x = Object.assign({}, l); x.nb = (x.nb || 1) - 1; return x; }).filter(function (l) { return (l.nb || 1) > 0 && l.nb !== 0; });
+      cote.push(pc.ligneId);
+      res = meilleur(cur, cfg, 12, 1200);
+    }
+    if (!cote.length) return res;
+    // les colis de côté prennent les derniers numéros de leur ligne : les autres gardent leur id
+    var plan = Object.assign({}, res.plan), restant = {};
+    cur.forEach(function (l) { restant[l.id] = l.nb || 1; });
+    lignes.forEach(function (l) { for (var k = restant[l.id] || 0; k < (l.nb || 1); k++) plan[l.id + '#' + k] = 'X'; });
+    return { plan: plan, verif: verifier(lignes, plan, cfg), note: res.note, cote: cote.length };
+  }
   function partager(lignes, lgs, cfg, graine) {
     cfg = Object.assign({}, DEFAUT, cfg || {});
     var colis = colisDe(lignes).filter(function (c) { return c.cm > 0 && c.vol > 0; });
@@ -552,14 +580,28 @@
       parts.forEach(function (lg, i) { if (lg.length) note += noteVerif(proposer(lg, cfgR(i), true, e).verif); });
       if (!best || note < best.note) best = { parts: parts, note: note };
     }
-    return best.parts.map(function (lg, i) {
-      if (!lg.length) return { lignes: [], plan: {}, verif: null, note: 0, cfg: cfgR(i) };
-      var m = meilleur(lg, cfgR(i), 12, 1500);
-      return { lignes: lg, plan: m.plan, verif: m.verif, note: m.note, cfg: cfgR(i) };
+    function finir(parts) {
+      return parts.map(function (lg, i) {
+        if (!lg.length) return { lignes: [], plan: {}, verif: null, note: 0, cfg: cfgR(i), cote: 0 };
+        var m = meilleur(lg, cfgR(i), 12, 1500);
+        return { lignes: lg, plan: m.plan, verif: m.verif, note: m.note, cfg: cfgR(i), cote: 0, ok: tient(m.verif, cfgR(i)) };
+      });
+    }
+    var res = finir(best.parts);
+    // pas tout rentré : on essaie d'autres répartitions entre les 2 remorques
+    for (var e2 = 1; e2 <= 4 && res.some(function (x) { return x.lignes.length && !x.ok; }) && Date.now() - t0 < 9000; e2++) {
+      var pt = essai(0.3 + e2 * 0.15), r2 = finir(pt);
+      if (r2.filter(function (x) { return x.lignes.length && !x.ok; }).length < res.filter(function (x) { return x.lignes.length && !x.ok; }).length) res = r2;
+    }
+    // toujours pas : le plus petit colis de côté dans la remorque concernée
+    return res.map(function (x, i) {
+      if (!x.lignes.length || x.ok) return x;
+      var m = meilleurTient(x.lignes, cfgR(i), 1200);
+      return { lignes: x.lignes, plan: m.plan, verif: m.verif, note: m.note, cfg: cfgR(i), cote: m.cote || 0 };
     });
   }
 
-  var Plan = { partager: partager, estFine: estFine, nbEtages: nbEtages, estPetit: estPetit, SECTIONS: SECTIONS, trouverSection: trouverSection, lgPlan: lgPlan, ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, ecartLg: ecartLg, ECART_LG: ECART_LG, autre: autre, signature: signature, verifier: verifier, f2: f2 };
+  var Plan = { partager: partager, tient: tient, meilleurTient: meilleurTient, estFine: estFine, nbEtages: nbEtages, estPetit: estPetit, SECTIONS: SECTIONS, trouverSection: trouverSection, lgPlan: lgPlan, ROWS: ROWS, DEFAUT: DEFAUT, num: num, volLigne: volLigne, volTotalLigne: volTotalLigne, totalM3: totalM3, etat: etat, colisDe: colisDe, proposer: proposer, meilleur: meilleur, noteVerif: noteVerif, deseq: deseq, ecartLg: ecartLg, ECART_LG: ECART_LG, autre: autre, signature: signature, verifier: verifier, f2: f2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = Plan;
   else root.Plan = Plan;
 })(typeof window !== 'undefined' ? window : this);

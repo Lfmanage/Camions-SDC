@@ -987,18 +987,18 @@ img, svg, canvas { max-width: 100%; }
 :root[data-theme="sombre"] { --ch: #56635c; --pn: #2b342f; --ja: #9aa69f; }
 .trk { border-left: 0; margin-left: 4px; }
 .trk::before { content: ""; position: absolute; left: -6px; top: -4px; bottom: -4px; width: 4px; background: var(--ch); }
-.rang-ch { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 5px; height: 30px; }
+.rang.rang-ch { min-height: 0; height: 30px; align-items: start; }
 .chassis { position: relative; height: 30px; margin-left: 4px; }
-.chassis::before { content: ""; position: absolute; left: -6px; top: -4px; width: 4px; height: 6px; background: var(--ch); }
-.ch-sol { position: absolute; left: -6px; right: 0; top: 2px; height: 7px; background: var(--ch); border-radius: 0 3px 4px 4px; }
+.chassis::before { content: ""; position: absolute; left: -6px; top: -5px; width: 4px; height: 10px; background: var(--ch); }
+.ch-sol { position: absolute; left: -6px; right: 0; top: 2px; height: 7px; background: var(--ch); border-radius: 0 3px 4px 0; }
 .ch-cr { position: absolute; left: 14%; top: 9px; width: 14px; height: 5px; background: var(--ch); border-radius: 0 0 3px 3px; }
 .ch-roues { position: absolute; top: 5px; display: flex; gap: 2px; }
-.ch-roues.ar { right: 16%; } .ch-roues.av { left: 8%; }
+.ch-roues.ar { right: 16%; } .ch-roues.avant { left: 8%; }
 .roue { width: 20px; height: 20px; display: block; }
 .sens .hl { font-size: 11.5px; font-weight: 700; color: var(--text); }
 .hl.vert::before { background: linear-gradient(90deg, rgba(120,200,90,.5), rgba(120,200,90,.85) 12%, rgba(130,210,100,.8) 85%, rgba(120,200,90,.45)); }
 .hl.gris::before { background: linear-gradient(90deg, rgba(150,160,155,.5), rgba(150,160,155,.85) 12%, rgba(160,170,165,.8) 85%, rgba(150,160,155,.45)); }
-@media (min-width: 640px) { .rang-ch, .chassis { height: 32px; } .roue { width: 26px; height: 26px; } }
+@media (min-width: 640px) { .rang.rang-ch, .chassis { height: 32px; } .roue { width: 26px; height: 26px; } }
 
 /* v47 — double remorque */
 .lien-double { display: block; margin: 2px auto 10px; background: none; border: 0; color: var(--accent); font: 600 13.5px/1.2 inherit; font-family: inherit; padding: 6px 10px; opacity: .9; cursor: pointer; }
@@ -1020,3 +1020,33 @@ img, svg, canvas { max-width: 100%; }
 .rem-etr { border: 1px dashed var(--accent); }
 .rem-h { margin: 12px 2px 4px; font-size: 14px; color: var(--accent); }
 .tag-dbl { font-style: normal; font-size: 10px; font-weight: 700; background: #3B5A34; color: #E6F0DA; border-radius: 5px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
+
+/* v47 — accueil : barre collée en bas, tout visible sans descendre */
+@media (max-width: 959px) {
+  .barre { left: 0; right: 0; transform: none; width: 100%; max-width: none; bottom: 0; border-radius: 22px 22px 0 0; border-width: 1px 0 0;
+    padding: 6px max(8px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 4px) max(8px, env(safe-area-inset-left)); min-height: 0; }
+  .onglet { min-height: 50px; }
+  #v-accueil { gap: 8px; }
+  #v-accueil .acc-tete { min-height: 0; padding: 4px 2px 0; }
+  #v-accueil .acc-titre { font-size: 36px; }
+  #v-accueil .acc-sous { margin-top: 2px; }
+  #v-accueil .logo { height: 52px; }
+  #v-accueil .hero-go { min-height: 84px; padding: 16px 18px; }
+  #v-accueil .tuile { min-height: 0; padding: 12px 14px; }
+  #v-accueil .tuile svg { width: 24px; height: 24px; }
+  #v-accueil .stat { padding: 10px 14px; }
+}
+.lien-double { margin: 0 auto; padding: 4px 10px; }
+.lien-double span { position: relative; z-index: 0; padding: 0 6px; color: var(--text); font-weight: 700; }
+.lien-double span::before { content: ""; position: absolute; z-index: -1; left: -2px; right: -4px; bottom: 1px; height: 62%; border-radius: 3px 8px 4px 9px / 7px 3px 8px 4px; transform: rotate(-1.2deg) skewX(-6deg); background: linear-gradient(90deg, rgba(150,200,120,.5), rgba(150,200,120,.85) 12%, rgba(160,210,130,.8) 85%, rgba(150,200,120,.45)); }
+
+/* v47 — textes lisibles sur la forêt : Stabilo jaune doux */
+#v-accueil .titre-sec, #v-accueil .astuce { text-shadow: none; color: #1f2a22; }
+#v-accueil .titre-sec { display: inline-block; justify-self: start; align-self: flex-start; }
+#v-accueil .titre-sec, #v-accueil .astuce { position: relative; z-index: 0; }
+#v-accueil .titre-sec::before { content: ""; position: absolute; z-index: -1; left: -5px; right: -6px; bottom: 0; height: 62%; border-radius: 3px 8px 4px 9px / 7px 3px 8px 4px; transform: rotate(-1deg) skewX(-6deg); background: rgba(255, 228, 120, .8); }
+#v-accueil .astuce { align-self: center; width: fit-content; margin-left: auto; margin-right: auto; padding: 1px 8px; border-radius: 6px; background: rgba(255, 233, 140, .72); font-weight: 500; }
+:root[data-theme="sombre"] #v-accueil .titre-sec, :root[data-theme="sombre"] #v-accueil .astuce { color: #1f2a22; }
+#btnInstaller { display: none !important; }
+.poser { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; white-space: nowrap; }
+.poser small { font-size: 10px; font-weight: 700; opacity: .9; }
