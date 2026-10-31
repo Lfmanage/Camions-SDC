@@ -447,13 +447,12 @@
     }
     RW.forEach(function (k) { rows[k].m = rows[k].len / 100; rows[k].alerte = false; rows[k].ext = rows[k].len; });
     // dernier étage : espaces laissés à la main entre les colis (decal[id] = vide devant ce colis, en cm)
-    if (decal) RW.forEach(function (k) { if (k.charAt(0) !== 'C') rows[k].colis.forEach(function (c) { rows[k].ext += Math.max(0, +decal[c.id] || 0); }); });
+    if (decal) RW.forEach(function (k) { rows[k].colis.forEach(function (c) { rows[k].ext += Math.max(0, +decal[c.id] || 0); }); });
     var erreurs = [], avis = [];
     var mn = Math.round(cfg.e1Min * 100), mx = Math.round(cfg.e1Max * 100);
     var manque = 0; ['G', 'D'].forEach(function (p) { manque += Math.max(0, mx - rows[p + '1'].len) + Math.max(0, mx - rows[p + '2'].len); });
     if (nonPlaces.length) erreurs.push(nonPlaces.length + (nonPlaces.length > 1 ? ' colis non placés.' : ' colis non placé.'));
     if (cote.length) erreurs.push(cote.length + ' colis de côté : remets-' + (cote.length > 1 ? 'les' : 'le') + ' dans le camion.');
-    if (rows[CK].colis.length > 1) { rows[CK].alerte = true; erreurs.push('Un seul colis au milieu : il est à cheval sur les 2 côtés.'); }
     [0, 1].forEach(function (s) {
       var p = s === 0 ? 'G' : 'D', r1 = rows[p + '1'], r2 = rows[p + '2'];
       if (r1.len < mn || r1.ext > mx) {
@@ -477,7 +476,7 @@
       }
     });
     // dernier étage avec le centre : doit tenir sur les deux piles de l'étage du dessous
-    var E3 = Math.max(rows[TOP].ext, rows[TOPD].ext) + rows[CK].len, sup3 = Math.min(rows['G' + (N - 1)].len, rows['D' + (N - 1)].len);
+    var E3 = Math.max(rows[TOP].ext, rows[TOPD].ext) + rows[CK].ext, sup3 = Math.min(rows['G' + (N - 1)].len, rows['D' + (N - 1)].len);
     if (rows[CK].colis.length && cfg.relax && E3 > mx) { rows[CK].alerte = true; erreurs.push('Étage ' + N + ' : ' + f2(E3 / 100) + ' m avec le colis du centre, plus de ' + f2(cfg.e1Max) + ' m.'); }
     else if (rows[CK].colis.length && E3 > sup3 && cfg.relax) avis.push('Étage ' + N + ' plus long que l\'étage ' + (N - 1) + ' avec le colis du centre : seule solution pour tout charger.');
     else if (rows[CK].colis.length && E3 > sup3) { rows[CK].alerte = rows[TOP].alerte = rows[TOPD].alerte = true; erreurs.push('Étage ' + N + ' : ' + f2(E3 / 100) + ' m avec le colis du centre, plus long que l\'étage ' + (N - 1) + ' (' + f2(sup3 / 100) + ' m).'); }
