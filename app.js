@@ -3,9 +3,9 @@
   'use strict';
   ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (e) { document.addEventListener(e, function (x) { x.preventDefault(); }, { passive: false }); });
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
-  var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || ''))) x.preventDefault(); dtap = n; }, { passive: false });
+  var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '54';
+  var VERSION_APP = '55';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1535,7 +1535,7 @@
   }
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=54';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=55';
   function imagePlan(c) { return ficheJolie(c, 'plan'); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -1602,7 +1602,15 @@
     var fd = Ambiance.cfg(reg()).fonds, im = Ambiance.imageAffichee();
     if (im && im.naturalWidth) {
       var k = Math.max(W / im.naturalWidth, H / im.naturalHeight), iw = im.naturalWidth * k, ih = im.naturalHeight * k;
-      try { x.save(); if (fd.flou) x.filter = 'blur(' + Math.round(fd.flou * 1.6 * S) + 'px)'; x.drawImage(im, (W - iw) / 2, (H - ih) / 2, iw, ih); x.restore(); } catch (e) {}
+      try { // flou fait à la main (marche aussi sur iPhone) : image réduite puis agrandie en douceur
+        var fl = Math.max(4, fd.flou || 0), red = 1 / (2 + fl * 1.6), t1 = document.createElement('canvas'), t2 = document.createElement('canvas');
+        t1.width = Math.max(8, Math.round(iw * red)); t1.height = Math.max(8, Math.round(ih * red));
+        var g1 = t1.getContext('2d'); g1.imageSmoothingQuality = 'high'; g1.drawImage(im, 0, 0, t1.width, t1.height);
+        t2.width = Math.max(4, Math.round(t1.width / 2)); t2.height = Math.max(4, Math.round(t1.height / 2));
+        var g2 = t2.getContext('2d'); g2.imageSmoothingQuality = 'high'; g2.drawImage(t1, 0, 0, t2.width, t2.height);
+        x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+        x.drawImage(t2, (W - iw) / 2, (H - ih) / 2, iw, ih);
+      } catch (e) {}
     }
     x.fillStyle = 'rgba(232,238,230,' + Math.max(0.15, fd.voile / 100) + ')'; x.fillRect(0, 0, W, H);
     // ---- en-tête ----
@@ -2012,7 +2020,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=54" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=54" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=55" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=55" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

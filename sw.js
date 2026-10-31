@@ -1,43 +1,45 @@
 /* Camions SDC — service worker (hors ligne). Changer VERSION à chaque mise à jour.
    Mise à jour automatique : la page est toujours redemandée au serveur, le nouveau service worker
    s'active tout de suite (skipWaiting + clients.claim) et l'appli se recharge seule. Rien à réinstaller. */
-const VERSION = 'camions-sdc-v54';
+const VERSION = 'camions-sdc-v55';
 const FICHIERS = [
   './',
   'index.html',
-  'barlow-regular.woff?v=54',
-  'barlow-medium.woff?v=54',
-  'barlow-semibold.woff?v=54',
-  'barlow-bold.woff?v=54',
-  'barlowcondensed-semibold.woff?v=54',
-  'barlowcondensed-bold.woff?v=54',
-  'style.css?v=54',
-  'plan.js?v=54',
-  'sync.js?v=54',
-  'app.js?v=54',
-  'manifest.webmanifest?v=54',
-  'icon-192.png?v=54',
-  'icon-512.png?v=54',
-  'icon-maskable-512.png?v=54',
-  'apple-touch-icon.png?v=54',
-  'favicon-32.png?v=54',
-  'logo-clair.png?v=54',
-  'logo-sombre.png?v=54',
-  'mini-1.jpg?v=54',
-  'mini-2.jpg?v=54',
-  'mini-3.jpg?v=54',
-  'mini-4.jpg?v=54',
-  'mini-5.jpg?v=54',
-  'mini-6.jpg?v=54',
-  'mini-7.jpg?v=54',
-  'mini-8.jpg?v=54',
-  'mini-9.jpg?v=54',
-  'ambiance.js?v=54',
-  'feuilles.png?v=54'
+  'barlow-regular.woff?v=55',
+  'barlow-medium.woff?v=55',
+  'barlow-semibold.woff?v=55',
+  'barlow-bold.woff?v=55',
+  'barlowcondensed-semibold.woff?v=55',
+  'barlowcondensed-bold.woff?v=55',
+  'style.css?v=55',
+  'plan.js?v=55',
+  'sync.js?v=55',
+  'app.js?v=55',
+  'manifest.webmanifest?v=55',
+  'icon-192.png?v=55',
+  'icon-512.png?v=55',
+  'icon-maskable-512.png?v=55',
+  'apple-touch-icon.png?v=55',
+  'favicon-32.png?v=55',
+  'logo-clair.png?v=55',
+  'logo-sombre.png?v=55',
+  'mini-1.jpg?v=55',
+  'mini-2.jpg?v=55',
+  'mini-3.jpg?v=55',
+  'mini-4.jpg?v=55',
+  'mini-5.jpg?v=55',
+  'mini-6.jpg?v=55',
+  'mini-7.jpg?v=55',
+  'mini-8.jpg?v=55',
+  'mini-9.jpg?v=55',
+  'ambiance.js?v=55',
+  'feuilles.png?v=55'
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FICHIERS)).then(() => self.skipWaiting()));
+  // chaque fichier séparément : un seul fichier manquant ne doit jamais bloquer la mise à jour
+  e.waitUntil(caches.open(VERSION).then((c) => Promise.all(FICHIERS.map((f) => c.add(new Request(f, { cache: 'reload' })).catch(() => null))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
