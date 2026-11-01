@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=60') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=60') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=60') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=60') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=60') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=60') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=61') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=61') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=61') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=61') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=61') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=61') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1237,3 +1237,27 @@ html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100
 .feuille-partage .langues { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .feuille-partage .langues button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; font-size: 12.5px; }
 .feuille-partage .langues .drap { font-size: 20px; line-height: 1; }
+/* v61 : vue 3D */
+.btn-3d { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 12px; border-radius: 16px; border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent); font: 700 16px Barlow, system-ui, sans-serif; flex: none; }
+.feuille.feuille-3d { top: 0; max-height: none; height: 100%; border-radius: 0; padding-top: max(12px, env(safe-area-inset-top)); background: rgba(232, 238, 230, .42); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); border-top: 0; }
+:root[data-theme="sombre"] .feuille.feuille-3d { background: rgba(10, 14, 11, .55); }
+.feuille-3d .poignee { display: none; }
+.v3-tete { display: flex; justify-content: space-between; align-items: center; font-size: 17px; }
+.v3-tete b { font: 700 22px "Barlow Condensed", Barlow, sans-serif; }
+.v3-tete span { width: 60px; }
+.v3-carte { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-radius: 22px; background: rgba(247, 250, 245, .9); box-shadow: 0 6px 18px rgba(10, 30, 20, .12); }
+:root[data-theme="sombre"] .v3-carte { background: rgba(24, 32, 27, .9); }
+.v3-carte b { font: 700 24px "Barlow Condensed", Barlow, sans-serif; display: block; }
+.v3-carte small { color: var(--muted, #5E6E64); font-size: 13px; }
+.v3-m3 { font: 700 38px/1 "Barlow Condensed", Barlow, sans-serif; white-space: nowrap; }
+.v3-m3 small { font-size: 15px; }
+.v3-scene { position: relative; border-radius: 22px; overflow: hidden; background: rgba(247, 250, 245, .55); box-shadow: 0 6px 18px rgba(10, 30, 20, .1); touch-action: none; }
+:root[data-theme="sombre"] .v3-scene { background: rgba(24, 32, 27, .55); }
+.v3-scene canvas { display: block; width: 100%; cursor: grab; }
+.v3-aide { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 12.5px; color: var(--muted, #5E6E64); pointer-events: none; }
+.v3-seg { display: flex; gap: 4px; padding: 4px; margin-top: 10px; border-radius: 16px; background: rgba(255, 255, 255, .6); }
+:root[data-theme="sombre"] .v3-seg { background: rgba(255, 255, 255, .07); }
+.v3-seg button { flex: 1; border: 0; background: transparent; border-radius: 12px; padding: 10px 4px; font: 600 15px Barlow, sans-serif; color: var(--text); }
+.v3-seg button.actif { background: #fff; color: #16221A; box-shadow: 0 2px 8px rgba(0, 0, 0, .1); }
+.v3-zone { max-width: 520px; width: 100%; margin: 0 auto; }
+#ficheQR .fq-t3 { margin: 6px 0 -4px; font: 700 22px "Barlow Condensed", Barlow, sans-serif; }

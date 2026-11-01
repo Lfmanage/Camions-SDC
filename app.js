@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '60';
+  var VERSION_APP = '61';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1165,6 +1165,14 @@
   var RH_MAX = 48, RH_MIN = 30, RH_GRAND = 64;
   function ajusterPlan() {
     var z = $('#planZone'); if (!z || vueActive !== 'plan') return;
+    var sm = $('.sum', z);
+    if (sm && window.Vue3D && !$('.btn-3d', z)) {
+      var b3 = document.createElement('button'); b3.type = 'button'; b3.className = 'btn-3d';
+      b3.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/></svg> Voir le camion en 3D';
+      b3.onclick = function (e) { e.stopPropagation(); ouvrir3D(); };
+      var apres = sm.nextElementSibling && sm.nextElementSibling.classList.contains('statut-detail') ? sm.nextElementSibling : sm;
+      apres.parentNode.insertBefore(b3, apres.nextSibling);
+    }
     var n = $$('.rang:not(.rang-ch)', z).length || 6;
     z.style.setProperty('--rh', RH_MAX + 'px');
     var trop = z.scrollHeight - z.clientHeight;
@@ -1559,7 +1567,7 @@
     var langue = 'fr';
     var f = ouvrirFeuille('<div class="sec-tete"><h2>Partager le camion</h2><button class="lien" data-ferme="1" type="button">Fermer</button></div>' +
       '<button type="button" class="opt-part prio" data-p="qr"><span class="op-ic op-qr"></span><span><b>QR code pour le chauffeur</b><small>Il scanne, la fiche s\'ouvre sur son téléphone</small></span></button>' +
-      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche en images</b><small>Détail des colis + plan, en A4</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche en images</b><small>Détail des colis + plan + vue 3D, en A4</small></span></button>' +
       '<button type="button" class="opt-part" data-p="pdf"><span class="op-ic">📄</span><span><b>Fiche en PDF</b><small>Pratique pour imprimer</small></span></button>' +
       '<p class="reg-st lang-tit">Langue de la fiche</p>' + puceLangues(langue));
     f.classList.add('feuille-partage');
@@ -1577,6 +1585,7 @@
   // les fichiers de la fiche (détail des colis + plan, une page A4 par remorque)
   function fichiersFiche(c, format, langue) {
     var pages = c.double && c.double.r ? [['detail', 'Colis'], ['plan', 'Plan-R1', 0], ['plan', 'Plan-R2', 1]] : [['detail', 'Colis'], ['plan', 'Plan']];
+    if (window.Vue3D) pages.push(['3d', 'Vue-3D']);
     return pages.map(function (m) {
       var fc = ficheJolie(c, m[0], m[2], langue), url = fc.toDataURL('image/jpeg', 0.9), jpg = octets(url), nom = nomFichier(c, 'x').replace(/^Fiche-/, m[1] + '-');
       return format === 'jpg' ? { f: new File([jpg], nom.replace(/\.x$/, '.jpg'), { type: 'image/jpeg' }), url: url } : { f: new File([pdfDepuisJpeg(jpg, fc.width, fc.height)], nom.replace(/\.x$/, '.pdf'), { type: 'application/pdf' }), url: null };
@@ -1585,20 +1594,20 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=60'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=60';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=61'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=61';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
   // Langues de la fiche chauffeur (le français reste la langue par défaut)
   var LANGUES = {
     fr: { nom: 'Français', dr: '🇫🇷' },
-    en: { fr: 'anglais', nom: 'English', dr: '🇬🇧', loc: 'en-GB', pc: 'LOADING PLAN', dc: 'PACK DETAILS', cli: 'Customer', cmd: 'Order no.', col: 'Packs', g: 'Left', d: 'Right', dbl: '2 trailers', rem: 'Trailer', dcT: 'Pack details', sec: 'Size', lgs: 'Lengths', tot: 'Total', vol: 'Volume', gd: 'Left · Right', G: 'Driver side', D: 'Passenger side', lib: 'free', arr: 'Rear', et: 'L', mil: 'CENTRE', pdf: 'Download PDF', aide: 'Long-press an image to save it.', lang: 'Language' },
-    es: { fr: 'espagnol', nom: 'Español', dr: '🇪🇸', loc: 'es-ES', pc: 'PLAN DE CARGA', dc: 'DETALLE DE LOS PAQUETES', cli: 'Cliente', cmd: 'N.º de pedido', col: 'Paquetes', g: 'Izquierda', d: 'Derecha', dbl: '2 remolques', rem: 'Remolque', dcT: 'Detalle de los paquetes', sec: 'Sección', lgs: 'Longitudes', tot: 'Total', vol: 'Volumen', gd: 'Izquierda · Derecha', G: 'Lado del conductor', D: 'Lado del pasajero', lib: 'libre', arr: 'Trasera', et: 'N', mil: 'CENTRO', pdf: 'Descargar PDF', aide: 'Mantén pulsada una imagen para guardarla.', lang: 'Idioma' },
-    pt: { fr: 'portugais', nom: 'Português', dr: '🇵🇹', loc: 'pt-PT', pc: 'PLANO DE CARGA', dc: 'DETALHE DOS PACOTES', cli: 'Cliente', cmd: 'N.º de encomenda', col: 'Pacotes', g: 'Esquerda', d: 'Direita', dbl: '2 reboques', rem: 'Reboque', dcT: 'Detalhe dos pacotes', sec: 'Secção', lgs: 'Comprimentos', tot: 'Total', vol: 'Volume', gd: 'Esquerda · Direita', G: 'Lado do condutor', D: 'Lado do passageiro', lib: 'livre', arr: 'Traseira', et: 'N', mil: 'CENTRO', pdf: 'Descarregar PDF', aide: 'Mantenha premida uma imagem para a guardar.', lang: 'Idioma' },
-    pl: { fr: 'polonais', nom: 'Polski', dr: '🇵🇱', loc: 'pl-PL', pc: 'PLAN ZAŁADUNKU', dc: 'SZCZEGÓŁY PAKIETÓW', cli: 'Klient', cmd: 'Nr zamówienia', col: 'Pakiety', g: 'Lewa', d: 'Prawa', dbl: '2 przyczepy', rem: 'Przyczepa', dcT: 'Szczegóły pakietów', sec: 'Przekrój', lgs: 'Długości', tot: 'Razem', vol: 'Objętość', gd: 'Lewa · Prawa', G: 'Strona kierowcy', D: 'Strona pasażera', lib: 'wolne', arr: 'Tył', et: 'P', mil: 'ŚRODEK', pdf: 'Pobierz PDF', aide: 'Przytrzymaj obraz, aby go zapisać.', lang: 'Język' },
-    lt: { fr: 'lituanien', nom: 'Lietuvių', dr: '🇱🇹', loc: 'lt-LT', pc: 'PAKROVIMO PLANAS', dc: 'PAKETŲ SĄRAŠAS', cli: 'Klientas', cmd: 'Užsakymo Nr.', col: 'Paketai', g: 'Kairė', d: 'Dešinė', dbl: '2 priekabos', rem: 'Priekaba', dcT: 'Paketų sąrašas', sec: 'Skerspjūvis', lgs: 'Ilgiai', tot: 'Iš viso', vol: 'Tūris', gd: 'Kairė · Dešinė', G: 'Vairuotojo pusė', D: 'Keleivio pusė', lib: 'laisva', arr: 'Galas', et: 'A', mil: 'VIDURYS', pdf: 'Atsisiųsti PDF', aide: 'Palaikykite paspaudę paveikslėlį, kad jį išsaugotumėte.', lang: 'Kalba' },
-    ru: { fr: 'russe', nom: 'Русский', dr: '🇷🇺', loc: 'ru-RU', pc: 'ПЛАН ЗАГРУЗКИ', dc: 'СПИСОК ПАКЕТОВ', cli: 'Клиент', cmd: '№ заказа', col: 'Пакеты', g: 'Слева', d: 'Справа', dbl: '2 прицепа', rem: 'Прицеп', dcT: 'Список пакетов', sec: 'Сечение', lgs: 'Длины', tot: 'Итого', vol: 'Объём', gd: 'Слева · Справа', G: 'Сторона водителя', D: 'Сторона пассажира', lib: 'свободно', arr: 'Сзади', et: 'Я', mil: 'ЦЕНТР', pdf: 'Скачать PDF', aide: 'Нажмите и удерживайте изображение, чтобы сохранить его.', lang: 'Язык' },
-    nl: { fr: 'néerlandais', nom: 'Nederlands', dr: '🇳🇱', loc: 'nl-NL', pc: 'LAADPLAN', dc: 'PAKKETOVERZICHT', cli: 'Klant', cmd: 'Ordernr.', col: 'Pakketten', g: 'Links', d: 'Rechts', dbl: '2 aanhangers', rem: 'Aanhanger', dcT: 'Pakketoverzicht', sec: 'Doorsnede', lgs: 'Lengtes', tot: 'Totaal', vol: 'Volume', gd: 'Links · Rechts', G: 'Bestuurderszijde', D: 'Passagierszijde', lib: 'vrij', arr: 'Achterkant', et: 'L', mil: 'MIDDEN', pdf: 'PDF downloaden', aide: 'Houd een afbeelding ingedrukt om deze op te slaan.', lang: 'Taal' }
+    en: { fr: 'anglais', nom: 'English', dr: '🇬🇧', loc: 'en-GB', pc: 'LOADING PLAN', dc: 'PACK DETAILS', cli: 'Customer', cmd: 'Order no.', col: 'Packs', g: 'Left', d: 'Right', dbl: '2 trailers', rem: 'Trailer', dcT: 'Pack details', sec: 'Size', lgs: 'Lengths', tot: 'Total', vol: 'Volume', gd: 'Left · Right', G: 'Driver side', D: 'Passenger side', lib: 'free', arr: 'Rear', et: 'L', mil: 'CENTRE', pdf: 'Download PDF', aide: 'Long-press an image to save it.', lang: 'Language', vc: 'Side', vd: 'Top', va: 'Rear', tour: 'Swipe to rotate the truck', v3: 'View in 3D' },
+    es: { fr: 'espagnol', nom: 'Español', dr: '🇪🇸', loc: 'es-ES', pc: 'PLAN DE CARGA', dc: 'DETALLE DE LOS PAQUETES', cli: 'Cliente', cmd: 'N.º de pedido', col: 'Paquetes', g: 'Izquierda', d: 'Derecha', dbl: '2 remolques', rem: 'Remolque', dcT: 'Detalle de los paquetes', sec: 'Sección', lgs: 'Longitudes', tot: 'Total', vol: 'Volumen', gd: 'Izquierda · Derecha', G: 'Lado del conductor', D: 'Lado del pasajero', lib: 'libre', arr: 'Trasera', et: 'N', mil: 'CENTRO', pdf: 'Descargar PDF', aide: 'Mantén pulsada una imagen para guardarla.', lang: 'Idioma', vc: 'Lado', vd: 'Arriba', va: 'Trasera', tour: 'Desliza para girar el camión', v3: 'Ver en 3D' },
+    pt: { fr: 'portugais', nom: 'Português', dr: '🇵🇹', loc: 'pt-PT', pc: 'PLANO DE CARGA', dc: 'DETALHE DOS PACOTES', cli: 'Cliente', cmd: 'N.º de encomenda', col: 'Pacotes', g: 'Esquerda', d: 'Direita', dbl: '2 reboques', rem: 'Reboque', dcT: 'Detalhe dos pacotes', sec: 'Secção', lgs: 'Comprimentos', tot: 'Total', vol: 'Volume', gd: 'Esquerda · Direita', G: 'Lado do condutor', D: 'Lado do passageiro', lib: 'livre', arr: 'Traseira', et: 'N', mil: 'CENTRO', pdf: 'Descarregar PDF', aide: 'Mantenha premida uma imagem para a guardar.', lang: 'Idioma', vc: 'Lado', vd: 'Cima', va: 'Traseira', tour: 'Deslize para rodar o camião', v3: 'Ver em 3D' },
+    pl: { fr: 'polonais', nom: 'Polski', dr: '🇵🇱', loc: 'pl-PL', pc: 'PLAN ZAŁADUNKU', dc: 'SZCZEGÓŁY PAKIETÓW', cli: 'Klient', cmd: 'Nr zamówienia', col: 'Pakiety', g: 'Lewa', d: 'Prawa', dbl: '2 przyczepy', rem: 'Przyczepa', dcT: 'Szczegóły pakietów', sec: 'Przekrój', lgs: 'Długości', tot: 'Razem', vol: 'Objętość', gd: 'Lewa · Prawa', G: 'Strona kierowcy', D: 'Strona pasażera', lib: 'wolne', arr: 'Tył', et: 'P', mil: 'ŚRODEK', pdf: 'Pobierz PDF', aide: 'Przytrzymaj obraz, aby go zapisać.', lang: 'Język', vc: 'Bok', vd: 'Z góry', va: 'Tył', tour: 'Przesuń palcem, aby obrócić', v3: 'Widok 3D' },
+    lt: { fr: 'lituanien', nom: 'Lietuvių', dr: '🇱🇹', loc: 'lt-LT', pc: 'PAKROVIMO PLANAS', dc: 'PAKETŲ SĄRAŠAS', cli: 'Klientas', cmd: 'Užsakymo Nr.', col: 'Paketai', g: 'Kairė', d: 'Dešinė', dbl: '2 priekabos', rem: 'Priekaba', dcT: 'Paketų sąrašas', sec: 'Skerspjūvis', lgs: 'Ilgiai', tot: 'Iš viso', vol: 'Tūris', gd: 'Kairė · Dešinė', G: 'Vairuotojo pusė', D: 'Keleivio pusė', lib: 'laisva', arr: 'Galas', et: 'A', mil: 'VIDURYS', pdf: 'Atsisiųsti PDF', aide: 'Palaikykite paspaudę paveikslėlį, kad jį išsaugotumėte.', lang: 'Kalba', vc: 'Šonas', vd: 'Iš viršaus', va: 'Galas', tour: 'Braukite, kad pasuktumėte sunkvežimį', v3: '3D vaizdas' },
+    ru: { fr: 'russe', nom: 'Русский', dr: '🇷🇺', loc: 'ru-RU', pc: 'ПЛАН ЗАГРУЗКИ', dc: 'СПИСОК ПАКЕТОВ', cli: 'Клиент', cmd: '№ заказа', col: 'Пакеты', g: 'Слева', d: 'Справа', dbl: '2 прицепа', rem: 'Прицеп', dcT: 'Список пакетов', sec: 'Сечение', lgs: 'Длины', tot: 'Итого', vol: 'Объём', gd: 'Слева · Справа', G: 'Сторона водителя', D: 'Сторона пассажира', lib: 'свободно', arr: 'Сзади', et: 'Я', mil: 'ЦЕНТР', pdf: 'Скачать PDF', aide: 'Нажмите и удерживайте изображение, чтобы сохранить его.', lang: 'Язык', vc: 'Сбоку', vd: 'Сверху', va: 'Сзади', tour: 'Проведите пальцем, чтобы повернуть грузовик', v3: 'Вид в 3D' },
+    nl: { fr: 'néerlandais', nom: 'Nederlands', dr: '🇳🇱', loc: 'nl-NL', pc: 'LAADPLAN', dc: 'PAKKETOVERZICHT', cli: 'Klant', cmd: 'Ordernr.', col: 'Pakketten', g: 'Links', d: 'Rechts', dbl: '2 aanhangers', rem: 'Aanhanger', dcT: 'Pakketoverzicht', sec: 'Doorsnede', lgs: 'Lengtes', tot: 'Totaal', vol: 'Volume', gd: 'Links · Rechts', G: 'Bestuurderszijde', D: 'Passagierszijde', lib: 'vrij', arr: 'Achterkant', et: 'L', mil: 'MIDDEN', pdf: 'PDF downloaden', aide: 'Houd een afbeelding ingedrukt om deze op te slaan.', lang: 'Taal', vc: 'Zijkant', vd: 'Boven', va: 'Achterkant', tour: 'Veeg om de vrachtwagen te draaien', v3: 'Bekijk in 3D' }
   };
   var ORDRE_LANGUES = ['fr', 'en', 'es', 'pt', 'pl', 'lt', 'ru', 'nl'];
   function puceLangues(sel) {
@@ -1606,7 +1615,7 @@
   }
   function ficheJolie(c, mode, seule, langue) {
     var L = langue && langue !== 'fr' ? LANGUES[langue] : null, T = function (k, fr) { return L && L[k] ? L[k] : fr; }, SEP = L ? ': ' : ' : '; // pas d'espace avant « : » hors français // seule : n° de remorque (double) pour une page A4 par remorque
-    var avecDetail = mode !== 'plan', avecPlan = mode !== 'detail', HT = 280;
+    var avec3D = mode === '3d', avecDetail = mode !== 'plan' && !avec3D, avecPlan = mode !== 'detail' && !avec3D, HT = 280;
     assurerPlan(c);
     var W = 1240, A4H = Math.round(1240 * 297 / 210), pad = 48, larg = W - 2 * pad, S = 2.6; // S : échelle par rapport à l'écran du téléphone
     var SOMBRE = document.documentElement.dataset.theme === 'sombre';
@@ -1691,7 +1700,7 @@
     var y = pad; carte(y, HT);
     var d = new Date(base.termine_le || base.maj_le || Date.now()), dt = d.toLocaleDateString(T('loc', 'fr-FR'), { weekday: 'long', day: 'numeric', month: 'long' });
     var vb = vplan(c.double ? remDeN(c, 0) : c), gT = c.double ? plansTous.reduce(function (a, p) { return a + p.v.volG; }, 0) : vb.volG, dT = c.double ? plansTous.reduce(function (a, p) { return a + p.v.volD; }, 0) : vb.volD;
-    x.fillStyle = MU; x.font = F(600, 24); x.fillText(mode === 'detail' ? T('dc', 'DÉTAIL DES COLIS') : (mode === 'plan' ? T('pc', 'PLAN DE CHARGEMENT') : T('pc', 'FICHE DE CHARGEMENT')), pad + 36, y + 46);
+    x.fillStyle = MU; x.font = F(600, 24); x.fillText(mode === 'detail' ? T('dc', 'DÉTAIL DES COLIS') : avec3D ? T('v3', 'VUE EN 3D').toUpperCase() : (mode === 'plan' ? T('pc', 'PLAN DE CHARGEMENT') : T('pc', 'FICHE DE CHARGEMENT')), pad + 36, y + 46);
     x.fillStyle = INK; x.font = F(700, 62, true); x.fillText(T('cli', 'Client') + SEP + (base.client || '—'), pad + 36, y + 110);
     x.font = F(600, 34); x.fillText(T('cmd', 'N° de commande') + SEP + (base.reference || '—'), pad + 36, y + 160);
     x.fillStyle = MU; x.font = F(500, 28); x.fillText(dt.charAt(0).toUpperCase() + dt.slice(1) + ' · ' + heure(d.toISOString()) + ' · ' + (L ? T('col') + SEP + nbTot : nbTot + ' colis'), pad + 36, y + 208);
@@ -1785,6 +1794,15 @@
         y += hCote - 60 + 30;
       });
     });
+    // ---- vue 3D : grande vue + côté + arrière ----
+    if (avec3D && window.Vue3D) {
+      var M3 = modele3D(c, langue), hDispo = H - pad - hPied - 20 - y, hG = Math.round((hDispo - 30) * 0.6), hP = hDispo - 30 - hG, lP = Math.round((larg - 20) / 2);
+      carte(y, hG); x.drawImage(Vue3D.image(M3, '3d', larg - 20, hG - 20, 2.4), pad + 10, y + 10);
+      y += hG + 30;
+      var demi = function (xx) { x.save(); x.shadowColor = 'rgba(10,30,20,.14)'; x.shadowBlur = 24; x.shadowOffsetY = 6; x.fillStyle = CARTE; rond(xx, y, lP, hP, 36); x.fill(); x.restore(); };
+      demi(pad); x.drawImage(Vue3D.image(M3, 'cote', lP - 20, hP - 20, 1.5), pad + 10, y + 10);
+      demi(pad + lP + 20); x.drawImage(Vue3D.image(M3, 'arriere', lP - 20, hP - 20, 1.5), pad + lP + 30, y + 10);
+    }
     // ---- remarques + logo ----
     y = H - pad - (hPied - 20); carte(y, hPied - 20);
     var py = y + 4;
@@ -1855,6 +1873,41 @@
       return { c: c, lang: LANGUES[m[1]] ? m[1] : 'fr', s: o.s };
     });
   }
+  // ---------- Vue 3D ----------
+  function modele3D(c, langue) {
+    var L = langue && langue !== 'fr' ? LANGUES[langue] : null, T = function (k, fr) { return L && L[k] ? L[k] : fr; };
+    var en = langue === 'en', fmt = function (n) { var t = fm(Math.round(n * 100) / 100); return en ? t.replace(',', '.') : t; };
+    var rems = c.double && c.double.r ? [0, 1].map(function (i) { return remDeN(c, i); }) : [c];
+    var res = rems.map(function (rc) {
+      var v = vplan(rc), r = cfgC(rc), N = v.N, mx = Math.round(r.e1Max * 100), maxLen = mx, colis = [], libres = [], etages = { G: [], D: [] };
+      v.ROWS.forEach(function (k2) { maxLen = Math.max(maxLen, v.rows[k2].ext || v.rows[k2].len); });
+      var c3 = v.rows['C' + N], ggc = gapsRow(rc, v, 'C' + N);
+      function ajout(k3, x0, s, e) { colis.push({ x0: x0 / 100, x1: (x0 + k3.cm) / 100, s: s, e: e, id: String(k3.id), lot: fmt(k3.lo) + ' m', sec: fmt(k3.ep) + '×' + fmt(k3.la) }); }
+      ['G', 'D'].forEach(function (s) {
+        for (var f = 1; f <= N; f++) {
+          var ro = v.rows[s + f], occ = ro.ext + (f === N ? c3.ext : 0), xx = 0, gg = gapsRow(rc, v, s + f);
+          if (f === N) c3.colis.forEach(function (k3, i5) { xx += (ggc[i5] || 0); if (s === 'G') ajout(k3, xx, 'C', f - 1); xx += k3.cm; });
+          ro.colis.forEach(function (k3, i3) { xx += (gg[i3] || 0); ajout(k3, xx, s, f - 1); xx += k3.cm; });
+          var libre = (f > 1 ? Math.min(mx, v.rows[s + (f - 1)].ext) : mx) - occ;
+          if (libre >= 30) libres.push({ x0: occ / 100, x1: (occ + libre) / 100, e: f - 1, s: s });
+          etages[s].push(occ / 100);
+        }
+      });
+      return { L: maxLen / 100, N: N, colis: colis, libres: libres, etages: etages, deux: !!(rc.parentId && rc.rem === 1) };
+    });
+    return { rems: res, fmt: fmt, sombre: document.documentElement.dataset.theme === 'sombre',
+      T: { G: T('G', 'Côté conducteur'), D: T('D', 'Côté passager'), arr: T('arr', 'Arrière'), lib: T('lib', 'libre'), et: T('et', 'É'), vc: T('vc', 'Côté'), vd: T('vd', 'Dessus'), va: T('va', 'Arrière'), tour: T('tour', 'Glisse pour tourner le camion') } };
+  }
+  function ouvrir3D() {
+    var base = courantBase(); if (!base || !base.lignes.length) return;
+    assurerPlan(base);
+    var f = ouvrirFeuille('<div class="v3-tete"><button class="lien" data-ferme="1" type="button">‹ Plan</button><b>Vue 3D</b><span></span></div>' +
+      '<div class="v3-carte"><div><b>' + esc(base.client || 'Camion') + (base.reference ? ' · ' + esc(base.reference) : '') + '</b><small>' +
+      base.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis' + (base.double ? ' · double remorque' : '') + '</small></div><div class="v3-m3">' + f2(base.total_m3) + '<small> m³</small></div></div><div class="v3-zone"></div>');
+    f.classList.add('feuille-3d');
+    $('[data-ferme]', f).onclick = function () { fermerFeuille(); };
+    Vue3D.monter($('.v3-zone', f), modele3D(base, 'fr'));
+  }
   function montrerQR(c, langue) {
     lienFiche(c, langue).then(function (url) {
       var cv; try { cv = QR.canvas(url, 900, '#16221A'); } catch (e) { toast('Camion trop grand pour un QR code.'); return; }
@@ -1889,10 +1942,12 @@
         z.innerHTML = '<div class="fq-tete"><img src="' + (document.documentElement.dataset.theme === 'sombre' ? 'logo-sombre.png' : 'logo-clair.png') + '" alt="SDC"><b>Les Scieries du Centre</b>' +
           '<select id="fqLang" aria-label="' + esc(T('lang', 'Langue')) + '">' + ORDRE_LANGUES.map(function (k) { return '<option value="' + k + '"' + (k === langue ? ' selected' : '') + '>' + LANGUES[k].dr + ' ' + LANGUES[k].nom + '</option>'; }).join('') + '</select></div>' +
           pages.map(function (m) { return '<img class="fq-img" alt="" src="' + ficheJolie(c, m[0], m[1], langue).toDataURL('image/jpeg', 0.9) + '">'; }).join('') +
+          '<h3 class="fq-t3">' + esc(T('v3', 'Vue en 3D')) + '</h3><div class="fq-3d"></div>' +
           '<button class="btn" type="button" id="fqPdf">⬇ ' + esc(T('pdf', 'Télécharger en PDF')) + '</button>' +
           '<p class="petit-txt" style="text-align:center">' + esc(T('aide', 'Appui long sur une image pour l\'enregistrer.')) + '</p>';
         $('#fqLang').onchange = function () { langue = this.value; z.innerHTML = '<p class="fq-att">…</p>'; setTimeout(dessiner, 30); };
         $('#fqPdf').onclick = function () { envoyerFichiers(fichiersFiche(c, 'pdf', langue), ligneCourte(c)); };
+        if (window.Vue3D) { try { Vue3D.monter($('.fq-3d'), modele3D(c, langue)); } catch (e) {} }
       }
       pret().then(dessiner);
     }).catch(function () { z.innerHTML = '<p class="fq-att">Lien invalide.</p>'; });
@@ -2202,7 +2257,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=60" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=60" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=61" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=61" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
