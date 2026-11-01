@@ -189,7 +189,7 @@
   var MSG = {
     CODE: 'Code d\'équipe incorrect.', CODE_COURT: 'Code trop court (4 caractères minimum).', SECRET_COURT: 'Code secret trop court (4 caractères minimum).', IMAGE: 'Image trop lourde ou non reconnue.', PRENOM: 'Écris ton prénom.',
     RETIRE: 'Ce téléphone a été retiré de l\'équipe.', PRENOM_PRIS: 'Ce prénom est déjà utilisé dans l\'équipe.', CODE_PRIS: 'Ce code ne peut pas être utilisé.', ADMIN: 'Action non autorisée.',
-    SOI_MEME: 'Impossible sur ce téléphone.'
+    SOI_MEME: 'Impossible sur ce téléphone.', INTROUVABLE: 'Ce camion n\'existe plus.'
   };
   function message(e) {
     var m = (e && e.message) || '';
@@ -250,6 +250,17 @@
     changerCode: function (code) { return rpc('changer_code', { p_code: code }).catch(function (e) { throw new Error(message(e)); }); },
     definirSecret: function (c) { return rpc('definir_secret', { p_code: c }).catch(function (e) { throw new Error(message(e)); }); },
     nouveauSecret: function () { return rpc('nouveau_secret').catch(function (e) { throw new Error(message(e)); }); },
+    recuperer: function (id) { // le camion d'un collègue passe à mon nom
+      return rpc('recuperer_camion', { p_id: id }).then(function (r) {
+        var d = hooks.lire(), c = r.data || {};
+        c.id = r.id; c.auteur = r.auteur; c.auteur_prenom = nom(r.auteur_prenom); c.supprime = false; delete c._sale;
+        if (r.maj_le) c.maj_le = new Date(r.maj_le).toISOString();
+        d.camions[r.id] = c; hooks.ecrire(d); notifier(true); return c;
+      }).catch(function (e) {
+        if (/recuperer_camion|function|404|PGRST/i.test(e.message || '')) throw new Error('Mets à jour Supabase (fichier v74) pour pouvoir récupérer.');
+        throw new Error(message(e));
+      });
+    },
     retirer: function (uid, remettre) { return rpc('retirer_membre', { p_user: uid, p_actif: !!remettre }).then(membres).then(function () { notifier(true); }).catch(function (e) { throw new Error(message(e)); }); },
     ajouterFond: function (id, data) { return rpc('ajouter_fond', { p_id: id, p_data: data }).catch(function (e) { throw new Error(message(e)); }); },
     supprimerFond: function (id) { return rpc('supprimer_fond', { p_id: id }).catch(function () {}); },

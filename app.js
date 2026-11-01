@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '72';
+  var VERSION_APP = '74';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -565,7 +565,8 @@
     var d = new Date(), txt = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
     $('#accDate').textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
     var h = d.getHours();
-    $('.acc-titre').textContent = h >= 6 && h < 18 ? 'Bonjour' : 'Bonsoir';
+    var prn = enEquipe() && Sync.moi().prenom ? String(Sync.moi().prenom).trim().toLowerCase().replace(/(^|[\s-])\S/g, function (x) { return x.toUpperCase(); }) : '';
+    $('.acc-titre').textContent = (h >= 6 && h < 18 ? 'Bonjour' : 'Bonsoir') + (prn ? ' ' + prn : ''); $('.acc-titre').classList.toggle('long', prn.length > 9); // « Bonjour Doudou » : le prénom de la personne connectée
     majInstaller();
     var auj = jourCle(d.toISOString()), tous = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime; });
     var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj && compte(c); });
@@ -1651,7 +1652,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=72'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=72';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=74'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=74';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2038,7 +2039,7 @@
   function ligneCam(c, enCours) {
     var qui = c.client || 'Sans client';
     return glisse(c.id, '<button class="cam" type="button" data-id="' + esc(c.id) + '"><span class="h">' + heure(enCours ? c.maj_le : c.termine_le) + '</span>' +
-      '<span class="qui"><b>' + esc(qui) + (c.double ? ' <i class="tag-dbl">Double</i>' : '') + partageTag(c) + (enEquipe() && Sync.moi().admin && c.auteur === Sync.moi().uid ? ' <i class="lock-p">🔒 privé</i>' : '') + '</b><small>' + (enEquipe() ? '<i class="qui-p' + (estAMoi(c) ? ' moi' : '') + '">' + esc(prenomDe(c)) + '</i>' : '') + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small></span>' +
+      '<span class="qui"><b>' + esc(qui) + (c.double ? ' <i class="tag-dbl">Double</i>' : '') + partageTag(c) + (enEquipe() && Sync.moi().admin && c.auteur === Sync.moi().uid ? ' <i class="lock-p">🔒 privé</i>' : '') + '</b><small>' + (enEquipe() ? '<i class="qui-p' + (estAMoi(c) ? ' moi' : '') + '">' + esc(prenomDe(c)) + '</i>' : '') + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small>' + (c.repris_de ? '<small class="repris-l">↩ Récupéré de ' + esc(c.repris_de) + '</small>' : '') + '</span>' +
       '<span class="m3 ' + (enCours ? 'cours' : (compte(c) ? c.etat : 'copie')) + '" title="' + (enCours ? 'En cours' : LIB[c.etat]) + '">' + (enCours || compte(c) ? f2(c.total_m3) : '—') + '</span></button>');
   }
   // ---------- Glisser une ligne : à gauche supprimer, à droite ouvrir ----------
@@ -2301,7 +2302,8 @@
       (!aMoi ? '<button class="btn sec" data-a="image" type="button">Partager</button><button class="btn" data-a="recuperer" type="button">Récupérer</button>'
         : (enCours ? '<button class="btn" data-a="reprendre" type="button">Reprendre</button>' : '<button class="btn" data-a="dupliquer" type="button">Dupliquer</button>') +
           '<button class="btn sec" data-a="image" type="button">Partager</button>') + '</div>' +
-      (!aMoi ? '<p class="verrou">🔒 Camion de ' + esc(prenomDe(c)) + ' : tu peux le voir et le partager, pas le modifier. « Récupérer » en fait une copie à ton nom.</p>' : '') +
+      (!aMoi ? '<p class="verrou">🔒 Camion de ' + esc(prenomDe(c)) + ' : tu peux le voir et le partager, pas le modifier. « Récupérer » le passe à ton nom (il n\'y aura pas de copie).</p>' : '') +
+      (c.repris_de ? '<p class="repris-l">↩ Récupéré de ' + esc(c.repris_de) + '</p>' : '') +
       (c.lignes.length ? '<div class="plan-histo">' + (c.double && c.double.r ? [0, 1].map(function (i) { return '<h3 class="rem-h">Remorque ' + (i + 1) + ' · ' + fm(c.double.lg[i]) + ' m</h3>' + htmlPlan(remDeN(c, i), { lecture: true }); }).join('') : htmlPlan(c, { lecture: true })) + '<button class="btn-lien plan-grand" data-a="plan" type="button">Ouvrir le plan en grand ›</button></div>' : '') +
       (c.lignes.length ? '<details class="pli carte"><summary><span>Colis</span><small>' + nbColis + ' colis · ' + gl.length + ' section' + (gl.length > 1 ? 's' : '') + '</small></summary>' + lignes + '</details>' : '<div class="carte"><div class="vide">Aucun colis</div></div>') +
       '<div class="grille-btns' + (peutSupprimer(c) ? '' : ' un') + '">' + (peutSupprimer(c) ? '<button class="btn danger" data-a="suppr" type="button">Supprimer</button>' : '') + '<button class="btn sec" data-a="fermer" type="button">Fermer</button></div>');
@@ -2320,7 +2322,16 @@
         }
         if (a === 'image') { fermerFeuille(); setTimeout(function () { choixPartage(c); }, 260); }
         if (a === 'reprendre') { db.courant = c.id; sauver(true); fermerFeuille(); viderForm(); setTimeout(function () { aller('camion'); }, 60); }
-        if (a === 'dupliquer' || a === 'recuperer') { fermerFeuille(); copierCamion(c, a === 'recuperer'); }
+        if (a === 'dupliquer') { fermerFeuille(); copierCamion(c, false); }
+        if (a === 'recuperer') {
+          if (!navigator.onLine) { toast('Il faut du réseau pour récupérer un camion.'); return; }
+          b.disabled = true;
+          Sync.recuperer(c.id).then(function (n) {
+            fermerFeuille(); toast('Camion récupéré : il est à ton nom.');
+            if (n.statut === 'en_cours') { db.courant = n.id; sauver(true); viderForm(); setTimeout(function () { aller('camion'); }, 60); }
+            else setTimeout(function () { detail(db.camions[n.id]); }, 260);
+          }).catch(function (er) { b.disabled = false; toast(er.message); });
+        }
         if (a === 'suppr') {
           if (!peutSupprimer(c)) return;
           c.supprime = true; toucher(c); fermerFeuille(); rendreHisto(); effacerPlusTard(c);
@@ -2358,7 +2369,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=72" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=72" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=74" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=74" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
