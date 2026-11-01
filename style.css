@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=58') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=58') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=58') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=58') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=58') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=58') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=59') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=59') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=59') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=59') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=59') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=59') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1202,3 +1202,26 @@ body { font-feature-settings: "tnum"; }
 .tag-p { font-style: normal; font-size: 10px; font-weight: 700; background: #E3ECF7; color: #2C5A8A; border-radius: 5px; padding: 1px 6px; margin-left: 4px; vertical-align: middle; white-space: nowrap; }
 :root[data-theme="sombre"] .tag-p { background: #22364A; color: #A9CBEF; }
 .m3.copie { opacity: .5; }
+
+/* ---- v59 : langue de la fiche + QR code chauffeur ---- */
+.langues { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 6px; }
+.langues button { border-radius: 14px; padding: 8px 11px; background: rgba(255, 255, 255, .7); border: 2px solid transparent; color: var(--text); font: 600 14px/1.1 Barlow, system-ui, sans-serif; }
+.langues button.actif { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+:root[data-theme="sombre"] .langues button { background: rgba(255, 255, 255, .07); }
+:root[data-theme="sombre"] .langues button.actif { background: var(--accent-soft); }
+.langues .drap { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.qr-boite { background: #fff; border-radius: 20px; padding: 10px; margin: 8px auto 10px; max-width: 360px; }
+.qr-img { width: 100%; height: auto; display: block; image-rendering: pixelated; }
+.qr-qui { text-align: center; margin: 0 0 8px; line-height: 1.4; }
+body.mode-fiche > *:not(#ficheQR) { display: none !important; }
+body.mode-fiche { overflow: auto; }
+#ficheQR { max-width: 760px; margin: 0 auto; padding: max(14px, env(safe-area-inset-top)) 14px 40px; display: flex; flex-direction: column; gap: 12px; }
+#ficheQR .fq-tete { display: flex; align-items: center; gap: 10px; }
+#ficheQR .fq-tete img { height: 36px; }
+#ficheQR .fq-tete b { flex: 1; font: 700 20px/1.1 "Barlow Condensed", Barlow, sans-serif; }
+#ficheQR select { font: 600 15px Barlow, sans-serif; padding: 8px 10px; border-radius: 12px; border: 2px solid var(--accent); background: var(--card, #fff); color: var(--text); }
+#ficheQR .fq-img { width: 100%; border-radius: 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, .15); }
+#ficheQR .fq-att { text-align: center; margin-top: 40vh; font-size: 22px; }
+html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100%; overflow: auto !important; position: static !important; }
+#ficheQR .fq-tete b { white-space: nowrap; }
+#ficheQR select { width: auto; flex: none; max-width: 48%; }

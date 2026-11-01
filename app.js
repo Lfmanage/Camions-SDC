@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '58';
+  var VERSION_APP = '59';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -41,8 +41,10 @@
     d.sync = d.sync || {};
     return d;
   }
+  var MODE_FICHE = /^#f=/.test(location.hash || '');
   var db = charger();
   function sauver(sansSynchro) {
+    if (MODE_FICHE) return;
     try { localStorage.setItem(CLE, JSON.stringify(db)); }
     catch (e) { toast('Mémoire du téléphone pleine : exporte une sauvegarde.'); }
     if (!sansSynchro && window.Sync && Sync.actif()) Sync.bientot();
@@ -1554,32 +1556,57 @@
     ta.remove();
   }
   function choixPartage(c) {
+    var langue = 'fr';
     var f = ouvrirFeuille('<h2>Partager le camion</h2>' +
+      '<button type="button" class="opt-part" data-p="qr"><span class="op-ic">▦</span><span><b>QR code pour le chauffeur</b><small>Il scanne et ouvre la fiche sur son téléphone</small></span></button>' +
       '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche chauffeur / client (images)</b><small>Détail des colis + plan de chargement, en A4</small></span></button>' +
       '<button type="button" class="opt-part" data-p="pdf"><span class="op-ic">📄</span><span><b>Fiche chauffeur / client (PDF)</b><small>Détail des colis + plan en A4, pratique pour imprimer</small></span></button>' +
       '<button type="button" class="opt-part" data-p="image"><span class="op-ic">🖼</span><span><b>Image du plan seulement</b><small>Comme avant</small></span></button>' +
-      '<button type="button" class="opt-part" data-p="texte"><span class="op-ic">📋</span><span><b>Copier le texte</b><small>Pour le coller où tu veux</small></span></button>');
+      '<button type="button" class="opt-part" data-p="texte"><span class="op-ic">📋</span><span><b>Copier le texte</b><small>Pour le coller où tu veux (en français)</small></span></button>' +
+      '<p class="reg-st" style="margin-top:14px">Langue de la fiche</p>' + puceLangues(langue) + '<p class="petit-txt" id="langInfo">Fiche en français</p>');
     f.onclick = function (e) {
+      var bl = e.target.closest('[data-lang]');
+      if (bl) { langue = bl.dataset.lang; $$('[data-lang]', f).forEach(function (x) { x.classList.toggle('actif', x === bl); }); $('#langInfo', f).textContent = langue === 'fr' ? 'Fiche en français' : 'Fiche traduite en ' + LANGUES[langue].fr; return; }
       var b = e.target.closest('[data-p]'); if (!b) return;
       var p = b.dataset.p; f.onclick = null; fermerFeuille();
-      if (p === 'image') { setTimeout(function () { partagerImage(c); }, 120); return; }
+      if (p === 'image') { setTimeout(function () { partagerImage(c, langue); }, 120); return; }
       if (p === 'texte') { copier(texteChauffeur(c)); return; }
-      // 2 fichiers séparés : le détail des colis, puis le plan de chargement
-      var pages = c.double && c.double.r ? [['detail', 'Colis'], ['plan', 'Plan-R1', 0], ['plan', 'Plan-R2', 1]] : [['detail', 'Colis'], ['plan', 'Plan']];
-      var fichiers = pages.map(function (m) {
-        var fc = ficheJolie(c, m[0], m[2]), url = fc.toDataURL('image/jpeg', 0.9), jpg = octets(url), nom = nomFichier(c, 'x').replace(/^Fiche-/, m[1] + '-');
-        return p === 'fiche' ? { f: new File([jpg], nom.replace(/\.x$/, '.jpg'), { type: 'image/jpeg' }), url: url } : { f: new File([pdfDepuisJpeg(jpg, fc.width, fc.height)], nom.replace(/\.x$/, '.pdf'), { type: 'application/pdf' }), url: null };
-      });
-      envoyerFichiers(fichiers, ligneCourte(c));
+      if (p === 'qr') { setTimeout(function () { montrerQR(c, langue); }, 120); return; }
+      envoyerFichiers(fichiersFiche(c, p === 'fiche' ? 'jpg' : 'pdf', langue), ligneCourte(c));
     };
   }
+  // les fichiers de la fiche (détail des colis + plan, une page A4 par remorque)
+  function fichiersFiche(c, format, langue) {
+    var pages = c.double && c.double.r ? [['detail', 'Colis'], ['plan', 'Plan-R1', 0], ['plan', 'Plan-R2', 1]] : [['detail', 'Colis'], ['plan', 'Plan']];
+    return pages.map(function (m) {
+      var fc = ficheJolie(c, m[0], m[2], langue), url = fc.toDataURL('image/jpeg', 0.9), jpg = octets(url), nom = nomFichier(c, 'x').replace(/^Fiche-/, m[1] + '-');
+      return format === 'jpg' ? { f: new File([jpg], nom.replace(/\.x$/, '.jpg'), { type: 'image/jpeg' }), url: url } : { f: new File([pdfDepuisJpeg(jpg, fc.width, fc.height)], nom.replace(/\.x$/, '.pdf'), { type: 'application/pdf' }), url: null };
+    });
+  }
+
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=58'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=58';
-  function imagePlan(c) { return ficheJolie(c, 'plan'); }
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=59'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=59';
+  function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
-  function ficheJolie(c, mode, seule) { // seule : n° de remorque (double) pour une page A4 par remorque
+  // Langues de la fiche chauffeur (le français reste la langue par défaut)
+  var LANGUES = {
+    fr: { nom: 'Français', dr: '🇫🇷' },
+    en: { fr: 'anglais', nom: 'English', dr: '🇬🇧', loc: 'en-GB', pc: 'LOADING PLAN', dc: 'PACK DETAILS', cli: 'Customer', cmd: 'Order no.', col: 'Packs', g: 'Left', d: 'Right', dbl: '2 trailers', rem: 'Trailer', dcT: 'Pack details', sec: 'Size', lgs: 'Lengths', tot: 'Total', vol: 'Volume', gd: 'Left · Right', G: 'Driver side', D: 'Passenger side', lib: 'free', arr: 'Rear', et: 'L', mil: 'CENTRE', pdf: 'Download PDF', aide: 'Long-press an image to save it.', lang: 'Language' },
+    es: { fr: 'espagnol', nom: 'Español', dr: '🇪🇸', loc: 'es-ES', pc: 'PLAN DE CARGA', dc: 'DETALLE DE LOS PAQUETES', cli: 'Cliente', cmd: 'N.º de pedido', col: 'Paquetes', g: 'Izquierda', d: 'Derecha', dbl: '2 remolques', rem: 'Remolque', dcT: 'Detalle de los paquetes', sec: 'Sección', lgs: 'Longitudes', tot: 'Total', vol: 'Volumen', gd: 'Izquierda · Derecha', G: 'Lado del conductor', D: 'Lado del pasajero', lib: 'libre', arr: 'Trasera', et: 'N', mil: 'CENTRO', pdf: 'Descargar PDF', aide: 'Mantén pulsada una imagen para guardarla.', lang: 'Idioma' },
+    pt: { fr: 'portugais', nom: 'Português', dr: '🇵🇹', loc: 'pt-PT', pc: 'PLANO DE CARGA', dc: 'DETALHE DOS PACOTES', cli: 'Cliente', cmd: 'N.º de encomenda', col: 'Pacotes', g: 'Esquerda', d: 'Direita', dbl: '2 reboques', rem: 'Reboque', dcT: 'Detalhe dos pacotes', sec: 'Secção', lgs: 'Comprimentos', tot: 'Total', vol: 'Volume', gd: 'Esquerda · Direita', G: 'Lado do condutor', D: 'Lado do passageiro', lib: 'livre', arr: 'Traseira', et: 'N', mil: 'CENTRO', pdf: 'Descarregar PDF', aide: 'Mantenha premida uma imagem para a guardar.', lang: 'Idioma' },
+    pl: { fr: 'polonais', nom: 'Polski', dr: '🇵🇱', loc: 'pl-PL', pc: 'PLAN ZAŁADUNKU', dc: 'SZCZEGÓŁY PAKIETÓW', cli: 'Klient', cmd: 'Nr zamówienia', col: 'Pakiety', g: 'Lewa', d: 'Prawa', dbl: '2 przyczepy', rem: 'Przyczepa', dcT: 'Szczegóły pakietów', sec: 'Przekrój', lgs: 'Długości', tot: 'Razem', vol: 'Objętość', gd: 'Lewa · Prawa', G: 'Strona kierowcy', D: 'Strona pasażera', lib: 'wolne', arr: 'Tył', et: 'P', mil: 'ŚRODEK', pdf: 'Pobierz PDF', aide: 'Przytrzymaj obraz, aby go zapisać.', lang: 'Język' },
+    lt: { fr: 'lituanien', nom: 'Lietuvių', dr: '🇱🇹', loc: 'lt-LT', pc: 'PAKROVIMO PLANAS', dc: 'PAKETŲ SĄRAŠAS', cli: 'Klientas', cmd: 'Užsakymo Nr.', col: 'Paketai', g: 'Kairė', d: 'Dešinė', dbl: '2 priekabos', rem: 'Priekaba', dcT: 'Paketų sąrašas', sec: 'Skerspjūvis', lgs: 'Ilgiai', tot: 'Iš viso', vol: 'Tūris', gd: 'Kairė · Dešinė', G: 'Vairuotojo pusė', D: 'Keleivio pusė', lib: 'laisva', arr: 'Galas', et: 'A', mil: 'VIDURYS', pdf: 'Atsisiųsti PDF', aide: 'Palaikykite paspaudę paveikslėlį, kad jį išsaugotumėte.', lang: 'Kalba' },
+    ru: { fr: 'russe', nom: 'Русский', dr: '🇷🇺', loc: 'ru-RU', pc: 'ПЛАН ЗАГРУЗКИ', dc: 'СПИСОК ПАКЕТОВ', cli: 'Клиент', cmd: '№ заказа', col: 'Пакеты', g: 'Слева', d: 'Справа', dbl: '2 прицепа', rem: 'Прицеп', dcT: 'Список пакетов', sec: 'Сечение', lgs: 'Длины', tot: 'Итого', vol: 'Объём', gd: 'Слева · Справа', G: 'Сторона водителя', D: 'Сторона пассажира', lib: 'свободно', arr: 'Сзади', et: 'Я', mil: 'ЦЕНТР', pdf: 'Скачать PDF', aide: 'Нажмите и удерживайте изображение, чтобы сохранить его.', lang: 'Язык' },
+    nl: { fr: 'néerlandais', nom: 'Nederlands', dr: '🇳🇱', loc: 'nl-NL', pc: 'LAADPLAN', dc: 'PAKKETOVERZICHT', cli: 'Klant', cmd: 'Ordernr.', col: 'Pakketten', g: 'Links', d: 'Rechts', dbl: '2 aanhangers', rem: 'Aanhanger', dcT: 'Pakketoverzicht', sec: 'Doorsnede', lgs: 'Lengtes', tot: 'Totaal', vol: 'Volume', gd: 'Links · Rechts', G: 'Bestuurderszijde', D: 'Passagierszijde', lib: 'vrij', arr: 'Achterkant', et: 'L', mil: 'MIDDEN', pdf: 'PDF downloaden', aide: 'Houd een afbeelding ingedrukt om deze op te slaan.', lang: 'Taal' }
+  };
+  var ORDRE_LANGUES = ['fr', 'en', 'es', 'pt', 'pl', 'lt', 'ru', 'nl'];
+  function puceLangues(sel) {
+    return '<div class="langues">' + ORDRE_LANGUES.map(function (k) { return '<button type="button" data-lang="' + k + '" class="' + (k === sel ? 'actif' : '') + '"><span class="drap">' + LANGUES[k].dr + '</span> ' + LANGUES[k].nom + '</button>'; }).join('') + '</div>';
+  }
+  function ficheJolie(c, mode, seule, langue) {
+    var L = langue && langue !== 'fr' ? LANGUES[langue] : null, T = function (k, fr) { return L && L[k] ? L[k] : fr; }, SEP = L ? ': ' : ' : '; // pas d'espace avant « : » hors français // seule : n° de remorque (double) pour une page A4 par remorque
     var avecDetail = mode !== 'plan', avecPlan = mode !== 'detail', HT = 280;
     assurerPlan(c);
     var W = 1240, A4H = Math.round(1240 * 297 / 210), pad = 48, larg = W - 2 * pad, S = 2.6; // S : échelle par rapport à l'écran du téléphone
@@ -1587,6 +1614,10 @@
     var INK = SOMBRE ? '#EEF3EC' : '#16221A', MU = SOMBRE ? '#A3B2A8' : '#5E6E64', VERT = SOMBRE ? '#9CCB8A' : '#3B5A34', CARTE = SOMBRE ? 'rgba(24,32,27,.9)' : 'rgba(247,250,245,.92)';
     var F = function (w, px, cond) { return w + ' ' + px + 'px ' + (cond ? '"Barlow Condensed", ' : '') + 'Barlow, system-ui, sans-serif'; };
     var cv = document.createElement('canvas'), x = cv.getContext('2d');
+    if (langue === 'en') { // en anglais : 42.19 et 25,000
+      var enNb = function (t) { return String(t).replace(/(\d),(\d)/g, '$1.$2').replace(/(\d) (\d{3})(?!\d)/g, '$1,$2'); }, ft = x.fillText.bind(x), mt = x.measureText.bind(x);
+      x.fillText = function (t, a, b) { return ft(enNb(t), a, b); }; x.measureText = function (t) { return mt(enNb(t)); };
+    }
     function rond(a, b, w, h, rr) { rr = Math.max(0, Math.min(rr, h / 2, w / 2)); x.beginPath(); x.moveTo(a + rr, b); x.arcTo(a + w, b, a + w, b + h, rr); x.arcTo(a + w, b + h, a, b + h, rr); x.arcTo(a, b + h, a, b, rr); x.arcTo(a, b, a + w, b, rr); x.closePath(); }
     function carte(y, h) { x.save(); x.shadowColor = 'rgba(10,30,20,.14)'; x.shadowBlur = 24; x.shadowOffsetY = 6; x.fillStyle = CARTE; rond(pad, y, larg, h, 36); x.fill(); x.restore(); }
     function stabilo(t, xx, yy, coul, px) {
@@ -1659,13 +1690,13 @@
     x.fillStyle = SOMBRE ? 'rgba(10,14,11,' + Math.max(0.45, fd.voile / 100) + ')' : 'rgba(232,238,230,' + Math.max(0.15, fd.voile / 100) + ')'; x.fillRect(0, 0, W, H);
     // ---- en-tête ----
     var y = pad; carte(y, HT);
-    var d = new Date(base.termine_le || base.maj_le || Date.now()), dt = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    var d = new Date(base.termine_le || base.maj_le || Date.now()), dt = d.toLocaleDateString(T('loc', 'fr-FR'), { weekday: 'long', day: 'numeric', month: 'long' });
     var vb = vplan(c.double ? remDeN(c, 0) : c), gT = c.double ? plansTous.reduce(function (a, p) { return a + p.v.volG; }, 0) : vb.volG, dT = c.double ? plansTous.reduce(function (a, p) { return a + p.v.volD; }, 0) : vb.volD;
-    x.fillStyle = MU; x.font = F(600, 24); x.fillText(mode === 'detail' ? 'DÉTAIL DES COLIS' : (mode === 'plan' ? 'PLAN DE CHARGEMENT' : 'FICHE DE CHARGEMENT'), pad + 36, y + 46);
-    x.fillStyle = INK; x.font = F(700, 62, true); x.fillText('Client : ' + (base.client || '—'), pad + 36, y + 110);
-    x.font = F(600, 34); x.fillText('N° de commande : ' + (base.reference || '—'), pad + 36, y + 160);
-    x.fillStyle = MU; x.font = F(500, 28); x.fillText(dt.charAt(0).toUpperCase() + dt.slice(1) + ' · ' + heure(d.toISOString()) + ' · ' + nbTot + ' colis', pad + 36, y + 208);
-    x.fillText((c.double ? 'Double remorque ' + fm(c.double.lg[0]) + ' + ' + fm(c.double.lg[1]) + ' m · ' : '') + 'Gauche ' + f2(gT) + ' · Droite ' + f2(dT), pad + 36, y + 250);
+    x.fillStyle = MU; x.font = F(600, 24); x.fillText(mode === 'detail' ? T('dc', 'DÉTAIL DES COLIS') : (mode === 'plan' ? T('pc', 'PLAN DE CHARGEMENT') : T('pc', 'FICHE DE CHARGEMENT')), pad + 36, y + 46);
+    x.fillStyle = INK; x.font = F(700, 62, true); x.fillText(T('cli', 'Client') + SEP + (base.client || '—'), pad + 36, y + 110);
+    x.font = F(600, 34); x.fillText(T('cmd', 'N° de commande') + SEP + (base.reference || '—'), pad + 36, y + 160);
+    x.fillStyle = MU; x.font = F(500, 28); x.fillText(dt.charAt(0).toUpperCase() + dt.slice(1) + ' · ' + heure(d.toISOString()) + ' · ' + (L ? T('col') + SEP + nbTot : nbTot + ' colis'), pad + 36, y + 208);
+    x.fillText((c.double ? T('dbl', 'Double remorque') + ' ' + fm(c.double.lg[0]) + ' + ' + fm(c.double.lg[1]) + ' m · ' : '') + T('g', 'Gauche') + ' ' + f2(gT) + ' · ' + T('d', 'Droite') + ' ' + f2(dT), pad + 36, y + 250);
     x.textAlign = 'right'; x.fillStyle = INK; x.font = F(700, 92, true); x.fillText(f2(base.total_m3), W - pad - 36, y + 112);
     x.fillStyle = MU; x.font = F(500, 30); x.fillText('m³', W - pad - 36, y + 150);
     x.font = F(700, 40, true); x.fillStyle = INK; var wp = x.measureText(POIDS_TXT).width;
@@ -1675,9 +1706,9 @@
     // ---- détail des colis ----
     if (avecDetail) {
       carte(y, (avecPlan ? hTab : H - pad - hPied - y) - 40);
-      x.fillStyle = INK; x.font = F(700, 46, true); x.fillText('Détail des colis', pad + 36, y + 64);
+      x.fillStyle = INK; x.font = F(700, 46, true); x.fillText(T('dcT', 'Détail des colis'), pad + 36, y + 64);
       var yy = y + 102; x.fillStyle = MU; x.font = F(500, 24);
-      x.fillText('Section', pad + 36, yy); x.fillText('Longueurs', colLg, yy); x.textAlign = 'right'; x.fillText('Colis', colN, yy); x.fillText('m³', colM, yy); x.textAlign = 'left';
+      x.fillText(T('sec', 'Section'), pad + 36, yy); x.fillText(T('lgs', 'Longueurs'), colLg, yy); x.textAlign = 'right'; x.fillText(T('col', 'Colis'), colN, yy); x.fillText('m³', colM, yy); x.textAlign = 'left';
       yy += 14;
       tab.forEach(function (l) {
         x.fillStyle = SOMBRE ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.07)'; x.fillRect(pad + 36, yy, larg - 72, 2);
@@ -1689,11 +1720,11 @@
         yy += l.h;
       });
       x.fillStyle = SOMBRE ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.18)'; x.fillRect(pad + 36, yy, larg - 72, 3);
-      x.fillStyle = INK; x.font = F(700, 38); x.fillText('Total', pad + 36, yy + 58);
+      x.fillStyle = INK; x.font = F(700, 38); x.fillText(T('tot', 'Total'), pad + 36, yy + 58);
       x.textAlign = 'right'; x.fillText(String(nbTot), colN, yy + 58); x.fillText(f2(base.total_m3), colM, yy + 58); x.textAlign = 'left';
       if (!avecPlan) { // récap en bas de la feuille
         var bas = H - pad - hPied - 40 - 36, tw3 = (larg - 72 - 40) / 3, th3 = 150, ty = bas - th3;
-        [['Colis', String(nbTot)], ['Volume', f2(base.total_m3) + ' m³'], ['Gauche · Droite', f2(gT) + ' · ' + f2(dT)]].forEach(function (t, i) {
+        [[T('col', 'Colis'), String(nbTot)], [T('vol', 'Volume'), f2(base.total_m3) + ' m³'], [T('gd', 'Gauche · Droite'), f2(gT) + ' · ' + f2(dT)]].forEach(function (t, i) {
           var tx3 = pad + 36 + i * (tw3 + 20);
           x.fillStyle = SOMBRE ? 'rgba(255,255,255,.06)' : 'rgba(59,90,52,.07)'; rond(tx3, ty, tw3, th3, 24); x.fill();
           x.fillStyle = MU; x.font = F(600, 26); x.fillText(t[0].toUpperCase(), tx3 + 28, ty + 50);
@@ -1713,7 +1744,7 @@
       if (centre) { x.strokeStyle = 'rgba(59,90,52,.28)'; x.lineWidth = 16; for (var t = -h; t < w; t += 34) { x.beginPath(); x.moveTo(xx + t, yy + h); x.lineTo(xx + t + h, yy); x.stroke(); } }
       x.fillStyle = 'rgba(160,110,50,.25)'; x.fillRect(xx + w - 12, yy, 12, h);
       x.restore();
-      if (centre) { x.strokeStyle = VERT; x.lineWidth = 5; rond(xx + 2, yy + 2, w - 4, h - 4, 13); x.stroke(); x.font = F(800, 20); var bw = x.measureText('MILIEU').width + 18; x.fillStyle = VERT; rond(xx + w - bw - 10, yy + 8, bw, 30, 8); x.fill(); x.fillStyle = '#E6F0DA'; x.fillText('MILIEU', xx + w - bw - 1, yy + 30); }
+      if (centre) { x.strokeStyle = VERT; x.lineWidth = 5; rond(xx + 2, yy + 2, w - 4, h - 4, 13); x.stroke(); x.font = F(800, 20); var tm = T('mil', 'MILIEU'), bw = x.measureText(tm).width + 18; x.fillStyle = VERT; rond(xx + w - bw - 10, yy + 8, bw, 30, 8); x.fill(); x.fillStyle = '#E6F0DA'; x.fillText(tm, xx + w - bw - 1, yy + 30); }
       x.save(); rond(xx, yy, w, h, 14); x.clip();
       x.fillStyle = '#3D2B12'; x.font = F(700, 34); x.fillText(fm(k.lo) + ' m', xx + 16, yy + h / 2 - 2);
       x.fillStyle = '#6E5434'; x.font = F(500, 24); x.fillText(fm(k.ep) + '×' + fm(k.la), xx + 16, yy + h / 2 + 30);
@@ -1723,9 +1754,9 @@
     if (avecPlan) plans.forEach(function (p, ip) {
       var v = p.v, r = p.r, rc = p.c, N = v.N, mx = Math.round(r.e1Max * 100), maxLen = mx;
       v.ROWS.forEach(function (k2) { maxLen = Math.max(maxLen, v.rows[k2].ext || v.rows[k2].len); });
-      if (c.double) { var ir = p.i; var tr = 'Remorque ' + (ir + 1) + ' · ' + fm(c.double.lg[ir]) + ' m · ' + f2(rc.total_m3) + ' m³'; x.font = F(700, 44, true); var wtr = x.measureText(tr).width; x.fillStyle = VERT; rond(pad, y + 6, wtr + 44, 62, 31); x.fill(); x.fillStyle = '#fff'; x.fillText(tr, pad + 22, y + 52); y += 80; }
+      if (c.double) { var ir = p.i; var tr = T('rem', 'Remorque') + ' ' + (ir + 1) + ' · ' + fm(c.double.lg[ir]) + ' m · ' + f2(rc.total_m3) + ' m³'; x.font = F(700, 44, true); var wtr = x.measureText(tr).width; x.fillStyle = VERT; rond(pad, y + 6, wtr + 44, 62, 31); x.fill(); x.fillStyle = '#fff'; x.fillText(tr, pad + 22, y + 52); y += 80; }
       ['G', 'D'].forEach(function (s) {
-        stabilo(NOMS[s], pad + 10, y + 40, s === 'G' ? 'rgba(56,170,255,A)' : 'rgba(255,92,170,A)', 44);
+        stabilo(T(s, NOMS[s]), pad + 10, y + 40, s === 'G' ? 'rgba(56,170,255,A)' : 'rgba(255,92,170,A)', 44);
         var tv = f2(s === 'G' ? v.volG : v.volD) + ' m³'; x.font = F(600, 32); var wv = x.measureText(tv).width;
         x.fillStyle = CARTE; rond(W - pad - wv - 30, y + 6, wv + 30, 50, 25); x.fill();
         x.textAlign = 'right'; x.fillStyle = INK; x.fillText(tv, W - pad - 15, y + 42); x.textAlign = 'left';
@@ -1735,9 +1766,9 @@
           var ro = v.rows[s + f], c3 = v.rows['C' + N], occ = ro.ext + (f === N ? c3.ext : 0);
           var libre = (f > 1 ? Math.min(mx, v.rows[s + (f - 1)].ext) : mx) - occ;
           x.fillStyle = SOMBRE ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.55)'; rond(tx, ry, tw, rowH, 12); x.fill();
-          x.fillStyle = MU; x.font = F(500, 26); x.fillText('É' + f, pad + 30, ry + 34);
+          x.fillStyle = MU; x.font = F(500, 26); x.fillText(T('et', 'É') + f, pad + 30, ry + 34);
           x.fillStyle = ro.alerte ? (SOMBRE ? '#FF8A7A' : '#C23A2B') : INK; x.font = F(600, 38); x.fillText(fm(Math.round(occ) / 100) + ' m', pad + 30, ry + 76);
-          if (libre >= 30) { x.fillStyle = SOMBRE ? '#9CCB8A' : '#2F6B3A'; x.font = F(700, 25); x.fillText(fm(Math.round(libre) / 100) + ' m libre', pad + 30, ry + 108); }
+          if (libre >= 30) { x.fillStyle = SOMBRE ? '#9CCB8A' : '#2F6B3A'; var tl = fm(Math.round(libre) / 100) + ' m ' + T('lib', 'libre'), pl = 25; x.font = F(700, pl); while (pl > 15 && x.measureText(tl).width > tx - pad - 40) { pl--; x.font = F(700, pl); } x.fillText(tl, pad + 30, ry + 108); }
           var xx = tx + 6, gg = gapsRow(rc, v, s + f);
           var ggc = gapsRow(rc, v, 'C' + N);
           if (f === N) c3.colis.forEach(function (k3, i5) { xx += (ggc[i5] || 0) * lu; var w = k3.cm * lu - 6; bois(xx, ry + 6, Math.max(w, 20), rowH - 12, k3, true); xx += w + 6; });
@@ -1751,7 +1782,7 @@
         var deux = rc.parentId && rc.rem === 1, wy = ry + 44;
         [0, 1, 2].slice(0, deux ? 2 : 3).forEach(function (i4) { roue(tx + tw * 0.76 - i4 * 62, wy); });
         if (deux) [0, 1].forEach(function (i4) { roue(tx + tw * 0.1 + i4 * 62, wy); });
-        stabilo('Arrière', W - pad - 170, y + hCote - 60 - 22, 'rgba(150,160,155,A)', 32);
+        x.font = F(700, 32, true); var tAr = T('arr', 'Arrière'); stabilo(tAr, W - pad - 30 - x.measureText(tAr).width - 14, y + hCote - 60 - 22, 'rgba(150,160,155,A)', 32);
         y += hCote - 60 + 30;
       });
     });
@@ -1767,9 +1798,9 @@
     x.textAlign = 'left';
     return cv;
   }
-  function partagerImage(c) {
+  function partagerImage(c, langue) {
     if (!c.lignes.length) { toast('Aucun colis.'); return; }
-    var cv = imagePlan(c), url = cv.toDataURL('image/png');
+    var cv = imagePlan(c, langue), url = cv.toDataURL('image/png');
     var nom = 'plan-camion' + (c.client ? '-' + c.client.replace(/[^A-Z0-9]+/gi, '-') : '') + (c.reference ? '-' + c.reference : '') + '.png';
     try {
       var bin = atob(url.split(',')[1]), arr = new Uint8Array(bin.length);
@@ -1785,6 +1816,89 @@
       '<div class="grille-btns"><a class="btn sec" style="display:grid;place-items:center;text-decoration:none" download="' + esc(nom) + '" href="' + url + '">Télécharger</a><button class="btn" type="button" id="fermerImg">Fermer</button></div>');
     $('#fermerImg', f).onclick = fermerFeuille;
   }
+  function b64url(u8) { var s2 = ''; for (var i = 0; i < u8.length; i++) s2 += String.fromCharCode(u8[i]); return btoa(s2).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function deb64url(t) { var b = atob(t.replace(/-/g, '+').replace(/_/g, '/')), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  function fluxVers(u8, Flux) { return new Response(new Blob([u8]).stream().pipeThrough(new Flux('deflate-raw'))).arrayBuffer().then(function (ab) { return new Uint8Array(ab); }); }
+  function paquetPlan(o) { // lignes + plan rangé par ligne : bien plus court
+    var p = {};
+    o.lignes.forEach(function (l) { var t = []; for (var i = 0; i < (l.nb || 1); i++) t.push((o.plan || {})[l.id + '#' + i] || ''); p[l.id] = t.join(','); });
+    var r = { l: o.lignes.map(function (l) { return [l.id, l.ep, l.la, l.pi, l.lo, l.nb || 1]; }), p: p };
+    if (o.ordre) r.o = o.ordre; if (o.decal) r.d = o.decal; if (o.relax) r.x = 1; if (o.rem != null) r.n = o.rem;
+    return r;
+  }
+  function depaquetPlan(r, cible) {
+    cible.lignes = r.l.map(function (a) { return { id: a[0], ep: a[1], la: a[2], pi: a[3], lo: a[4], nb: a[5] }; });
+    cible.plan = {};
+    Object.keys(r.p || {}).forEach(function (id) { String(r.p[id]).split(',').forEach(function (v, i) { if (v) cible.plan[id + '#' + i] = v; }); });
+    cible.ordre = r.o || null; cible.decal = r.d || null; if (r.x) cible.relax = true; if (r.n != null) cible.rem = r.n;
+    cible.total_m3 = Math.round(P.totalM3(cible.lignes) * 1000) / 1000;
+    return cible;
+  }
+  function lienFiche(c, langue) {
+    var g = reg(), o = { v: 1, c: c.client || '', r: c.reference || '', t: c.termine_le || c.maj_le || maintenant(), lg: c.lgMax || null, s: [g.m3Min, g.m3Max, g.e1Min, g.e1Max, g.ecartMax], k: paquetPlan(c) };
+    if (c.double && c.double.r) o.db = { lg: c.double.lg, r: c.double.r.map(paquetPlan) };
+    var json = JSON.stringify(o), base = location.href.split('#')[0].replace(/index\.html$/, '');
+    var fin = function (t) { return base + '#f=' + langue + '.' + t; };
+    if (window.CompressionStream) return fluxVers(new TextEncoder().encode(json), CompressionStream).then(function (u) { return fin('z' + b64url(u)); }).catch(function () { return fin('j' + b64url(new TextEncoder().encode(json))); });
+    return Promise.resolve(fin('j' + b64url(new TextEncoder().encode(json))));
+  }
+  function lireLien() {
+    var m = /^#f=([a-z]{2})\.([zj])(.+)$/.exec(location.hash || ''); if (!m) return Promise.reject(new Error('lien'));
+    var u = deb64url(m[3]);
+    var pr = m[2] === 'z' ? fluxVers(u, DecompressionStream) : Promise.resolve(u);
+    return pr.then(function (u2) {
+      var o = JSON.parse(new TextDecoder().decode(u2));
+      var c = depaquetPlan(o.k, { id: 'fiche-qr', client: o.c, reference: o.r, termine_le: o.t, maj_le: o.t, statut: 'termine', lgMax: o.lg || null });
+      if (o.db) {
+        c.double = { lg: o.db.lg, actif: 0, algo: 2, r: o.db.r.map(function (rr, i) { var s2 = depaquetPlan(rr, { id: 'fiche-qr-r' + i }); if (s2.rem == null) s2.rem = i; return s2; }) };
+        c.double.sig = sigLignes(c.lignes);
+      }
+      return { c: c, lang: LANGUES[m[1]] ? m[1] : 'fr', s: o.s };
+    });
+  }
+  function montrerQR(c, langue) {
+    lienFiche(c, langue).then(function (url) {
+      var cv; try { cv = QR.canvas(url, 900, '#16221A'); } catch (e) { toast('Camion trop grand pour un QR code.'); return; }
+      var f = ouvrirFeuille('<div class="sec-tete"><h2>QR code chauffeur</h2><button class="lien" data-ok="1" type="button">Fermer</button></div>' +
+        '<div class="qr-boite"></div>' +
+        '<p class="qr-qui"><b>' + esc(c.client || 'Camion') + (c.reference ? ' · ' + esc(c.reference) : '') + '</b><br>' + LANGUES[langue].dr + ' ' + esc(langue === 'fr' ? 'Fiche en français' : 'Fiche en ' + LANGUES[langue].fr) + '</p>' +
+        '<p class="petit-txt">Le chauffeur scanne avec l\'appareil photo de son téléphone. Il lui faut internet (4G). Si tu modifies le camion, refais un QR code.</p>');
+      cv.className = 'qr-img'; $('.qr-boite', f).appendChild(cv);
+      $('[data-ok]', f).onclick = fermerFeuille;
+    });
+  }
+  // ---- page ouverte par le chauffeur (lien du QR code) ----
+  function pageFiche() {
+    document.body.classList.add('mode-fiche'); document.documentElement.classList.add('mode-fiche');
+    var z = document.createElement('div'); z.id = 'ficheQR'; document.body.appendChild(z);
+    z.innerHTML = '<p class="fq-att">…</p>';
+    lireLien().then(function (res) {
+      var c = res.c, langue = res.lang;
+      if (res.s) { db.reglages.m3Min = res.s[0]; db.reglages.m3Max = res.s[1]; db.reglages.e1Min = res.s[2]; db.reglages.e1Max = res.s[3]; db.reglages.ecartMax = res.s[4]; }
+      db.camions[c.id] = c;
+      if (c.double) c.double.r.forEach(function (s2) { s2.parentId = c.id; });
+      c.etat = P.etat(c.total_m3, cfgC(c)).code;
+      function pret() { // fond d'écran, logo et polices chargés avant de dessiner
+        var im = Ambiance.imageAffichee(), n = 0;
+        return new Promise(function (ok) {
+          (function att() { n++; var i2 = Ambiance.imageAffichee(); if ((!i2 || i2.complete) && LOGO.complete && LOGO_S.complete || n > 40) ok(); else setTimeout(att, 100); })();
+        }).then(function () { return document.fonts && document.fonts.ready; });
+      }
+      function dessiner() {
+        var L = LANGUES[langue], T = function (k, fr) { return langue !== 'fr' && L[k] ? L[k] : fr; };
+        var pages = c.double ? [['detail'], ['plan', 0], ['plan', 1]] : [['detail'], ['plan']];
+        z.innerHTML = '<div class="fq-tete"><img src="' + (document.documentElement.dataset.theme === 'sombre' ? 'logo-sombre.png' : 'logo-clair.png') + '" alt="SDC"><b>Les Scieries du Centre</b>' +
+          '<select id="fqLang" aria-label="' + esc(T('lang', 'Langue')) + '">' + ORDRE_LANGUES.map(function (k) { return '<option value="' + k + '"' + (k === langue ? ' selected' : '') + '>' + LANGUES[k].dr + ' ' + LANGUES[k].nom + '</option>'; }).join('') + '</select></div>' +
+          pages.map(function (m) { return '<img class="fq-img" alt="" src="' + ficheJolie(c, m[0], m[1], langue).toDataURL('image/jpeg', 0.9) + '">'; }).join('') +
+          '<button class="btn" type="button" id="fqPdf">⬇ ' + esc(T('pdf', 'Télécharger en PDF')) + '</button>' +
+          '<p class="petit-txt" style="text-align:center">' + esc(T('aide', 'Appui long sur une image pour l\'enregistrer.')) + '</p>';
+        $('#fqLang').onchange = function () { langue = this.value; z.innerHTML = '<p class="fq-att">…</p>'; setTimeout(dessiner, 30); };
+        $('#fqPdf').onclick = function () { envoyerFichiers(fichiersFiche(c, 'pdf', langue), ligneCourte(c)); };
+      }
+      pret().then(dessiner);
+    }).catch(function () { z.innerHTML = '<p class="fq-att">Lien invalide.</p>'; });
+  }
+  window.__lienFiche = lienFiche;
   window.__imagePlan = imagePlan; window.__fiche2 = ficheJolie; window.__fiche = function (c) { return ficheCanvas(c); }; window.__pdf = function (c) { var fc = ficheCanvas(c); return pdfDepuisJpeg(octets(fc.toDataURL('image/jpeg', 0.9)), fc.width, fc.height); }; // pour les tests
 
   // ---------- Historique ----------
@@ -2089,7 +2203,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=58" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=58" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=59" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=59" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2577,6 +2691,7 @@
   }
 
   // ---------- Démarrage ----------
+  if (MODE_FICHE) { appliquerTheme(); Ambiance.appliquer(reg()); pageFiche(); return; }
   Sync.init({
     lire: function () { return db; },
     ecrire: function (d) { db = d; sauver(true); },
