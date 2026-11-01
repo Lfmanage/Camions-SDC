@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '64';
+  var VERSION_APP = '66';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -38,6 +38,14 @@
       d.reglages.ajouts.push(cle);
     });
     d.clients = d.clients || [];
+    // ménage : un camion supprimé et déjà envoyé (ou qui n'a jamais quitté ce téléphone) est effacé pour de bon
+    var horsEquipe = true; try { horsEquipe = !(JSON.parse(localStorage.getItem('csdc.equipe') || '{}') || {}).equipe; } catch (e) {}
+    Object.keys(d.camions).forEach(function (k) {
+      var c = d.camions[k];
+      if (c.supprime && (!c._sale || horsEquipe)) { delete d.camions[k]; return; }
+      if (c.statut === 'termine' && c.plansVus) delete c.plansVus; // les anciens « Autre plan » ne servent plus (le plan de départ reste)
+    });
+    if (d.courant && !d.camions[d.courant]) d.courant = null;
     d.sync = d.sync || {};
     return d;
   }
@@ -139,6 +147,9 @@
   // ---------- Équipe : à qui est ce camion ----------
   function enEquipe() { return window.Sync && Sync.rejoint(); }
   function estAMoi(c) { return !c || !c.auteur || !enEquipe() || c.auteur === Sync.moi().uid; }
+  function effacerPlusTard(c) { // sans équipe : rien à prévenir, le camion est effacé dès que « Annuler » a disparu
+    setTimeout(function () { var l = db.camions[c.id]; if (l && l.supprime && !(window.Sync && Sync.actif() && Sync.rejoint())) { delete db.camions[c.id]; if (db.courant === c.id) db.courant = null; sauver(true); } }, 8000);
+  }
   function peutSupprimer(c) { return estAMoi(c) || (enEquipe() && Sync.moi().admin); }
   function prenomDe(c) { return Sync.nom(c.auteur_prenom) || (estAMoi(c) ? (Sync.moi().prenom || 'Moi') : '?'); }
   function tousClients() {
@@ -872,7 +883,7 @@
       toucher(c); sauver(true); selection = null; edition = null;
       retour(); toast('Plan enregistré ✔'); return;
     }
-    c.statut = 'termine'; c.termine_le = maintenant();
+    c.statut = 'termine'; c.termine_le = maintenant(); delete c.plansVus;
     if (c.client && db.clients.indexOf(c.client) < 0) db.clients.push(c.client);
     toucher(c);
     viderForm(); nouveauCamion(); sauver(true);
@@ -1594,7 +1605,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=64'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=64';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=66'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=66';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2027,8 +2038,8 @@
   function supprimerCamion(id, rendre) {
     var c = db.camions[id]; if (!c) return;
     if (!peutSupprimer(c)) { rendre(); toast('Camion de ' + prenomDe(c) + ' : seul ' + prenomDe(c) + ' peut le supprimer.'); return; }
-    c.supprime = true; toucher(c); rendre();
-    toast('Camion supprimé', function () { c.supprime = false; toucher(c); rendre(); }, 'Annuler');
+    c.supprime = true; toucher(c); rendre(); effacerPlusTard(c);
+    toast('Camion supprimé', function () { c.supprime = false; db.camions[c.id] = c; toucher(c); rendre(); }, 'Annuler');
   }
   function ouvrirCamion(id) {
     var c = db.camions[id]; if (!c) return;
@@ -2036,11 +2047,16 @@
     else detail(c);
   }
   var filtreQui = 'tous';
-  function personnes() { // prénoms de l'équipe (membres actifs + auteurs des camions)
+  function personnes() { // prénoms de l'équipe : seulement les membres actifs (un membre retiré n'apparaît plus)
     var l = [], vu = {}, moi = Sync.moi();
     Sync.membres().forEach(function (m) { if (m.actif && m.user_id !== moi.uid && !vu[m.user_id]) { vu[m.user_id] = 1; l.push({ uid: m.user_id, prenom: m.prenom }); } });
-    Object.keys(db.camions).forEach(function (k) { var c = db.camions[k]; if (c.auteur && c.auteur !== moi.uid && !vu[c.auteur] && !c.supprime) { vu[c.auteur] = 1; l.push({ uid: c.auteur, prenom: c.auteur_prenom || '?' }); } });
     return l;
+  }
+  // camion en cours d'un membre retiré : personne ne le finira, on ne le montre plus (ses camions terminés restent dans l'historique)
+  function coursVivant(c) {
+    if (!enEquipe() || estAMoi(c) || !c.auteur) return true;
+    var ms = Sync.membres(); if (!ms.length) return true;
+    return ms.some(function (m) { return m.user_id === c.auteur && m.actif !== false; });
   }
   function rendreHisto() {
     var q = ($('#recherche').value || '').trim().toUpperCase(), moi = Sync.moi().uid;
@@ -2050,7 +2066,7 @@
       if (q && (c.client || '').toUpperCase().indexOf(q) < 0 && (c.reference || '').toUpperCase().indexOf(q) < 0) return false;
       return true;
     });
-    var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
+    var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && coursVivant(c); }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
     var fini = tous.filter(function (c) { return c.statut === 'termine'; }).sort(function (a, b) { return b.termine_le < a.termine_le ? -1 : 1; });
     var h = '';
     if (cours.length) h += '<div class="jour"><div class="jour-tete"><h2>Non terminés</h2><span>' + cours.length + '</span></div><div class="carte">' + cours.map(function (c) { return ligneCam(c, true); }).join('') + '</div></div>';
@@ -2223,8 +2239,8 @@
         if (a === 'dupliquer' || a === 'recuperer') { fermerFeuille(); copierCamion(c, a === 'recuperer'); }
         if (a === 'suppr') {
           if (!peutSupprimer(c)) return;
-          c.supprime = true; toucher(c); fermerFeuille(); rendreHisto();
-          toast('Camion supprimé', function () { c.supprime = false; toucher(c); rendreHisto(); });
+          c.supprime = true; toucher(c); fermerFeuille(); rendreHisto(); effacerPlusTard(c);
+          toast('Camion supprimé', function () { c.supprime = false; db.camions[c.id] = c; toucher(c); rendreHisto(); });
         }
       };
     });
@@ -2258,7 +2274,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=64" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=64" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=66" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=66" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2293,7 +2309,7 @@
     var gens = [{ uid: moi.uid, prenom: moi.prenom, moi: true }].concat(personnes());
     var tous = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime; });
     var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj && compte(c); });
-    var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; });
+    var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && coursVivant(c); });
     z.innerHTML = '<div class="carte eq-liste">' + gens.map(function (g) {
       var n = camionsDe(g.uid).filter(function (c) { return c.statut === 'termine'; }).length;
       return '<button type="button" class="eq-p" data-p="' + esc(g.uid) + '"><span class="av' + (g.moi ? '' : ' b') + '">' + initiale(g.prenom) + '</span><span class="eq-n"><b>' + esc(g.prenom) + '</b>' + (g.moi ? '<small>toi</small>' : '') + '</span><span class="eq-c">' + n + ' camion' + (n > 1 ? 's' : '') + '</span><i>›</i></button>';

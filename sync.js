@@ -76,6 +76,9 @@
     var moi = st.session.uid;
     var sales = Object.keys(db.camions).map(function (k) { return db.camions[k]; })
       .filter(function (c) { return c._sale && (fusion || !c.auteur || c.auteur === moi || st.admin); });
+    // une suppression part seulement quand le « Annuler » a disparu (6 s) : « Annuler » remet donc toujours le camion tel quel
+    var attente = sales.filter(function (c) { return c.supprime && Date.now() - t(c.maj_le) < 7000; });
+    if (attente.length) { sales = sales.filter(function (c) { return attente.indexOf(c) < 0; }); clearTimeout(envoyer.tard); envoyer.tard = setTimeout(function () { if (rejoint()) lancer(); }, 7500); }
     if (!sales.length) return Promise.resolve(false);
     var change = false;
     function paquet(i) {
@@ -86,11 +89,11 @@
         lot.forEach(function (c) {
           var r = res && res[c.id], l = d.camions[c.id];
           if (!l) return;
-          if (r === 'refuse') { delete l._sale; st.depuis = null; change = true; return; } // on reprendra la version de l'équipe
+          if (r === 'refuse') { delete d.camions[c.id]; if (d.courant === c.id) d.courant = null; st.depuis = null; change = true; return; } // pas à moi : on l'enlève de ce téléphone, l'équipe renverra sa version si je peux la voir
           if (r && r !== c.id) { // fusionné avec un camion déjà dans l'équipe
             delete d.camions[c.id]; if (d.courant === c.id) d.courant = r; change = true; return;
           }
-          if (l.maj_le === c.maj_le) delete l._sale;
+          if (l.maj_le === c.maj_le) { delete l._sale; if (l.supprime) { delete d.camions[c.id]; if (d.courant === c.id) d.courant = null; } } // supprimé : effacé pour de bon
         });
         hooks.ecrire(d);
         return paquet(i + 40);
@@ -111,12 +114,21 @@
           var c = r.data || {}, l = d.camions[r.id];
           c.id = r.id; c.auteur = r.auteur; c.auteur_prenom = nom(r.auteur_prenom); c.supprime = !!r.supprime;
           c.maj_le = new Date(r.maj_le).toISOString(); delete c._sale;
-          if (!l || !l._sale || t(c.maj_le) >= t(l.maj_le)) { d.camions[r.id] = c; change = true; }
+          if (c.supprime) { if (l && !l._sale) { delete d.camions[r.id]; change = true; } }
+          else if (!l || !l._sale || t(c.maj_le) >= t(l.maj_le)) { d.camions[r.id] = c; change = true; }
           st.depuis = r.serveur_le;
         });
         hooks.ecrire(d); garder();
-        return rows.length === 500 ? page() : change;
+        return rows.length === 500 ? page() : effaces();
       });
+    }
+    function effaces() { // camions effacés par un autre téléphone : on les enlève d'ici aussi
+      return http('/rest/v1/camions_effaces?select=id').then(function (rows) {
+        var d = hooks.lire(), n = 0;
+        (rows || []).forEach(function (r) { var l = d.camions[r.id]; if (l && !(l._sale && !l.supprime)) { delete d.camions[r.id]; if (d.courant === r.id) d.courant = null; n++; } });
+        if (n) { hooks.ecrire(d); change = true; }
+        return change;
+      }, function () { return change; }); // ancienne version de Supabase : pas de liste, on continue
     }
     return page();
   }
@@ -198,7 +210,7 @@
       var d = hooks.lire(), moi = st.session.uid;
       Object.keys(d.camions).forEach(function (k) {
         var c = d.camions[k];
-        if (!c.auteur || c.auteur === ancien) { c.auteur = moi; c.auteur_prenom = st.prenom; }
+        if (!c.auteur) { c.auteur = moi; c.auteur_prenom = st.prenom; } // seuls les camions jamais envoyés deviennent les miens (jamais ceux d'un autre compte)
         if (c.auteur === moi) c._sale = true;
       });
       d.sync = d.sync || {}; d.sync.reglagesSales = !!j.nouvelle; // la toute première équipe prend les réglages de ce téléphone
@@ -212,6 +224,8 @@
       var n = hooks.lire ? Object.keys(hooks.lire().camions).filter(function (k) { return hooks.lire().camions[k]._sale; }).length : 0;
       if (n > 0) throw new Error('Des camions ne sont pas encore envoyés. Connecte-toi au réseau puis réessaie.');
       st.dernierUid = st.session && st.session.uid;
+      // le téléphone est vidé des camions de l'équipe (ils sont en sécurité dans l'équipe) : le prochain compte ne voit rien de l'ancien
+      if (hooks.lire) { var d = hooks.lire(); Object.keys(d.camions).forEach(function (k) { if (d.camions[k].auteur) delete d.camions[k]; }); if (d.courant && !d.camions[d.courant]) d.courant = null; d.clients = []; hooks.ecrire(d); } // la liste des clients aussi
       ['equipe', 'session', 'prenom', 'admin', 'membres', 'depuis', 'regLe', 'secretAVoir'].forEach(function (k) { delete st[k]; });
       garder(); notifier(true); return true;
     });
