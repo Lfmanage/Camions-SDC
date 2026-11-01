@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '66';
+  var VERSION_APP = '67';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1605,7 +1605,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=66'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=66';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=67'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=67';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2274,7 +2274,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=66" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=66" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=67" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=67" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2336,7 +2336,15 @@
       h += '<div class="jour"><div class="jour-tete"><h2>' + jourNom(k) + '</h2><span>' + nbCompte(jours[k]) + ' · ' + f2(tot) + ' m³</span></div><div class="carte">' + jours[k].map(function (c) { return ligneCam(c, false); }).join('') + '</div></div>';
     });
     if (!fin.length && !cours.length) h += '<div class="carte vide">Aucun camion pour l\'instant.</div>';
+    if (!estMoi && enEquipe() && p.prenom !== '?') h += '<button type="button" class="btn sec retirer-p" id="profilRetirer">Retirer ' + esc(p.prenom) + ' de l\'équipe</button>' +
+      '<p class="petit-txt" style="text-align:center">Ses camions validés restent dans l\'historique.</p>';
     $('#profilZone').innerHTML = h;
+    var br = $('#profilRetirer');
+    if (br) br.onclick = function () {
+      if (!br.dataset.ok) { br.dataset.ok = '1'; br.textContent = 'Confirmer : retirer ' + p.prenom; br.classList.add('rouge-plein'); return; }
+      br.disabled = true;
+      Sync.retirer(profilUid, false).then(function () { toast(p.prenom + ' a été retiré de l\'équipe'); aller('equipe'); }).catch(function (er) { br.disabled = false; toast(er.message); });
+    };
   }
   $('#profilZone').addEventListener('click', function (e) { var b = e.target.closest('.cam'); if (b && Date.now() - glisseFini > 350) detail(db.camions[b.dataset.id]); });
   function etatSyncTxt() {
