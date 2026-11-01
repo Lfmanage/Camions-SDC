@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '63';
+  var VERSION_APP = '64';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1594,7 +1594,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=63'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=63';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=64'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=64';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -1897,7 +1897,7 @@
       return { L: maxLen / 100, N: N, colis: colis, libres: libres, etages: etages, deux: !!(rc.parentId && rc.rem === 1) };
     });
     return { rems: res, fmt: fmt, sombre: document.documentElement.dataset.theme === 'sombre',
-      T: { G: T('G', 'Côté conducteur'), D: T('D', 'Côté passager'), arr: T('arr', 'Arrière'), lib: T('lib', 'libre'), et: T('et', 'É'), vc: T('vc', 'Côté'), vd: T('vd', 'Dessus'), va: T('va', 'Arrière'), tour: T('tour', 'Glisse pour tourner le camion') } };
+      T: { G: T('G', 'Côté conducteur'), D: T('D', 'Côté passager'), arr: T('arr', 'Arrière'), lib: T('lib', 'libre'), et: T('et', 'É'), mil: T('mil', 'MILIEU'), vc: T('vc', 'Côté'), vd: T('vd', 'Dessus'), va: T('va', 'Arrière'), tour: T('tour', 'Glisse pour tourner le camion') } };
   }
   function ouvrir3D() {
     var base = courantBase(); if (!base || !base.lignes.length) return;
@@ -2258,7 +2258,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=63" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=63" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=64" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=64" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

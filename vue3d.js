@@ -9,7 +9,7 @@
     var T = M.T, sombre = M.sombre;
     if (!M._pret) M.rems.forEach(function (r) { // placement réel : côté, étage → position dans l'espace
       r.colis.forEach(function (b) {
-        b.z0 = PLAT + b.e * H; b.z1 = b.z0 + H - 0.12;
+        b.z0 = PLAT + b.e * H; b.z1 = b.z0 + H - 0.03; // chaque colis repose sur ceux du dessous
         if (b.s === 'G') { b.y0 = 0.03; b.y1 = 0.03 + LARG; } else if (b.s === 'D') { b.y0 = YD; b.y1 = YD + LARG; } else { var mid = (0.03 + YD + LARG) / 2; b.y0 = mid - LARG / 2; b.y1 = mid + LARG / 2; b.mil = true; } // milieu : même sens que les autres, posé à cheval entre gauche et droite
         b.x0 += 0.04; b.x1 -= 0.04;
       });
@@ -49,7 +49,7 @@
       for (var i = 0; i < 4; i++) { var ly = h * (0.16 + i * 0.22) + (sd % 7); x.beginPath(); x.moveTo(0, ly); x.bezierCurveTo(w * 0.3, ly - 4, w * 0.6, ly + 5, w, ly - 1); x.stroke(); }
       x.beginPath(); x.ellipse(w * (0.3 + (sd % 40) / 100), h * 0.5, 14, 4.5, 0, 0, 6.3); x.stroke();
       x.fillStyle = 'rgba(160,110,50,.25)'; x.fillRect(w - 9, 0, 9, h);
-      if (lab && b.mil) { x.font = '800 20px Barlow, sans-serif'; var bw = x.measureText('MILIEU').width + 18; x.fillStyle = '#3B5A34'; rr(w - bw - 14, 10, bw, 30, 8); x.fill(); x.fillStyle = '#E6F0DA'; x.fillText('MILIEU', w - bw - 5, 32); }
+      if (lab && b.mil) { x.font = '800 20px Barlow, sans-serif'; var tMil = T.mil || 'MILIEU', bw = x.measureText(tMil).width + 18; x.fillStyle = '#3B5A34'; rr(14, 12, bw, 30, 8); x.fill(); x.fillStyle = '#E6F0DA'; x.fillText(tMil, 23, 34); }
       if (lab) {
         x.strokeStyle = 'rgba(110,80,40,.45)'; x.lineWidth = 1.6; if (w > 120) { x.beginPath(); x.moveTo(w - 58, h - 14); x.lineTo(w - 22, h - 14); x.stroke(); }
         x.fillStyle = '#3D2B12'; x.font = '700 34px Barlow, system-ui, sans-serif'; x.fillText(lab[0], 14, h / 2 + 2);
@@ -111,10 +111,12 @@
         if (nd([0, 0, 1]) < 0) ['G', 'D'].forEach(function (s) { for (var e = 0; e < r.N; e++) { var y0 = s === 'G' ? 0.03 : YD, z = PLAT + e * H - 0.03; x.save(); repere([o + 0.02, y0 + LARG, z], [o + r.L - 0.02, y0 + LARG, z], [o + 0.02, y0, z], 1000, LARG * 100); x.fillStyle = sombre ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.55)'; rr(0, 0, 1000, LARG * 100, 14); x.fill(); x.restore(); x.setTransform(1, 0, 0, 1, 0, 0); } });
         var obj = r.colis.map(function (b) { return { b: b, d: proj([(b.x0 + b.x1) / 2 + o, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2])[2] }; });
         obj.push({ paroi: 1, d: proj([o - 0.06, YD, PLAT + r.N * H / 2])[2] });
-        obj.sort(function (a, b) { return b.d - a.d; });
+        var murDevant = nd([-1, 0, 0]) < 0; // on voit la paroi de face : elle passe devant
+        obj.forEach(function (q) { q.e = q.paroi ? (murDevant ? 99 : -1) : q.b.e; });
+        obj.sort(function (a, b) { return a.e - b.e || b.d - a.d; }); // étage par étage (du bas vers le haut), puis du fond vers l'avant
         obj.forEach(function (q) {
           if (q.paroi) plaque({ x0: o - 0.15, x1: o, y0: 0, y1: yL, z0: 1.13, z1: PLAT + r.N * H + 0.25 });
-          else { var b = q.b, bb = { x0: b.x0 + o, x1: b.x1 + o, y0: b.y0, y1: b.y1, z0: b.z0, z1: b.z1, id: b.id, lot: b.lot, sec: b.sec, s: b.s, mil: b.mil }; colis(bb); }
+          else { var b = q.b; if (b.mil && nd([0, 0, 1]) < 0) { x.save(); repere([o + b.x0 - 0.1, b.y1 + 0.1, b.z0 + 0.001], [o + b.x1 + 0.1, b.y1 + 0.1, b.z0 + 0.001], [o + b.x0 - 0.1, b.y0 - 0.1, b.z0 + 0.001], 100, 100); var gs = x.createRadialGradient(50, 50, 10, 50, 50, 70); gs.addColorStop(0, 'rgba(60,40,15,.35)'); gs.addColorStop(1, 'rgba(60,40,15,0)'); x.fillStyle = gs; x.fillRect(0, 0, 100, 100); x.restore(); x.setTransform(1, 0, 0, 1, 0, 0); } var bb = { x0: b.x0 + o, x1: b.x1 + o, y0: b.y0, y1: b.y1, z0: b.z0, z1: b.z1, id: b.id, lot: b.lot, sec: b.sec, s: b.s, mil: b.mil }; colis(bb); }
         });
         // place libre en pointillés
         r.libres.forEach(function (l) {
