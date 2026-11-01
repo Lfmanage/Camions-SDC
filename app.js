@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '59';
+  var VERSION_APP = '60';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -160,7 +160,7 @@
   }
   function ouvrirFeuille(html) {
     var f = $('#feuille');
-    f.innerHTML = '<div class="poignee"></div>' + html;
+    f.classList.remove('feuille-partage'); f.innerHTML = '<div class="poignee"></div>' + html;
     f.hidden = false; $('#feuilleFond').hidden = false;
     f.scrollTop = 0;
     if (!(history.state && history.state.f)) history.pushState({ f: 1, v: vueActive, d: profondeur() + 1 }, '');
@@ -1557,20 +1557,19 @@
   }
   function choixPartage(c) {
     var langue = 'fr';
-    var f = ouvrirFeuille('<h2>Partager le camion</h2>' +
-      '<button type="button" class="opt-part" data-p="qr"><span class="op-ic">▦</span><span><b>QR code pour le chauffeur</b><small>Il scanne et ouvre la fiche sur son téléphone</small></span></button>' +
-      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche chauffeur / client (images)</b><small>Détail des colis + plan de chargement, en A4</small></span></button>' +
-      '<button type="button" class="opt-part" data-p="pdf"><span class="op-ic">📄</span><span><b>Fiche chauffeur / client (PDF)</b><small>Détail des colis + plan en A4, pratique pour imprimer</small></span></button>' +
-      '<button type="button" class="opt-part" data-p="image"><span class="op-ic">🖼</span><span><b>Image du plan seulement</b><small>Comme avant</small></span></button>' +
-      '<button type="button" class="opt-part" data-p="texte"><span class="op-ic">📋</span><span><b>Copier le texte</b><small>Pour le coller où tu veux (en français)</small></span></button>' +
-      '<p class="reg-st" style="margin-top:14px">Langue de la fiche</p>' + puceLangues(langue) + '<p class="petit-txt" id="langInfo">Fiche en français</p>');
+    var f = ouvrirFeuille('<div class="sec-tete"><h2>Partager le camion</h2><button class="lien" data-ferme="1" type="button">Fermer</button></div>' +
+      '<button type="button" class="opt-part prio" data-p="qr"><span class="op-ic op-qr"></span><span><b>QR code pour le chauffeur</b><small>Il scanne, la fiche s\'ouvre sur son téléphone</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="fiche"><span class="op-ic">💬</span><span><b>Fiche en images</b><small>Détail des colis + plan, en A4</small></span></button>' +
+      '<button type="button" class="opt-part" data-p="pdf"><span class="op-ic">📄</span><span><b>Fiche en PDF</b><small>Pratique pour imprimer</small></span></button>' +
+      '<p class="reg-st lang-tit">Langue de la fiche</p>' + puceLangues(langue));
+    f.classList.add('feuille-partage');
+    try { var mq = QR.canvas('SDC', 120, '#3B5A34'); mq.className = 'mini-qr'; $('.op-qr', f).appendChild(mq); } catch (e) {}
     f.onclick = function (e) {
       var bl = e.target.closest('[data-lang]');
-      if (bl) { langue = bl.dataset.lang; $$('[data-lang]', f).forEach(function (x) { x.classList.toggle('actif', x === bl); }); $('#langInfo', f).textContent = langue === 'fr' ? 'Fiche en français' : 'Fiche traduite en ' + LANGUES[langue].fr; return; }
+      if (bl) { langue = bl.dataset.lang; $$('[data-lang]', f).forEach(function (x) { x.classList.toggle('actif', x === bl); }); return; }
+      if (e.target.closest('[data-ferme]')) { f.onclick = null; fermerFeuille(); return; }
       var b = e.target.closest('[data-p]'); if (!b) return;
       var p = b.dataset.p; f.onclick = null; fermerFeuille();
-      if (p === 'image') { setTimeout(function () { partagerImage(c, langue); }, 120); return; }
-      if (p === 'texte') { copier(texteChauffeur(c)); return; }
       if (p === 'qr') { setTimeout(function () { montrerQR(c, langue); }, 120); return; }
       envoyerFichiers(fichiersFiche(c, p === 'fiche' ? 'jpg' : 'pdf', langue), ligneCourte(c));
     };
@@ -1586,7 +1585,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=59'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=59';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=60'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=60';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -1603,7 +1602,7 @@
   };
   var ORDRE_LANGUES = ['fr', 'en', 'es', 'pt', 'pl', 'lt', 'ru', 'nl'];
   function puceLangues(sel) {
-    return '<div class="langues">' + ORDRE_LANGUES.map(function (k) { return '<button type="button" data-lang="' + k + '" class="' + (k === sel ? 'actif' : '') + '"><span class="drap">' + LANGUES[k].dr + '</span> ' + LANGUES[k].nom + '</button>'; }).join('') + '</div>';
+    return '<div class="langues">' + ORDRE_LANGUES.map(function (k) { return '<button type="button" data-lang="' + k + '" class="' + (k === sel ? 'actif' : '') + '"><span class="drap">' + LANGUES[k].dr + '</span>' + LANGUES[k].nom + '</button>'; }).join('') + '</div>';
   }
   function ficheJolie(c, mode, seule, langue) {
     var L = langue && langue !== 'fr' ? LANGUES[langue] : null, T = function (k, fr) { return L && L[k] ? L[k] : fr; }, SEP = L ? ': ' : ' : '; // pas d'espace avant « : » hors français // seule : n° de remorque (double) pour une page A4 par remorque
@@ -2203,7 +2202,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=59" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=59" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=60" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=60" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

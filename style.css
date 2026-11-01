@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=59') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=59') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=59') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=59') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=59') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=59') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=60') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=60') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=60') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=60') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=60') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=60') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1225,3 +1225,15 @@ body.mode-fiche { overflow: auto; }
 html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100%; overflow: auto !important; position: static !important; }
 #ficheQR .fq-tete b { white-space: nowrap; }
 #ficheQR select { width: auto; flex: none; max-width: 48%; }
+/* v60 : page Partager tout sur un écran */
+.feuille-partage .sec-tete { margin-bottom: 6px; }
+.feuille-partage .opt-part { margin-bottom: 8px; padding: 11px 12px; }
+.feuille-partage .opt-part.prio { border: 2px solid var(--accent); background: var(--accent-soft); padding: 14px 12px; }
+.feuille-partage .opt-part b { font-size: 16px; }
+.feuille-partage .opt-part small { font-size: 13px; }
+.op-qr { padding: 7px; }
+.mini-qr { width: 100%; height: 100%; border-radius: 6px; image-rendering: pixelated; display: block; }
+.feuille-partage .lang-tit { margin: 12px 0 4px; }
+.feuille-partage .langues { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.feuille-partage .langues button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; font-size: 12.5px; }
+.feuille-partage .langues .drap { font-size: 20px; line-height: 1; }
