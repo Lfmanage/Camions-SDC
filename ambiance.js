@@ -2,7 +2,7 @@
    et événements (Bonne année, Noël…). Tout se règle dans reglages.fonds et reglages.ambiance. */
 (function () {
   'use strict';
-  var V = '76';
+  var V = '78';
   var NB_INT = 9;
   var DEF_EVTS = [
     { id: 'an', emo: '🎊', nom: 'Bonne année', du: '01-01', au: '01-31', msg: 'Bonne année {annee} 🎊', effet: 'poussieres', extras: [] },

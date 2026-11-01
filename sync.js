@@ -20,7 +20,7 @@
   }
   function actif() { var c = conf(); return !!(c.url && c.cle); }
   function rejoint() { return actif() && !!st.equipe && !!(st.session && st.session.uid); }
-  function nom(p) { return String(p || '').trim().replace(/\s+/g, ' ').toUpperCase(); }
+  function nom(p) { return String(p || '').replace(/[^0-9A-Za-zÀ-ÖØ-öø-ÿ \-]/g, '').trim().replace(/\s+/g, ' ').toUpperCase(); } // « Sylvano. » → « SYLVANO »
   function t(x) { return x ? new Date(x).getTime() : 0; }
   function notifier(change) { if (hooks.changement) hooks.changement(etat, change); }
 
@@ -135,6 +135,12 @@
 
   function reglages() {
     var d = hooks.lire();
+    if (!st.admin && d.sync && d.sync.limitesSales) { // un membre a changé les limites du camion : elles partent à toute l'équipe
+      var lim = {}; ['m3Min', 'm3Max', 'ecartMax', 'e1Min', 'e1Max'].forEach(function (k) { lim[k] = d.reglages[k]; });
+      return rpc('ecrire_limites', { p: lim }).then(function (le) {
+        var d2 = hooks.lire(); d2.sync.limitesSales = false; st.regLe = le; garder(); hooks.ecrire(d2); return false;
+      }).catch(function (e) { if (/ecrire_limites|function|404|PGRST/i.test(e.message || '')) { var d3 = hooks.lire(); d3.sync.limitesSales = false; hooks.ecrire(d3); return false; } throw e; });
+    }
     if (st.admin && d.sync && d.sync.reglagesSales) {
       return rpc('ecrire_reglages', { p: partage(d.reglages) }).then(function (le) {
         var d2 = hooks.lire(); d2.sync.reglagesSales = false; st.regLe = le; garder(); hooks.ecrire(d2); return false;
@@ -250,6 +256,7 @@
     changerCode: function (code) { return rpc('changer_code', { p_code: code }).catch(function (e) { throw new Error(message(e)); }); },
     definirSecret: function (c) { return rpc('definir_secret', { p_code: c }).catch(function (e) { throw new Error(message(e)); }); },
     nouveauSecret: function () { return rpc('nouveau_secret').catch(function (e) { throw new Error(message(e)); }); },
+    renommerClient: function (de, vers) { return rpc('renommer_client', { p_de: de, p_vers: vers }).catch(function (e) { throw new Error(/renommer_client|function|404|PGRST/i.test(e.message || '') ? 'Mets à jour Supabase (fichier v78) pour fusionner pour toute l\'équipe.' : message(e)); }); },
     recuperer: function (id) { // le camion d'un collègue passe à mon nom
       return rpc('recuperer_camion', { p_id: id }).then(function (r) {
         var d = hooks.lire(), c = r.data || {};

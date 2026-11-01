@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '76';
+  var VERSION_APP = '78';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -152,6 +152,38 @@
   }
   function peutSupprimer(c) { return estAMoi(c) || (enEquipe() && Sync.moi().admin); }
   function prenomDe(c) { return Sync.nom(c.auteur_prenom) || (estAMoi(c) ? (Sync.moi().prenom || 'Moi') : '?'); }
+  // ---------- Clients : jamais en double ----------
+  var MOTS_VIDES = ['SARL', 'SAS', 'SASU', 'SA', 'EURL', 'ETS', 'ETABLISSEMENTS', 'ETABLISSEMENT', 'STE', 'SOCIETE', 'GROUPE', 'ET', 'DE', 'DU', 'DES', 'LA', 'LE', 'LES', 'D', 'L', 'AU', 'AUX', 'CIE'];
+  function cliNorm(x) { return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim(); }
+  function cliMots(x) { return cliNorm(x).split(' ').filter(function (w) { return w && MOTS_VIDES.indexOf(w) < 0; }); }
+  function cliProches(a, b) {
+    var na = cliNorm(a), nb = cliNorm(b); if (!na || !nb) return false;
+    if (na.replace(/ /g, '') === nb.replace(/ /g, '')) return true;
+    var ma = cliMots(a), mb = cliMots(b); if (!ma.length || !mb.length) return false;
+    var court = ma.length <= mb.length ? ma : mb, long = court === ma ? mb : ma;
+    if (court.every(function (w) { return long.indexOf(w) >= 0; }) && court.some(function (w) { return w.length >= 3; })) return true; // « FOURNEL » ⊂ « FOURNEL INDUSTRIEL »
+    if (ma[0] === mb[0] && ma[0].length >= 4) return true;
+    function sigle(m) { return m.length >= 2 ? m.map(function (w) { return w.charAt(0); }).join('') : ''; }
+    var ca = ma.join(''), cb = mb.join('');
+    return (sigle(ma) && sigle(ma) === cb) || (sigle(mb) && sigle(mb) === ca); // « MATERIAUX BOIS AQUITAINE » = « MBA »
+  }
+  function nbCamionsClient(n) { var k = 0; Object.keys(db.camions).forEach(function (i) { var c = db.camions[i]; if (!c.supprime && c.client === n) k++; }); return k; }
+  function clientProche(n) {
+    if (!n) return null;
+    var l = tousClients().filter(function (x) { return x !== n && cliProches(x, n); });
+    l.sort(function (a, b) { return nbCamionsClient(b) - nbCamionsClient(a); });
+    return l[0] || null;
+  }
+  // avant d'aller plus loin : « Tu veux dire FOURNEL ? »
+  function verifierClient(c, suite) {
+    c.client = String(c.client || '').trim().replace(/\s+/g, ' ').toUpperCase();
+    var p = clientProche(c.client);
+    if (!p) { suite(); return; }
+    if (cliNorm(p).replace(/ /g, '') === cliNorm(c.client).replace(/ /g, '')) { c.client = p; toucher(c); suite(); return; } // même nom, écrit autrement
+    var tape = c.client; c.client = ''; // le camion ne compte pas comme un nouveau client pendant la question
+    demander({ titre: 'Tu veux dire ' + p + ' ?', texte: '« ' + tape + ' » ressemble à « ' + p + ' », déjà dans tes clients.', oui: 'Oui, ' + p, non: 'Non, nouveau client' })
+      .then(function (oui) { c.client = oui ? p : tape; if ($('#client') && document.activeElement !== $('#client')) $('#client').value = c.client; toucher(c); setTimeout(suite, 120); });
+  }
   function tousClients() {
     var s = {};
     db.clients.forEach(function (x) { if (x) s[x] = 1; });
@@ -754,15 +786,16 @@
       if (t) { dbl = t.dataset.t === 'd'; $$('#vpType button').forEach(function (x) { x.classList.toggle('actif', x === t); }); $('#vpLg').innerHTML = corps(); return; }
       if (b) { var z = b.parentNode.dataset.r, v = +b.dataset.l; if (z === 's') lg = v; else dl[+z] = v; $$('button', b.parentNode).forEach(function (x) { x.classList.toggle('actif', x === b); }); return; }
       if (e.target.closest('#vpOk')) {
-        c.client = $('#vpCli').value.trim(); c.reference = $('#vpRef').value.trim();
+        c.client = $('#vpCli').value.trim().toUpperCase(); c.reference = $('#vpRef').value.trim();
         if (dbl) { c.double = { lg: [dl[0], dl[1]], r: null, actif: 0 }; c.lgMax = null; reg().dernDouble = dl.slice(); }
         else { delete c.double; c.lgMax = lg === r.e1Max ? null : lg; }
         majPlan(c); toucher(c); fermerFeuille();
-        setTimeout(function () { aller('plan'); }, 80);
+        setTimeout(function () { verifierClient(c, function () { aller('plan'); }); }, 260);
       }
     };
     $('#vpRef').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#vpOk').click(); });
     $('#vpCli').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#vpRef').focus(); });
+    $('#vpCli').addEventListener('input', function () { var el = this, p = el.selectionStart; el.value = el.value.toUpperCase(); try { el.setSelectionRange(p, p); } catch (er) {} });
   }
   $('#calcSuivi').addEventListener('click', function (e) {
     var c = courant();
@@ -808,8 +841,7 @@
     majCfgCamion();
     if (c.volMode === 'exact' && !c.volExact) { $('#volExact').classList.add('erreur'); $('#volExact').focus(); toast('Indique le volume exact, ou choisis « Entre 39 et 41 ».'); return; }
     $('#volExact').classList.remove('erreur');
-    aller('camion');
-    setTimeout(function () { $('#fEp').focus(); }, 80);
+    verifierClient(c, function () { aller('camion'); setTimeout(function () { $('#fEp').focus(); }, 80); });
   });
 
   // Un autre bon plan, calculé instantanément sur le téléphone
@@ -1652,7 +1684,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=76'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=76';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=78'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=78';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2369,7 +2401,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=76" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=76" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=78" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=78" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2497,10 +2529,11 @@
     }).join('');
     if (r.couleurs && Object.keys(r.couleurs).length) { r.couleurs = {}; appliquerTheme(); }
     $('#reglagesZone').innerHTML = blocEquipe() + (estAdmin() ? blocAdmin() : '') +
-      '<div class="carte reg' + (verrou ? ' verrouille' : '') + '"><h2>Limites du camion</h2>' + (verrou ? '<p class="petit-txt">Réglages communs à toute l\'équipe.</p>' : '') +
+      '<div class="carte reg"><h2>Limites du camion</h2>' + (enEquipe() ? '<p class="petit-txt">Communes à toute l\'équipe : ce que tu changes s\'applique à tout le monde.</p>' : '') +
       '<div class="g3">' + champNum('rMin', 'Vol min', r.m3Min) + champNum('rMax', 'Vol max', r.m3Max) + champNum('rEcart', 'Écart G/D', r.ecartMax) + champNum('rE1Min', 'Ét.1 min', r.e1Min) + champNum('rE1Max', 'Ét.1 max', r.e1Max) + '</div>' +
       '</div>' +
 
+      '<button class="carte reg-ouvrir" id="ouvrirClients" type="button"><span><b>Clients</b><small>' + tousClients().length + ' clients · fusionner les doublons</small></span><i>›</i></button>' +
       '<button class="carte reg-ouvrir" id="ouvrirSections" type="button"><span><b>Sections et quantités</b><small>' + r.sections.length + ' sections · ' + (verrou ? 'communes à l\'équipe' : 'quantité remplie toute seule') + '</small></span><i>›</i></button>' +
 
       '<div class="carte reg ligne-app"><span>Apparence</span><div class="seg" id="segTheme">' +
@@ -2813,14 +2846,47 @@
     };
   }
 
+  // Liste des clients : on en choisit 2 ou plus, puis on garde un seul nom
+  function ouvrirClients() {
+    var choisis = [];
+    function rendre(f) {
+      var l = tousClients();
+      var doubles = {}; l.forEach(function (a) { l.forEach(function (b) { if (a !== b && cliProches(a, b)) doubles[a] = 1; }); });
+      f.innerHTML = '<div class="poignee"></div><div class="sec-tete"><h2>Clients</h2><button class="lien" data-f="1" type="button">Fermer</button></div>' +
+        '<p class="petit-txt">Touche 2 clients (ou plus) qui sont les mêmes, puis « Fusionner ». ⚠ = doublon probable.</p>' +
+        '<div class="carte cl-liste">' + (l.length ? l.map(function (x) {
+          return '<button type="button" class="cl-l' + (choisis.indexOf(x) >= 0 ? ' actif' : '') + '" data-cl="' + esc(x) + '"><span class="cl-c"></span><b>' + esc(x) + (doubles[x] ? ' <i class="cl-d">⚠</i>' : '') + '</b><small>' + nbCamionsClient(x) + ' camion' + (nbCamionsClient(x) > 1 ? 's' : '') + '</small></button>';
+        }).join('') : '<div class="vide">Aucun client.</div>') + '</div>' +
+        (choisis.length >= 2 ? '<p class="reg-st">Garder quel nom ?</p><div class="cl-garder">' + choisis.map(function (x) { return '<button type="button" class="btn sec" data-garde="' + esc(x) + '">' + esc(x) + '</button>'; }).join('') + '</div>' : '');
+    }
+    var f = ouvrirFeuille(''); rendre(f);
+    f.onclick = function (e) {
+      if (e.target.closest('[data-f]')) { fermerFeuille(); return; }
+      var b = e.target.closest('[data-cl]');
+      if (b) { var x = b.dataset.cl, i = choisis.indexOf(x); if (i >= 0) choisis.splice(i, 1); else choisis.push(x); rendre(f); return; }
+      var g = e.target.closest('[data-garde]'); if (!g) return;
+      var garde = g.dataset.garde, de = choisis.filter(function (x) { return x !== garde; });
+      fusionnerClients(de, garde).then(function (n) { toast(de.length + ' nom' + (de.length > 1 ? 's' : '') + ' fusionné' + (de.length > 1 ? 's' : '') + ' dans ' + garde); choisis = []; rendre(f); }).catch(function (er) { toast(er.message); });
+    };
+  }
+  function fusionnerClients(de, garde) {
+    Object.keys(db.camions).forEach(function (k) {
+      var c = db.camions[k]; if (de.indexOf(c.client) < 0) return;
+      c.client = garde; if (estAMoi(c) || (enEquipe() && Sync.moi().admin)) toucher(c);
+    });
+    db.clients = db.clients.filter(function (x) { return de.indexOf(x) < 0; }); if (db.clients.indexOf(garde) < 0) db.clients.push(garde);
+    sauver();
+    return enEquipe() ? Sync.renommerClient(de, garde) : Promise.resolve(0);
+  }
   function lierReglages() {
     $('#ouvrirSections').onclick = ouvrirSections;
+    $('#ouvrirClients').onclick = ouvrirClients;
     var r = reg();
     function numChamp(id, cle, verif) {
       $('#' + id).addEventListener('change', function () {
         var v = P.num(this.value);
         if (!isFinite(v) || v <= 0 || (verif && !verif(v))) { toast('Valeur refusée.'); this.value = fm(r[cle]); return; }
-        r[cle] = v; db.sync.reglagesSales = true; sauver(); this.value = fm(v);
+        r[cle] = v; db.sync = db.sync || {}; if (enEquipe() && !Sync.moi().admin) db.sync.limitesSales = true; else db.sync.reglagesSales = true; sauver(); this.value = fm(v);
         Object.keys(db.camions).forEach(function (k) { var c = db.camions[k]; if (c.statut === 'en_cours') c.etat = P.etat(c.total_m3, r).code; });
       });
     }
