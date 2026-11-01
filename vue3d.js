@@ -10,7 +10,7 @@
     if (!M._pret) M.rems.forEach(function (r) { // placement réel : côté, étage → position dans l'espace
       r.colis.forEach(function (b) {
         b.z0 = PLAT + b.e * H; b.z1 = b.z0 + H - 0.12;
-        if (b.s === 'G') { b.y0 = 0.03; b.y1 = 0.03 + LARG; } else if (b.s === 'D') { b.y0 = YD; b.y1 = YD + LARG; } else { b.y0 = 0.03; b.y1 = YD + LARG; b.mil = true; }
+        if (b.s === 'G') { b.y0 = 0.03; b.y1 = 0.03 + LARG; } else if (b.s === 'D') { b.y0 = YD; b.y1 = YD + LARG; } else { var mid = (0.03 + YD + LARG) / 2; b.y0 = mid - LARG / 2; b.y1 = mid + LARG / 2; b.mil = true; } // milieu : même sens que les autres, posé à cheval entre gauche et droite
         b.x0 += 0.04; b.x1 -= 0.04;
       });
     });
@@ -49,14 +49,13 @@
       for (var i = 0; i < 4; i++) { var ly = h * (0.16 + i * 0.22) + (sd % 7); x.beginPath(); x.moveTo(0, ly); x.bezierCurveTo(w * 0.3, ly - 4, w * 0.6, ly + 5, w, ly - 1); x.stroke(); }
       x.beginPath(); x.ellipse(w * (0.3 + (sd % 40) / 100), h * 0.5, 14, 4.5, 0, 0, 6.3); x.stroke();
       x.fillStyle = 'rgba(160,110,50,.25)'; x.fillRect(w - 9, 0, 9, h);
-      if (b.mil && !clair) { x.strokeStyle = 'rgba(59,90,52,.28)'; x.lineWidth = 14; for (var t = -h; t < w; t += 30) { x.beginPath(); x.moveTo(t, h); x.lineTo(t + h, 0); x.stroke(); } }
       if (lab) {
         x.strokeStyle = 'rgba(110,80,40,.45)'; x.lineWidth = 1.6; if (w > 120) { x.beginPath(); x.moveTo(w - 58, h - 14); x.lineTo(w - 22, h - 14); x.stroke(); }
         x.fillStyle = '#3D2B12'; x.font = '700 34px Barlow, system-ui, sans-serif'; x.fillText(lab[0], 14, h / 2 + 2);
         x.fillStyle = '#6E5434'; x.font = '500 22px Barlow, system-ui, sans-serif'; x.fillText(lab[1], 14, h / 2 + 30);
       }
       x.restore();
-      x.strokeStyle = b.mil ? 'rgba(59,90,52,.8)' : 'rgba(120,85,40,.3)'; x.lineWidth = b.mil ? 4 : 1; rr(0, 0, w, h, clair ? 10 : 14); x.stroke();
+      x.strokeStyle = b.mil ? 'rgba(59,90,52,.7)' : 'rgba(120,85,40,.3)'; x.lineWidth = b.mil ? 3 : 1; rr(0, 0, w, h, clair ? 10 : 14); x.stroke();
     }
     function texBout(w, h) {
       var g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#D9B77D'); g.addColorStop(1, '#C19A5F'); x.fillStyle = g; rr(0, 0, w, h, 6); x.fill();

@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '61';
+  var VERSION_APP = '62';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1541,7 +1541,7 @@
     var fs = l.map(function (x) { return x.f; });
     try {
       if (navigator.canShare && navigator.canShare({ files: fs })) {
-        var data = { files: fs, text: texte }; if (!navigator.canShare(data)) data = { files: fs };
+        var data = { files: fs }; // uniquement les fichiers : pas de petit texte en plus
         navigator.share(data).catch(function () {}); return;
       }
     } catch (e) {}
@@ -1587,14 +1587,14 @@
     var pages = c.double && c.double.r ? [['detail', 'Colis'], ['plan', 'Plan-R1', 0], ['plan', 'Plan-R2', 1]] : [['detail', 'Colis'], ['plan', 'Plan']];
     if (window.Vue3D) pages.push(['3d', 'Vue-3D']);
     return pages.map(function (m) {
-      var fc = ficheJolie(c, m[0], m[2], langue), url = fc.toDataURL('image/jpeg', 0.9), jpg = octets(url), nom = nomFichier(c, 'x').replace(/^Fiche-/, m[1] + '-');
+      var fc = ficheJolie(c, m[0], m[2], langue), url = fc.toDataURL('image/jpeg', 0.95), jpg = octets(url), nom = nomFichier(c, 'x').replace(/^Fiche-/, m[1] + '-');
       return format === 'jpg' ? { f: new File([jpg], nom.replace(/\.x$/, '.jpg'), { type: 'image/jpeg' }), url: url } : { f: new File([pdfDepuisJpeg(jpg, fc.width, fc.height)], nom.replace(/\.x$/, '.pdf'), { type: 'application/pdf' }), url: null };
     });
   }
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=61'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=61';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=62'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=62';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -1679,20 +1679,21 @@
     lmsg = []; // pas de remarques sur la fiche (client / chauffeur)
     var natH = pad + HT + 30 + hTab + hPlans + hPied + pad, H = Math.max(A4H, natH), ext = H - natH;
     if (avecDetail && !avecPlan && ext > 0 && tab.length) { var plus = Math.min(110, Math.max(0, ext - 230) / tab.length); tab.forEach(function (l) { l.h += plus; }); hTab += plus * tab.length; }
-    cv.width = W; cv.height = H;
+    var Q = Math.min(2, Math.sqrt(16e6 / (W * H))); // haute définition (300 dpi en A4), sans dépasser la limite de l'iPhone
+    cv.width = Math.round(W * Q); cv.height = Math.round(H * Q); x.scale(Q, Q);
     // ---- fond d'écran du moment ----
     x.fillStyle = SOMBRE ? '#121813' : '#DCE5DA'; x.fillRect(0, 0, W, H);
     var fd = Ambiance.cfg(reg()).fonds, im = Ambiance.imageAffichee();
     if (im && im.naturalWidth) {
       var k = Math.max(W / im.naturalWidth, H / im.naturalHeight), iw = im.naturalWidth * k, ih = im.naturalHeight * k;
       try { // flou fait à la main (marche aussi sur iPhone) : image réduite puis agrandie en douceur
-        var fl = Math.max(4, fd.flou || 0), red = 1 / (2 + fl * 1.6), t1 = document.createElement('canvas'), t2 = document.createElement('canvas');
-        t1.width = Math.max(8, Math.round(iw * red)); t1.height = Math.max(8, Math.round(ih * red));
+        // flou maximum : image réduite à quelques pixels puis agrandie par étapes (dégradés très doux, aucun détail qui gêne)
+        var t1 = document.createElement('canvas'); t1.width = 24; t1.height = Math.max(8, Math.round(24 * ih / iw));
         var g1 = t1.getContext('2d'); g1.imageSmoothingQuality = 'high'; g1.drawImage(im, 0, 0, t1.width, t1.height);
-        t2.width = Math.max(4, Math.round(t1.width / 2)); t2.height = Math.max(4, Math.round(t1.height / 2));
-        var g2 = t2.getContext('2d'); g2.imageSmoothingQuality = 'high'; g2.drawImage(t1, 0, 0, t2.width, t2.height);
+        var src = t1;
+        while (src.width * 2 < iw * Q / 2) { var t2 = document.createElement('canvas'); t2.width = src.width * 2; t2.height = src.height * 2; var g2 = t2.getContext('2d'); g2.imageSmoothingEnabled = true; g2.imageSmoothingQuality = 'high'; g2.drawImage(src, 0, 0, t2.width, t2.height); src = t2; }
         x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
-        x.drawImage(t2, (W - iw) / 2, (H - ih) / 2, iw, ih);
+        x.drawImage(src, (W - iw) / 2, (H - ih) / 2, iw, ih);
       } catch (e) {}
     }
     x.fillStyle = SOMBRE ? 'rgba(10,14,11,' + Math.max(0.45, fd.voile / 100) + ')' : 'rgba(232,238,230,' + Math.max(0.15, fd.voile / 100) + ')'; x.fillRect(0, 0, W, H);
@@ -1797,11 +1798,11 @@
     // ---- vue 3D : grande vue + côté + arrière ----
     if (avec3D && window.Vue3D) {
       var M3 = modele3D(c, langue), hDispo = H - pad - hPied - 20 - y, hG = Math.round((hDispo - 30) * 0.6), hP = hDispo - 30 - hG, lP = Math.round((larg - 20) / 2);
-      carte(y, hG); x.drawImage(Vue3D.image(M3, '3d', larg - 20, hG - 20, 2.4), pad + 10, y + 10);
+      carte(y, hG); x.drawImage(Vue3D.image(M3, '3d', Math.round((larg - 20) * Q), Math.round((hG - 20) * Q), 1.9 * Q), pad + 10, y + 10, larg - 20, hG - 20);
       y += hG + 30;
       var demi = function (xx) { x.save(); x.shadowColor = 'rgba(10,30,20,.14)'; x.shadowBlur = 24; x.shadowOffsetY = 6; x.fillStyle = CARTE; rond(xx, y, lP, hP, 36); x.fill(); x.restore(); };
-      demi(pad); x.drawImage(Vue3D.image(M3, 'cote', lP - 20, hP - 20, 1.5), pad + 10, y + 10);
-      demi(pad + lP + 20); x.drawImage(Vue3D.image(M3, 'arriere', lP - 20, hP - 20, 1.5), pad + lP + 30, y + 10);
+      demi(pad); x.drawImage(Vue3D.image(M3, 'cote', Math.round((lP - 20) * Q), Math.round((hP - 20) * Q), 1.5 * Q), pad + 10, y + 10, lP - 20, hP - 20);
+      demi(pad + lP + 20); x.drawImage(Vue3D.image(M3, 'arriere', Math.round((lP - 20) * Q), Math.round((hP - 20) * Q), 1.5 * Q), pad + lP + 30, y + 10, lP - 20, hP - 20);
     }
     // ---- remarques + logo ----
     y = H - pad - (hPied - 20); carte(y, hPied - 20);
@@ -2257,7 +2258,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=61" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=61" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=62" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=62" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
