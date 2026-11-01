@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=67') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=67') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=67') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=67') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=67') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=67') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=68') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=68') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=68') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=68') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=68') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=68') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1262,5 +1262,40 @@ html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100
 .v3-zone { max-width: 520px; width: 100%; margin: 0 auto; }
 #ficheQR .fq-t3 { margin: 6px 0 -4px; font: 700 22px "Barlow Condensed", Barlow, sans-serif; }
 /* v67 : retirer un collègue depuis son profil */
-.retirer-p { width: 100%; margin-top: 14px; color: #C23A2B; border: 1px solid rgba(194, 58, 43, .35); }
-.retirer-p.rouge-plein { background: #C23A2B; color: #fff; border-color: #C23A2B; }
+.retirer-p { width: 100%; margin-top: 10px; color: #C23A2B !important; border: 1px solid rgba(194, 58, 43, .35) !important; }
+.retirer-p.rouge-plein { background: #C23A2B !important; color: #fff !important; }
+
+/* ---- v68 : rubrique Stats à part (6 onglets) ---- */
+.barre { grid-template-columns: repeat(6, 1fr) !important; }
+.barre .onglet { font-size: 10.5px; min-width: 0; padding-left: 0; padding-right: 0; }
+.barre .onglet > span:last-child { white-space: nowrap; }
+@media (max-width: 380px) { .barre .onglet { font-size: 9.5px; } .barre .onglet .ico { width: 36px; } }
+/* stats : tout se touche */
+#stats [data-sk] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#stats .kpi > div[data-sk] { position: relative; }
+#stats .kpi > div[data-sk]::after { content: "›"; position: absolute; right: 10px; top: 6px; font-size: 17px; font-weight: 700; color: var(--accent); opacity: .8; }
+#stats .kpi > div[data-sk]:active, #stats .st-r:active { transform: scale(.98); }
+#stats .st-r { position: relative; padding-right: 16px; }
+#stats .st-r::after { content: "›"; position: absolute; right: 0; top: 9px; font-weight: 700; color: var(--accent); opacity: .7; }
+#stats .st-ch div[data-sk]:active em { filter: brightness(1.15); }
+.st-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.st-chips span { border-radius: 10px; padding: 5px 10px; font-size: 13px; font-weight: 600; background: var(--field, rgba(255,255,255,.7)); }
+.st-chips .ok { color: #2E7D3B; } .st-chips .peu { color: #C8761F; } .st-chips .trop { color: #C23A2B; }
+.st-mini b { font-size: 17px !important; }
+/* ---- v68 : Équipe, profil et réglages plus compacts ---- */
+#v-equipe .eq-p { padding: 7px 2px; }
+#v-equipe .eq-p .av { width: 34px; height: 34px; font-size: 15px; }
+#v-equipe .eq-n b { font-size: 15.5px; }
+#v-equipe .eq-jour { padding: 10px 12px; }
+#v-equipe .eq-jour h2 { font-size: 14px; margin-bottom: 6px; }
+#v-equipe .eq-k > div, #v-profil .kpi > div { padding: 6px 10px; border-radius: 12px; }
+#v-equipe .eq-k b, #v-profil .kpi b { font-size: 19px; }
+#v-equipe .astuce { margin-top: -4px; }
+#v-profil .kpi { margin-bottom: 4px; gap: 6px; }
+#v-profil .jour-tete h2 { font-size: 14px; }
+#v-reglages .carte.reg, #v-reglages .reg-ouvrir { padding: 9px 12px; }
+#v-reglages .adm-carte { gap: 0; padding: 2px 12px; }
+#v-reglages .adm-l { padding: 8px 0; }
+#v-reglages .adm-l small { font-size: 11.5px; }
+#v-reglages .adm-l + .adm-l { border-top: 1px solid var(--line); }
+#v-reglages .ligne-app { padding: 7px 12px; }

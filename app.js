@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '67';
+  var VERSION_APP = '68';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -254,7 +254,7 @@
   }
   // ---------- Navigation ----------
   var vueActive = 'accueil';
-  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', ajout: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', equipe: 'equipe', profil: 'equipe', fonds: 'reglages', ambiance: 'reglages' };
+  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', ajout: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', stats: 'stats', equipe: 'equipe', profil: 'equipe', fonds: 'reglages', ambiance: 'reglages' };
   function montrer(v) {
     vueActive = v; document.body.dataset.vue = v;
     if (v !== 'plan' && v !== 'ajout') edition = null;
@@ -267,7 +267,8 @@
     if (v === 'client') rendreClient();
     if (v === 'camion') rendreCamion();
     if (v === 'plan') { rendrePlanVue(); requestAnimationFrame(ajusterPlan); }
-    if (v === 'historique') { if (ongletHisto === 'stats') rendreStats(); else rendreHisto(); }
+    if (v === 'historique') rendreHisto();
+    if (v === 'stats') rendreStats();
     if (v === 'reglages') rendreReglages();
     if (v === 'ajout') rendreAjout();
     if (v === 'equipe') rendreEquipe();
@@ -1605,7 +1606,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=67'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=67';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=68'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=68';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2088,15 +2089,45 @@
   $('#recherche').addEventListener('input', rendreHisto);
   // ---------- Statistiques ----------
   var ongletHisto = 'camions', periodeStats = 'semaine';
-  $('#histoOnglets').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-o]'); if (!b) return;
-    ongletHisto = b.dataset.o;
-    $$('#histoOnglets button').forEach(function (x) { x.classList.toggle('actif', x === b); });
-    $('#histoCamions').hidden = $('#histo').hidden = ongletHisto !== 'camions';
-    $('#stats').hidden = ongletHisto !== 'stats';
-    if (ongletHisto === 'stats') rendreStats(); else rendreHisto();
+  var statsDans = [], statsCases = [];
+  $('#stats').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-per]'); if (b) { periodeStats = b.dataset.per; rendreStats(); return; }
+    var k = e.target.closest('[data-sk]'); if (k) { detailStats(k.dataset.sk, k.dataset.v); }
   });
-  $('#stats').addEventListener('click', function (e) { var b = e.target.closest('[data-per]'); if (b) { periodeStats = b.dataset.per; rendreStats(); } });
+  // Tout se touche dans les stats : on ouvre la liste des camions concernés
+  function detailStats(sk, v) {
+    var l = statsDans.slice(), titre = '', h = '', per = { jour: 'aujourd\'hui', semaine: 'cette semaine', mois: 'ce mois', annee: 'cette année' }[periodeStats];
+    function tri(a) { return a.sort(function (x, y) { return y.termine_le < x.termine_le ? -1 : 1; }); }
+    function bloc(t, a) { return a.length ? '<p class="reg-st">' + t + '</p><div class="carte">' + tri(a).map(function (c) { return ligneCam(c, false); }).join('') + '</div>' : ''; }
+    function som(a) { return a.reduce(function (x, c) { return x + c.total_m3; }, 0); }
+    if (sk === 'vol' || sk === 'nb' || sk === 'moy') {
+      titre = { vol: 'Volume', nb: 'Camions', moy: 'Moyenne' }[sk] + ' · ' + per;
+      if (sk === 'moy') l.sort(function (a, b) { return b.total_m3 - a.total_m3; });
+      h = '<p class="petit-txt">' + l.length + ' camion' + (l.length > 1 ? 's' : '') + ' · ' + f2(som(l)) + ' m³' + (l.length ? ' · moyenne ' + f2(som(l) / l.length) + ' m³' : '') + '</p>' +
+        (sk === 'moy' ? '<div class="carte">' + l.map(function (c) { return ligneCam(c, false); }).join('') + '</div>' : bloc('Camions', l));
+    } else if (sk === 'ok') {
+      titre = 'Volume OK · ' + per;
+      var g = { ok: [], peu: [], trop: [] }; l.forEach(function (c) { (g[c.etat] || g.ok).push(c); });
+      h = '<div class="st-chips"><span class="ok">Bon · ' + g.ok.length + '</span><span class="peu">Pas assez · ' + g.peu.length + '</span><span class="trop">Dépassé · ' + g.trop.length + '</span></div>' +
+        bloc('Bon (' + fm(reg().m3Min) + ' – ' + fm(reg().m3Max) + ' m³)', g.ok) + bloc('Pas assez', g.peu) + bloc('Dépassé', g.trop);
+    } else if (sk === 'bar') {
+      var cs = statsCases[+v]; l = cs ? cs.l : []; titre = cs ? cs.titre : '';
+      var hs = l.map(function (c) { return heure(c.termine_le); }).sort();
+      h = '<div class="eq-k st-mini"><div><small>Volume</small><b>' + f2(som(l)) + '</b></div><div><small>Camions</small><b>' + l.length + '</b></div>' + (hs.length && periodeStats !== 'annee' && periodeStats !== 'mois' ? '<div><small>1er · dernier</small><b>' + hs[0] + ' · ' + hs[hs.length - 1] + '</b></div>' : '') + '</div>' + bloc('Camions', l);
+    } else if (sk === 'pers') {
+      l = l.filter(function (c) { return prenomDe(c) === v; }); titre = v + ' · ' + per;
+      h = '<p class="petit-txt">' + l.length + ' camion' + (l.length > 1 ? 's' : '') + ' · ' + f2(som(l)) + ' m³</p>' + bloc('Camions', l);
+    } else if (sk === 'cli') {
+      l = l.filter(function (c) { return (c.client || 'Sans client') === v; }); titre = v + ' · ' + per;
+      h = '<p class="petit-txt">' + l.length + ' camion' + (l.length > 1 ? 's' : '') + ' · ' + f2(som(l)) + ' m³</p>' + bloc('Camions', l);
+    }
+    if (!l.length && sk !== 'ok') h += '<div class="carte vide">Aucun camion.</div>';
+    var f = ouvrirFeuille('<div class="sec-tete"><h2>' + esc(titre) + '</h2><button class="lien" data-f="1" type="button">Fermer</button></div>' + h + '<p class="petit-txt">Touche un camion pour l\'ouvrir.</p>');
+    f.onclick = function (e) {
+      if (e.target.closest('[data-f]')) { fermerFeuille(); return; }
+      var b = e.target.closest('.cam'); if (b) { f.onclick = null; detail(db.camions[b.dataset.id]); }
+    };
+  }
   function debutPeriode(per, d) {
     var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     if (per === 'semaine') x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
@@ -2126,7 +2157,15 @@
     else if (per === 'semaine') { ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach(function (n) { cases.push({ n: n, v: 0 }); }); idx = function (t) { return (t.getDay() + 6) % 7; }; }
     else if (per === 'mois') { for (var w = 0; w < 5; w++) cases.push({ n: 'S' + (w + 1), v: 0 }); idx = function (t) { return Math.min(4, Math.floor((t.getDate() - 1) / 7)); }; }
     else { 'JFMAMJJASOND'.split('').forEach(function (n) { cases.push({ n: n, v: 0 }); }); idx = function (t) { return t.getMonth(); }; }
-    dans.forEach(function (c) { cases[idx(new Date(c.termine_le))].v += c.total_m3; });
+    cases.forEach(function (x) { x.l = []; });
+    dans.forEach(function (c) { var x = cases[idx(new Date(c.termine_le))]; x.v += c.total_m3; x.l.push(c); });
+    statsDans = dans; statsCases = cases;
+    cases.forEach(function (x, k) { // titre du détail quand on touche une barre
+      if (per === 'semaine') { var dj = decaler(deb, 'jour', k); x.titre = dj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' }); x.titre = x.titre.charAt(0).toUpperCase() + x.titre.slice(1); }
+      else if (per === 'jour') x.titre = 'Entre ' + x.n + ' et ' + (parseInt(x.n, 10) + 2) + 'h';
+      else if (per === 'mois') x.titre = 'Semaine ' + (k + 1) + ' du mois';
+      else x.titre = new Date(deb.getFullYear(), k, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    });
     var actuel = idx(maint), max = Math.max.apply(null, cases.map(function (x) { return x.v; }).concat([1]));
     function groupe(cle) {
       var g = {};
@@ -2138,18 +2177,18 @@
     var nomBar = { jour: 'm³ par heure', semaine: 'm³ par jour', mois: 'm³ par semaine', annee: 'm³ par mois' }[per];
     function lignesBarres(l, cl) {
       var mx = l.length ? l[0].m : 1;
-      return l.map(function (x, i) { return '<div class="st-r"><b>' + (cl ? (i + 1) + '. ' : '') + esc(x.k) + '<em>' + x.n + ' camion' + (x.n > 1 ? 's' : '') + '</em></b><span>' + f2(x.m) + ' m³</span><small><i style="width:' + Math.round(x.m / mx * 100) + '%"></i></small></div>'; }).join('');
+      return l.map(function (x, i) { return '<div class="st-r" data-sk="' + (cl ? 'cli' : 'pers') + '" data-v="' + esc(x.k) + '"><b>' + (cl ? (i + 1) + '. ' : '') + esc(x.k) + '<em>' + x.n + ' camion' + (x.n > 1 ? 's' : '') + '</em></b><span>' + f2(x.m) + ' m³</span><small><i style="width:' + Math.round(x.m / mx * 100) + '%"></i></small></div>'; }).join('');
     }
     var h = '<div class="seg seg4" id="segPer">' + [['jour', 'Jour'], ['semaine', 'Semaine'], ['mois', 'Mois'], ['annee', 'Année']].map(function (p) { return '<button type="button" data-per="' + p[0] + '" class="' + (per === p[0] ? 'actif' : '') + '">' + p[1] + '</button>'; }).join('') + '</div>' +
       '<div class="kpi st-kpi">' +
-      '<div><small>Volume</small><b>' + f2(tot) + '</b><em>m³</em>' + (evol !== null ? '<i class="' + (evol >= 0 ? 'plus' : 'moins') + '">' + (evol >= 0 ? '+' : '') + evol + ' %</i>' : '') + '</div>' +
-      '<div><small>Camions</small><b>' + dans.length + '</b>' + (avant.length || dans.length ? '<i class="' + (dn >= 0 ? 'plus' : 'moins') + '">' + (dn >= 0 ? '+' : '') + dn + '</i>' : '') + '</div>' +
-      '<div><small>Moyenne</small><b>' + (dans.length ? f2(tot / dans.length) : '–') + '</b><em>m³</em></div>' +
-      '<div><small>Volume OK</small><b>' + (dans.length ? okP + ' %' : '–') + '</b></div></div>';
+      '<div data-sk="vol"><small>Volume</small><b>' + f2(tot) + '</b><em>m³</em>' + (evol !== null ? '<i class="' + (evol >= 0 ? 'plus' : 'moins') + '">' + (evol >= 0 ? '+' : '') + evol + ' %</i>' : '') + '</div>' +
+      '<div data-sk="nb"><small>Camions</small><b>' + dans.length + '</b>' + (avant.length || dans.length ? '<i class="' + (dn >= 0 ? 'plus' : 'moins') + '">' + (dn >= 0 ? '+' : '') + dn + '</i>' : '') + '</div>' +
+      '<div data-sk="moy"><small>Moyenne</small><b>' + (dans.length ? f2(tot / dans.length) : '–') + '</b><em>m³</em></div>' +
+      '<div data-sk="ok"><small>Volume OK</small><b>' + (dans.length ? okP + ' %' : '–') + '</b></div></div>';
     if (!dans.length) h += '<div class="carte vide">Aucun camion terminé sur cette période.</div>';
     else {
       h += '<div class="carte st-tot"><small>' + nomBar + '</small><div class="st-ch' + (cases.length > 7 ? ' serre' : '') + '">' + cases.map(function (x, k) {
-        return '<div class="' + (k === actuel ? 'auj' : '') + '"><b>' + (x.v ? Math.round(x.v) : '') + '</b><em style="height:' + Math.max(2, Math.round(x.v / max * 100)) + '%"></em><span>' + x.n + '</span></div>';
+        return '<div class="' + (k === actuel ? 'auj' : '') + '" data-sk="bar" data-v="' + k + '"><b>' + (x.v ? Math.round(x.v) : '') + '</b><em style="height:' + Math.max(2, Math.round(x.v / max * 100)) + '%"></em><span>' + x.n + '</span></div>';
       }).join('') + '</div></div>';
       if (gens.length) h += '<div class="carte st-cl"><h3>Par personne</h3>' + lignesBarres(gens, false) + '</div>';
       h += '<div class="carte st-cl"><h3>Top clients</h3>' + lignesBarres(clients, true) + '</div>';
@@ -2274,7 +2313,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=67" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=67" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=68" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=68" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2290,7 +2329,8 @@
     if (vueActive === 'equipe') rendreEquipe();
     else if (vueActive === 'profil') rendreProfil();
     else if (vueActive === 'reglages') rendreReglages();
-    else if (vueActive === 'historique') { if (ongletHisto === 'stats') rendreStats(); else rendreHisto(); }
+    else if (vueActive === 'historique') rendreHisto();
+    else if (vueActive === 'stats') rendreStats();
     else if (vueActive === 'accueil') rendreAccueil();
   }
   function camionsDe(uidP) {
@@ -2468,7 +2508,7 @@
     var c = Ambiance.cfg(reg()), e = Ambiance.evenement(reg()), ef = Ambiance.effetActuel(reg());
     return '<div class="carte reg adm-carte"><button class="adm-l" data-adm="ambiance" type="button"><span><b>Ambiance <i class="lock-p">🔒 toi seul</i></b><small>' + esc((e ? e.emo + ' ' + e.nom : 'Aucune période') + ' · ' + nomDe(EFFETS, ef.effet)) + '</small></span><em>›</em></button>' +
       '<button class="adm-l" data-adm="fonds" type="button"><span><b>Fonds d\'écran <i class="lock-p">🔒 toi seul</i></b><small>' + Ambiance.visibles(reg()).length + ' images · ' + freqTxt(c.fonds) + ' · flou ' + c.fonds.flou + '</small></span><em>›</em></button>' +
-      '<div class="adm-minis">' + c.fonds.liste.slice(0, 9).map(function (x) { return '<img src="' + esc(Ambiance.miniDe(x)) + '" alt="">'; }).join('') + '</div></div>';
+      '</div>';
   }
   function rendreFonds() {
     var z = $('#fondsZone');
