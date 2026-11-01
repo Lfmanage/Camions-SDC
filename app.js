@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '68';
+  var VERSION_APP = '69';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -232,6 +232,44 @@
   })();
   function majRetour() { var ok = profondeur() > 0; $$('[data-retour]').forEach(function (b) { b.style.visibility = ok ? 'visible' : 'hidden'; }); }
   $('#feuilleFond').addEventListener('click', function () { if (!$('#feuilleFond').onclick) fermerFeuille(); });
+  // Glisser une fenêtre vers le bas pour la fermer (comme sur iPhone)
+  (function () {
+    var f = $('#feuille'), fond = $('#feuilleFond'), g = null;
+    function fermerParGeste() { if (fond.onclick) fond.onclick(); else fermerFeuille(); }
+    f.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1 || f.classList.contains('feuille-3d')) { g = null; return; }
+      var t = e.target;
+      if (t.closest && t.closest('canvas, input[type=range], textarea, select, .v3-scene, .langues, [data-noglisse]')) { g = null; return; }
+      g = { y0: e.touches[0].clientY, x0: e.touches[0].clientX, t0: Date.now(), dy: 0, actif: false, haut: f.scrollTop <= 0 };
+    }, { passive: true });
+    f.addEventListener('touchmove', function (e) {
+      if (!g) return;
+      var dy = e.touches[0].clientY - g.y0, dx = e.touches[0].clientX - g.x0;
+      if (!g.actif) {
+        if (f.scrollTop > 0) { g.y0 = e.touches[0].clientY; g.haut = false; return; } // la fenêtre défile d'abord jusqu'en haut
+        if (dy > 8 && Math.abs(dy) > Math.abs(dx) * 1.3) { g.actif = true; g.y0 = e.touches[0].clientY - 1; g.t0 = Date.now(); f.style.transition = 'none'; f.style.animation = 'none'; }
+        else return;
+      }
+      e.preventDefault();
+      g.dy = Math.max(0, e.touches[0].clientY - g.y0);
+      f.style.transform = 'translateY(' + g.dy + 'px)';
+      fond.style.opacity = String(Math.max(0.2, 1 - g.dy / (f.offsetHeight || 600)));
+    }, { passive: false });
+    function fin() {
+      if (!g || !g.actif) { g = null; return; }
+      var v = g.dy / Math.max(1, Date.now() - g.t0), h = f.offsetHeight || 600, ferme = g.dy > Math.min(h * 0.22, 160) || (v > 0.45 && g.dy > 40);
+      f.style.transition = 'transform .22s ease-out'; fond.style.transition = 'opacity .22s ease-out';
+      if (ferme) {
+        f.style.transform = 'translateY(' + (h + 40) + 'px)'; fond.style.opacity = '0';
+        setTimeout(function () { fermerParGeste(); f.style.transition = f.style.transform = f.style.animation = ''; fond.style.transition = fond.style.opacity = ''; }, 220);
+      } else {
+        f.style.transform = ''; fond.style.opacity = '';
+        setTimeout(function () { f.style.transition = ''; fond.style.transition = ''; f.style.animation = ''; }, 240);
+      }
+      g = null;
+    }
+    f.addEventListener('touchend', fin); f.addEventListener('touchcancel', fin);
+  })();
   function demander(o) {
     return new Promise(function (ok) {
       var f = ouvrirFeuille('<div class="dialogue"><h2>' + esc(o.titre) + '</h2>' + (o.html || '<p>' + esc(o.texte || '') + '</p>') +
@@ -1606,7 +1644,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=68'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=68';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=69'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=69';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2313,7 +2351,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=68" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=68" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=69" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=69" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
