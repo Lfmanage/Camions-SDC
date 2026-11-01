@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '62';
+  var VERSION_APP = '63';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1594,7 +1594,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=62'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=62';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=63'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=63';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -1618,7 +1618,7 @@
     var avec3D = mode === '3d', avecDetail = mode !== 'plan' && !avec3D, avecPlan = mode !== 'detail' && !avec3D, HT = 280;
     assurerPlan(c);
     var W = 1240, A4H = Math.round(1240 * 297 / 210), pad = 48, larg = W - 2 * pad, S = 2.6; // S : échelle par rapport à l'écran du téléphone
-    var SOMBRE = document.documentElement.dataset.theme === 'sombre';
+    var SOMBRE = false; // fiches toujours en mode clair (meilleure qualité, même si l'appli est en sombre)
     var INK = SOMBRE ? '#EEF3EC' : '#16221A', MU = SOMBRE ? '#A3B2A8' : '#5E6E64', VERT = SOMBRE ? '#9CCB8A' : '#3B5A34', CARTE = SOMBRE ? 'rgba(24,32,27,.9)' : 'rgba(247,250,245,.92)';
     var F = function (w, px, cond) { return w + ' ' + px + 'px ' + (cond ? '"Barlow Condensed", ' : '') + 'Barlow, system-ui, sans-serif'; };
     var cv = document.createElement('canvas'), x = cv.getContext('2d');
@@ -1797,7 +1797,7 @@
     });
     // ---- vue 3D : grande vue + côté + arrière ----
     if (avec3D && window.Vue3D) {
-      var M3 = modele3D(c, langue), hDispo = H - pad - hPied - 20 - y, hG = Math.round((hDispo - 30) * 0.6), hP = hDispo - 30 - hG, lP = Math.round((larg - 20) / 2);
+      var M3 = modele3D(c, langue); M3.sombre = false; var hDispo = H - pad - hPied - 20 - y, hG = Math.round((hDispo - 30) * 0.6), hP = hDispo - 30 - hG, lP = Math.round((larg - 20) / 2);
       carte(y, hG); x.drawImage(Vue3D.image(M3, '3d', Math.round((larg - 20) * Q), Math.round((hG - 20) * Q), 1.9 * Q), pad + 10, y + 10, larg - 20, hG - 20);
       y += hG + 30;
       var demi = function (xx) { x.save(); x.shadowColor = 'rgba(10,30,20,.14)'; x.shadowBlur = 24; x.shadowOffsetY = 6; x.fillStyle = CARTE; rond(xx, y, lP, hP, 36); x.fill(); x.restore(); };
@@ -2258,7 +2258,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=62" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=62" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=63" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=63" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2746,7 +2746,7 @@
   }
 
   // ---------- Démarrage ----------
-  if (MODE_FICHE) { appliquerTheme(); Ambiance.appliquer(reg()); pageFiche(); return; }
+  if (MODE_FICHE) { document.documentElement.dataset.theme = 'clair'; Ambiance.appliquer(reg()); pageFiche(); return; }
   Sync.init({
     lire: function () { return db; },
     ecrire: function (d) { db = d; sauver(true); },
