@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=71') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=71') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=71') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=71') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=71') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=71') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=72') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=72') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=72') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=72') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=72') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=72') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1303,3 +1303,11 @@ html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100
 #planZone .chip.centre { padding-top: 11px !important; }
 #planZone .chip.centre::before { left: 0 !important; right: 0 !important; top: 0 !important; width: auto !important; border-radius: 6px 6px 0 0 !important; padding: 1px 0 !important; text-align: center; font-size: 7.5px !important; line-height: 9px !important; }
 #planZone .chip.centre b { line-height: 1.05; }
+
+/* v72 : « Voir le camion en 3D » sur la ligne de « Équilibré » : la page gagne la hauteur d'un bouton */
+#planZone > .sum { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "tot gd" "etq b3"; align-items: center; gap: 4px 8px; padding: 0 2px; }
+#planZone > .sum .sum-g { display: contents; }
+#planZone > .sum .tot { grid-area: tot; }
+#planZone > .sum .etq { grid-area: etq; justify-self: start; }
+#planZone > .sum .gd { grid-area: gd; }
+#planZone > .sum .btn-3d { grid-area: b3; width: auto; flex: none; gap: 6px; padding: 5px 11px; border-radius: 12px; font-size: 13.5px; border-width: 1.5px; }
