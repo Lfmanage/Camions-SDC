@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '69';
+  var VERSION_APP = '71';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1120,7 +1120,7 @@
 
   var planGeo = { maxLen: 1300, place: 0 };
   function styleVide(cm) { return cm > 0 ? 'width:calc((100% - ' + (4 + planGeo.place) + 'px) * ' + (cm / planGeo.maxLen).toFixed(4) + ' - 2px)' : 'width:0;margin-left:-2px'; }
-  function txtVide(cm) { if (cm < 100) return ''; var t = fm(Math.round(cm) / 100) + ' m'; return cm >= 160 ? t + ' libre' : t; }
+  function txtVide(cm) { if (cm < 30) return ''; return fm(Math.round(cm) / 100) + ' m libre'; } // raccourci à l'affichage si la place manque
   var selRem = null, selEtr = false; // double : remorque où le colis choisi a été pris
   function rendrePlanVue() {
     var base = courantBase(), dbl = base.double;
@@ -1215,6 +1215,13 @@
   var RH_MAX = 48, RH_MIN = 30, RH_GRAND = 64;
   function ajusterPlan() {
     var z = $('#planZone'); if (!z || vueActive !== 'plan') return;
+    requestAnimationFrame(function () { // texte des places libres : toujours lisible, jamais coupé
+      $$('#planZone i.vide').forEach(function (el) {
+        var plein = el.dataset.t || el.textContent; el.dataset.t = plein; if (!plein) return;
+        var m = plein.replace(' libre', ''), essais = [plein, m, m.replace(' m', ''), ''];
+        for (var i = 0; i < essais.length; i++) { el.textContent = essais[i]; if (el.scrollWidth <= el.clientWidth + 1) break; }
+      });
+    });
     var sm = $('.sum', z);
     if (sm && window.Vue3D && !$('.btn-3d', z)) {
       var b3 = document.createElement('button'); b3.type = 'button'; b3.className = 'btn-3d';
@@ -1435,14 +1442,15 @@
     var fe = $('[data-fin]', trk), reste = Math.max(0, gl.finSup - r.fin);
     if (fe) { fe.setAttribute('style', styleVide(reste)); fe.textContent = txtVide(reste); }
   }, { passive: false });
-  // Vers l'arrière : le colis prend d'abord le vide devant le suivant, puis pousse les suivants.
+  // Vers l'arrière : le colis avance jusqu'au suivant, sans le pousser.
   // Vers la cabine : seul ce colis avance, les suivants ne bougent pas.
   function nouveauxVides(g, d) {
     var gg = g.g0.slice(), i = g.i, n = gg.length, lim = Math.max(planGeo.maxLen, g.fin0);
     if (d < 0) { d = Math.max(d, -gg[i]); gg[i] += d; if (i + 1 < n) gg[i + 1] -= d; }
     else if (d > 0) {
-      var libre = i + 1 < n ? gg[i + 1] : 0, pousse = Math.min(Math.max(0, d - libre), lim - g.fin0);
-      d = Math.min(d, libre + pousse); gg[i] += d; if (i + 1 < n) gg[i + 1] -= Math.min(d, libre);
+      // les colis de derrière ne bougent jamais : on s'arrête contre le suivant (ou au bout de la remorque pour le dernier)
+      var libre = i + 1 < n ? gg[i + 1] : Math.max(0, lim - g.fin0);
+      d = Math.min(d, libre); gg[i] += d; if (i + 1 < n) gg[i + 1] -= d;
     }
     var fin = g.fin0 + gg.reduce(function (s, x) { return s + x; }, 0) - g.g0.reduce(function (s, x) { return s + x; }, 0);
     return { d: d, gg: gg, fin: fin };
@@ -1644,7 +1652,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=69'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=69';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=71'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=71';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2351,7 +2359,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=69" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=69" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=71" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=71" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

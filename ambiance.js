@@ -2,7 +2,7 @@
    et événements (Bonne année, Noël…). Tout se règle dans reglages.fonds et reglages.ambiance. */
 (function () {
   'use strict';
-  var V = '69';
+  var V = '71';
   var NB_INT = 9;
   var DEF_EVTS = [
     { id: 'an', emo: '🎊', nom: 'Bonne année', du: '01-01', au: '01-31', msg: 'Bonne année {annee} 🎊', effet: 'poussieres', extras: [] },
@@ -148,18 +148,59 @@
     z.dataset.k = 'sapins';
   }
 
-  // ---------- Feuilles (sprites) ----------
+  // ---------- Feuilles : dessinées sur un canvas (fluide même avec beaucoup de feuilles) ----------
+  var fe = { cv: null, cx: null, l: [], raf: 0, tp: 0, img: null, sp: null, W: 0, H: 0, dpr: 1 };
+  function feTaille() {
+    fe.dpr = Math.min(2, window.devicePixelRatio || 1); fe.W = window.innerWidth; fe.H = window.innerHeight;
+    if (fe.cv) { fe.cv.width = Math.round(fe.W * fe.dpr); fe.cv.height = Math.round(fe.H * fe.dpr); fe.cx.setTransform(fe.dpr, 0, 0, fe.dpr, 0, 0); }
+  }
+  function feSprites() { // les 10 feuilles, avec leur ombre, préparées une seule fois
+    if (fe.sp || !fe.img || !fe.img.naturalWidth) return fe.sp;
+    var n = 10, w = fe.img.naturalWidth / n, h = fe.img.naturalHeight, m = 14;
+    fe.sp = [];
+    for (var k = 0; k < n; k++) {
+      var c = document.createElement('canvas'); c.width = w + m * 2; c.height = h + m * 2;
+      var g = c.getContext('2d'); g.shadowColor = 'rgba(40,20,0,.28)'; g.shadowBlur = 8; g.shadowOffsetY = 4;
+      g.drawImage(fe.img, k * w, 0, w, h, m, m, w, h); fe.sp.push({ c: c, w: w, m: m });
+    }
+    return fe.sp;
+  }
+  function feNouvelle(debut) {
+    var prof = Math.random(), t = 16 + prof * 26, d = 14 - prof * 5 + Math.random() * 6;
+    return { x: Math.random() * fe.W, y: debut ? Math.random() * (fe.H + 140) - 70 : -60 - Math.random() * 60, t: t, vy: (fe.H + 140) / d,
+      am: 20 + Math.random() * 50, f: 6.283 / (2 * (2 + Math.random() * 3)), ph: Math.random() * 6.283, k: Math.floor(Math.random() * 10), a: prof > 0.86 || prof < 0.2 ? 0.8 : 1 };
+  }
+  function feBoucle(t) {
+    fe.raf = requestAnimationFrame(feBoucle);
+    var dt = Math.min(0.05, (t - (fe.tp || t)) / 1000); fe.tp = t;
+    var cx2 = fe.cx, sp = feSprites(); if (!cx2) return;
+    cx2.clearRect(0, 0, fe.W, fe.H); if (!sp) return;
+    var vue = document.body.dataset.vue, acc = vue === 'accueil', petit = vue === 'plan' || vue === 'calcul', sombre = document.documentElement.dataset.theme === 'sombre';
+    var n = fe.l.length, max = petit ? Math.min(3, n) : n;
+    for (var i = 0; i < n; i++) {
+      var p = fe.l[i];
+      p.y += p.vy * dt;
+      if (p.y > fe.H + 80) { fe.l[i] = feNouvelle(false); continue; }
+      if (i >= max) continue;
+      var s = Math.sin(t / 1000 * p.f + p.ph), x = p.x + s * p.am, rot = (5 + s * 45) * Math.PI / 180, tumble = 0.45 + 0.55 * Math.abs(Math.cos(t / 1000 * p.f * 1.3 + p.ph));
+      var o = sp[p.k], k = (p.t * (petit ? 0.65 : 1)) / o.w, w = o.c.width * k, h = o.c.height * k;
+      cx2.save(); cx2.globalAlpha = p.a * (sombre ? 0.75 : 1) * (petit ? 0.85 : 1);
+      cx2.translate(x, p.y); cx2.rotate(rot); cx2.scale(1, tumble);
+      cx2.drawImage(o.c, -w / 2, -h / 2, w, h); cx2.restore();
+    }
+  }
+  function feArreter() { if (fe.raf) cancelAnimationFrame(fe.raf); fe.raf = 0; fe.tp = 0; if (fe.cx) fe.cx.clearRect(0, 0, fe.W, fe.H); }
   function feuilles(on, q) {
     var z = document.getElementById('feuillesZone'); if (!z) return;
-    if (!on) { z.innerHTML = ''; return; }
-    var n = Math.round(11 * q), h = '';
-    for (var i = 0; i < n; i++) {
-      var prof = Math.random(), taille = Math.round(16 + prof * 26), d = (14 - prof * 5 + Math.random() * 6).toFixed(1);
-      var flou = prof > 0.86 ? 2.2 : (prof < 0.2 ? 0.8 : 0);
-      h += '<i class="fe' + (i >= n / 2 ? ' fe-plus' : '') + '" style="left:' + (Math.random() * 96).toFixed(1) + '%;--d:' + d + 's;--r:' + (-Math.random() * d).toFixed(1) + 's;--b:' + (2 + Math.random() * 3).toFixed(1) + 's;--x:' + Math.round(20 + Math.random() * 50) + 'px">' +
-        '<i style="width:' + taille + 'px;height:' + taille + 'px;background-size:' + taille * 10 + 'px ' + taille + 'px;background-position:' + (-(i % 10) * taille) + 'px 0;filter:blur(' + flou + 'px) drop-shadow(0 ' + Math.round(2 + prof * 5) + 'px ' + Math.round(3 + prof * 6) + 'px rgba(40,20,0,.22))"></i></i>';
+    if (!on) { feArreter(); fe.l = []; z.innerHTML = ''; fe.cv = fe.cx = null; return; }
+    if (!fe.cv) {
+      z.innerHTML = ''; fe.cv = document.createElement('canvas'); fe.cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+      z.appendChild(fe.cv); fe.cx = fe.cv.getContext('2d'); feTaille();
+      if (!fe.img) { fe.img = new Image(); fe.img.onload = function () { fe.sp = null; }; fe.img.src = 'feuilles.png?v=27'; }
+      if (!fe.ecoute) { fe.ecoute = true; window.addEventListener('resize', feTaille); document.addEventListener('visibilitychange', function () { if (document.hidden) feArreter(); else if (fe.cv && fe.l.length && !fe.raf) fe.raf = requestAnimationFrame(feBoucle); }); }
     }
-    z.innerHTML = h;
+    fe.l = []; for (var i = 0, n = Math.round(11 * q); i < n; i++) fe.l.push(feNouvelle(true));
+    if (!fe.raf && !document.hidden) fe.raf = requestAnimationFrame(feBoucle);
   }
 
   // ---------- Particules dessinées (neige, pétales, poussières, confettis, étoiles, feux d'artifice) ----------
