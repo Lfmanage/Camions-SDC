@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=81') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=81') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=81') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=81') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=81') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=81') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=82') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=82') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=82') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=82') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=82') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=82') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -610,7 +610,9 @@ input:focus { background: var(--card); }
 .cam { border-bottom: 0; padding: 0 16px; min-height: 56px; }
 .cam .m3 { font-size: 16.5px; display: inline-flex; align-items: center; gap: 7px; }
 .cam .m3::before, .legende i { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; }
-.cam .m3.ok { color: var(--vert); } .cam .m3.peu { color: var(--orange); } .cam .m3.trop { color: var(--rouge); } .cam .m3.cours { color: var(--accent); }
+.cam .m3.ok { color: var(--vert); } .cam .m3.peu { color: var(--orange); } .cam .m3.trop { color: var(--rouge); } .cam .m3.cours { color: var(--muted); }
+.cam .m3.cours::before { display: none; }
+.tag-av { font-style: normal; font-family: var(--sans); font-size: 11px; font-weight: 700; color: var(--orange); background: color-mix(in srgb, var(--orange) 16%, transparent); border-radius: 20px; padding: 2px 8px; }
 .legende { display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); margin: 4px 0 0; }
 .legende i { margin-left: 6px; }
 .legende .ok { color: var(--vert); } .legende .peu { color: var(--orange); } .legende .trop { color: var(--rouge); } .legende .cours { color: var(--accent); }
@@ -1340,3 +1342,21 @@ html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100
 #v-plan .chip.glisse { transition: none; }
 #v-plan .trk .vide { transition: none; }
 #planZone .trk .vide { padding: 0 !important; min-width: 0 !important; } /* un petit vide reste petit : le colis suit exactement le doigt */
+
+/* v82 : Validés / À valider */
+.stat-bande { gap: 10px; }
+.stat-bande .sb-c { background: none; border: 0; padding: 0; color: inherit; font-family: inherit; text-align: left; cursor: pointer; }
+.stat-bande .sb-vol { flex: 1.4; }
+.stat-bande .sb-c:not(.sb-vol) { flex: 1; }
+.sb-ok { color: var(--vert); } .sb-av { color: var(--orange); }
+.eq-tap > button { background: var(--card); border-radius: 14px; padding: 9px 11px; border: 1px solid var(--line); color: var(--text); font-family: inherit; text-align: left; cursor: pointer; }
+#v-equipe .eq-tap > button { padding: 6px 10px; border-radius: 12px; }
+.eq-tap > button:active, .stat-bande .sb-c:active { opacity: .6; }
+.eq-astuce { margin: 8px 0 0; }
+.eq-c { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.eq-c b { font-weight: 600; } .eq-c .eq-ok { color: var(--vert); } .eq-c .eq-av { color: var(--orange); }
+.eq-c { opacity: 1; color: var(--muted); }
+/* v82 : Vue 3D sur PC — la feuille reste centrée et entière dans la fenêtre */
+@media (min-width: 960px) {
+  .feuille.feuille-3d { top: 50%; height: auto; max-height: 94vh; max-height: 94dvh; border-radius: 26px; padding-top: 14px; }
+}

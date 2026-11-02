@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '81';
+  var VERSION_APP = '82';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -602,13 +602,16 @@
     majInstaller();
     var auj = jourCle(d.toISOString()), tous = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime; });
     var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj && compte(c); });
-    var m3 = jour.reduce(function (a, c) { return a + c.total_m3; }, 0);
-    $('#accStats').innerHTML = '<button type="button" class="stat-bande" data-camions="1"><span class="sb-c"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></span><i class="sb-sep"></i><span class="sb-c"><small>Camions</small><b>' + jour.length + '</b></span><span class="sb-go">Voir ›</span></button>';
+    var m3 = somV(jour);
+    var aVal = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && coursVivant(c); });
+    $('#accStats').innerHTML = '<div class="stat-bande"><button type="button" class="sb-c sb-vol" data-camions="1"><small>Aujourd\'hui</small><b>' + f2(m3) + ' m³</b></button><i class="sb-sep"></i>' +
+      '<button type="button" class="sb-c" data-liste="val"><small>Validés ›</small><b class="sb-ok">' + jour.length + '</b></button><i class="sb-sep"></i>' +
+      '<button type="button" class="sb-c" data-liste="av"><small>À valider ›</small><b class="sb-av">' + aVal.length + '</b></button></div>';
     $('#accNbJour').textContent = 'Tous les camions';
     var mEv = Ambiance.message(reg(), d);
     $('#accSous').textContent = mEv || (Ambiance.cfg(reg()).ambiance.msgAuto === false ? '' : salutation(d));
     var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && estAMoi(c); }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
-    $('#accEnCours').innerHTML = cours.length ? '<p class="titre-sec cours-t"><span>En cours</span><small>' + cours.length + '</small></p><div class="carte liste-cours">' + cours.map(function (c) {
+    $('#accEnCours').innerHTML = cours.length ? '<p class="titre-sec cours-t"><span>À valider</span><small>' + cours.length + '</small></p><div class="carte liste-cours">' + cours.map(function (c) {
       return glisse(c.id, '<button type="button" class="en-cours-l" data-reprendre="' + esc(c.id) + '"><span><b>' + esc(c.client || 'Sans client') + '</b><small>' + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + f2(c.total_m3) + ' m³</small></span><span class="go">Reprendre</span></button>');
     }).join('') + '<p class="astuce-in">← Glisse pour supprimer · Glisse pour ouvrir →</p></div>' : '';
   }
@@ -678,6 +681,7 @@
   $('#v-accueil').addEventListener('click', function (e) {
     var g = e.target.closest('[data-go]'); if (g) { aller(g.dataset.go); return; }
     if (e.target.closest('[data-camions]')) { derniersCamions(); return; }
+    var li = e.target.closest('[data-liste]'); if (li) { listeJour(li.dataset.liste); return; }
     var r = e.target.closest('[data-reprendre]');
     if (r) { db.courant = r.dataset.reprendre; sauver(true); viderForm(); aller('camion'); }
   });
@@ -1693,7 +1697,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=81'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=81';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=82'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=82';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2074,14 +2078,17 @@
     var cp = copieDeLui(c); return cp ? ' <i class="tag-p">⇄ partagé avec ' + esc(prenomDe(cp)) + '</i>' : '';
   }
   function compte(c) { var o = c.copieDe && db.camions[c.copieDe]; return !(o && !o.supprime); }
-  function m3De(c) { return compte(c) ? c.total_m3 : 0; }
+  function v2(c) { return Math.round((c.total_m3 || 0) * 100) / 100; } // volume tel qu'affiché
+  function somV(l) { return Math.round(l.reduce(function (a, c) { return a + Math.round((c.total_m3 || 0) * 100); }, 0)) / 100; }
+  function m3De(c) { return compte(c) ? v2(c) : 0; }
   function nbCompte(l) { return l.filter(compte).length; }
   function copieDeLui(c) { var r = null; Object.keys(db.camions).forEach(function (k) { var x = db.camions[k]; if (!x.supprime && x.copieDe === c.id) r = x; }); return r; }
   function ligneCam(c, enCours) {
     var qui = c.client || 'Sans client';
     return glisse(c.id, '<button class="cam" type="button" data-id="' + esc(c.id) + '"><span class="h">' + heure(enCours ? c.maj_le : c.termine_le) + '</span>' +
       '<span class="qui"><b>' + esc(qui) + (c.double ? ' <i class="tag-dbl">Double</i>' : '') + partageTag(c) + (enEquipe() && Sync.moi().admin && c.auteur === Sync.moi().uid ? ' <i class="lock-p">🔒 privé</i>' : '') + '</b><small>' + (enEquipe() ? '<i class="qui-p' + (estAMoi(c) ? ' moi' : '') + '">' + esc(prenomDe(c)) + '</i>' : '') + (c.reference ? 'Réf. ' + esc(c.reference) + ' · ' : '') + c.lignes.reduce(function (a, l) { return a + (l.nb || 1); }, 0) + ' colis</small>' + (c.repris_de ? '<small class="repris-l">↩ Récupéré de ' + esc(c.repris_de) + '</small>' : '') + '</span>' +
-      '<span class="m3 ' + (enCours ? 'cours' : (compte(c) ? c.etat : 'copie')) + '" title="' + (enCours ? 'En cours' : LIB[c.etat]) + '">' + (enCours || compte(c) ? f2(c.total_m3) : '—') + '</span></button>');
+      (enCours ? '<span class="m3 cours" title="À valider"><i class="tag-av">À valider</i>' + f2(c.total_m3) + '</span></button>' :
+      '<span class="m3 ' + (compte(c) ? c.etat : 'copie') + '" title="' + LIB[c.etat] + '">' + (compte(c) ? f2(c.total_m3) : '—') + '</span></button>'));
   }
   // ---------- Glisser une ligne : à gauche supprimer, à droite ouvrir ----------
   function glisse(id, html) {
@@ -2157,7 +2164,7 @@
     var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && coursVivant(c); }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
     var fini = tous.filter(function (c) { return c.statut === 'termine'; }).sort(function (a, b) { return b.termine_le < a.termine_le ? -1 : 1; });
     var h = '';
-    if (cours.length) h += '<div class="jour"><div class="jour-tete"><h2>Non terminés</h2><span>' + cours.length + '</span></div><div class="carte">' + cours.map(function (c) { return ligneCam(c, true); }).join('') + '</div></div>';
+    if (cours.length) h += '<div class="jour"><div class="jour-tete"><h2>À valider</h2><span>' + cours.length + '</span></div><div class="carte">' + cours.map(function (c) { return ligneCam(c, true); }).join('') + '</div></div>';
     if (cours.length || fini.length) h = '<p class="astuce">Glisse à gauche pour supprimer, à droite pour ouvrir.</p>' + h;
     if (enEquipe()) h = '<div class="seg seg-qui" id="segQui">' + [{ uid: 'tous', prenom: 'Tous' }, { uid: 'moi', prenom: 'Moi' }].concat(personnes()).map(function (x) {
       return '<button type="button" data-qui="' + esc(x.uid) + '" class="' + (filtreQui === x.uid ? 'actif' : '') + '">' + esc(x.prenom) + '</button>';
@@ -2166,11 +2173,11 @@
     fini.forEach(function (c) { var k = jourCle(c.termine_le); if (!jours[k]) { jours[k] = []; ordre.push(k); } jours[k].push(c); });
     ordre.forEach(function (k) {
       var tot = jours[k].reduce(function (a, c) { return a + m3De(c); }, 0);
-      h += '<div class="jour"><div class="jour-tete"><h2>' + jourNom(k) + '</h2><span>' + nbCompte(jours[k]) + ' camion' + (nbCompte(jours[k]) > 1 ? 's' : '') + ' · ' + f2(tot) + ' m³</span></div>' +
+      h += '<div class="jour"><div class="jour-tete"><h2>' + jourNom(k) + '</h2><span>' + nbCompte(jours[k]) + ' validé' + (nbCompte(jours[k]) > 1 ? 's' : '') + ' · ' + f2(tot) + ' m³</span></div>' +
         '<div class="carte">' + jours[k].map(function (c) { return ligneCam(c, false); }).join('') + '</div></div>';
     });
     if (!h) h = '<div class="carte vide">' + (q ? 'Aucun camion trouvé.' : 'Aucun camion enregistré pour l\'instant.') + '</div>';
-    else h += '<p class="legende"><i class="ok"></i>bon <i class="peu"></i>pas assez <i class="trop"></i>dépassé <i class="cours"></i>en cours</p>';
+    else h += '<p class="legende"><i class="ok"></i>bon <i class="peu"></i>pas assez <i class="trop"></i>dépassé</p>';
     $('#histo').innerHTML = h;
   }
   $('#recherche').addEventListener('input', rendreHisto);
@@ -2186,7 +2193,7 @@
     var l = statsDans.slice(), titre = '', h = '', per = { jour: 'aujourd\'hui', semaine: 'cette semaine', mois: 'ce mois', annee: 'cette année' }[periodeStats];
     function tri(a) { return a.sort(function (x, y) { return y.termine_le < x.termine_le ? -1 : 1; }); }
     function bloc(t, a) { return a.length ? '<p class="reg-st">' + t + '</p><div class="carte">' + tri(a).map(function (c) { return ligneCam(c, false); }).join('') + '</div>' : ''; }
-    function som(a) { return a.reduce(function (x, c) { return x + c.total_m3; }, 0); }
+    function som(a) { return somV(a); }
     if (sk === 'vol' || sk === 'nb' || sk === 'moy') {
       titre = { vol: 'Volume', nb: 'Camions', moy: 'Moyenne' }[sk] + ' · ' + per;
       if (sk === 'moy') l.sort(function (a, b) { return b.total_m3 - a.total_m3; });
@@ -2235,7 +2242,7 @@
     var finis = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime && c.statut === 'termine' && c.termine_le && compte(c); });
     var dans = finis.filter(function (c) { var t = new Date(c.termine_le); return t >= deb && t < fin; });
     var avant = finis.filter(function (c) { var t = new Date(c.termine_le); return t >= prevDeb && t < deb; });
-    function som(l) { return l.reduce(function (a, c) { return a + c.total_m3; }, 0); }
+    function som(l) { return somV(l); }
     var tot = som(dans), totAv = som(avant), evol = totAv > 0 ? Math.round((tot - totAv) / totAv * 100) : null, dn = dans.length - avant.length;
     var okP = dans.length ? Math.round(dans.filter(function (c) { return c.etat === 'ok'; }).length / dans.length * 100) : 0;
     // bâtons
@@ -2256,7 +2263,7 @@
     var actuel = idx(maint), max = Math.max.apply(null, cases.map(function (x) { return x.v; }).concat([1]));
     function groupe(cle) {
       var g = {};
-      dans.forEach(function (c) { var k = cle(c); (g[k] = g[k] || { m: 0, n: 0 }); g[k].m += c.total_m3; g[k].n++; });
+      dans.forEach(function (c) { var k = cle(c); (g[k] = g[k] || { m: 0, n: 0 }); g[k].m += v2(c); g[k].n++; });
       return Object.keys(g).map(function (k) { return { k: k, m: g[k].m, n: g[k].n }; }).sort(function (a, b) { return b.m - a.m; });
     }
     var gens = enEquipe() ? groupe(function (c) { return prenomDe(c); }) : [];
@@ -2290,6 +2297,30 @@
   });
 
   // Les 20 derniers camions terminés, par jour
+  // Accueil / Équipe : on touche « Validés », « Volume » ou « À valider » → la liste du jour
+  function listeJour(type) {
+    var auj = jourCle(new Date().toISOString()), tous = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime; });
+    var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj && compte(c); }).sort(function (a, b) { return b.termine_le < a.termine_le ? -1 : 1; });
+    var av = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && coursVivant(c); }).sort(function (a, b) { return b.maj_le < a.maj_le ? -1 : 1; });
+    var titre, h;
+    if (type === 'av') {
+      titre = 'À valider · ' + av.length + ' plan' + (av.length > 1 ? 's' : '');
+      h = av.length ? '<div class="carte">' + av.map(function (c) { return ligneCam(c, true); }).join('') + '</div>' : '<div class="carte vide">Rien à valider.</div>';
+    } else {
+      titre = type === 'vol' ? 'Volume du jour' : 'Validés aujourd\'hui';
+      h = '<p class="petit-txt">' + jour.length + ' validé' + (jour.length > 1 ? 's' : '') + ' · ' + f2(somV(jour)) + ' m³</p>' +
+        (jour.length ? '<div class="carte">' + jour.map(function (c) { return ligneCam(c, false); }).join('') + '</div>' : '<div class="carte vide">Aucun plan validé aujourd\'hui.</div>');
+    }
+    var f = ouvrirFeuille('<div class="sec-tete"><h2>' + esc(titre) + '</h2><button class="lien" data-f="1" type="button">Fermer</button></div>' + h + '<p class="petit-txt">Touche un plan pour l\'ouvrir.</p>');
+    f.onclick = function (e) {
+      if (e.target.closest('[data-f]')) { fermerFeuille(); return; }
+      var b = e.target.closest('.cam'); if (!b) return;
+      var c = db.camions[b.dataset.id]; if (!c) return;
+      f.onclick = null;
+      if (c.statut === 'en_cours' && estAMoi(c)) { fermerFeuille(); setTimeout(function () { ouvrirCamion(c.id); }, 80); }
+      else detail(c);
+    };
+  }
   function derniersCamions() {
     var fini = Object.keys(db.camions).map(function (k) { return db.camions[k]; }).filter(function (c) { return !c.supprime && c.statut === 'termine'; })
       .sort(function (a, b) { return b.termine_le < a.termine_le ? -1 : 1; }).slice(0, 20);
@@ -2297,7 +2328,7 @@
     fini.forEach(function (c) { var k = jourCle(c.termine_le); if (!jours[k]) { jours[k] = []; ordre.push(k); } jours[k].push(c); });
     ordre.forEach(function (k) {
       var tot = jours[k].reduce(function (a, c) { return a + m3De(c); }, 0);
-      h += '<div class="jour"><div class="jour-tete"><h2>' + jourNom(k) + '</h2><span>' + nbCompte(jours[k]) + ' camion' + (nbCompte(jours[k]) > 1 ? 's' : '') + ', ' + f2(tot) + ' m³</span></div><div class="carte">' + jours[k].map(function (c) { return ligneCam(c, false); }).join('') + '</div></div>';
+      h += '<div class="jour"><div class="jour-tete"><h2>' + jourNom(k) + '</h2><span>' + nbCompte(jours[k]) + ' validé' + (nbCompte(jours[k]) > 1 ? 's' : '') + ' · ' + f2(tot) + ' m³</span></div><div class="carte">' + jours[k].map(function (c) { return ligneCam(c, false); }).join('') + '</div></div>';
     });
     var f = ouvrirFeuille('<div class="sec-tete"><h2>Derniers camions</h2><button class="lien" data-f="1" type="button">Fermer</button></div>' +
       (h || '<div class="carte vide">Aucun camion terminé pour l\'instant.</div>') +
@@ -2333,7 +2364,7 @@
         g.lg.sort(function (a, b) { return a - b; }).map(function (lo) { return '<i>' + fLong(lo) + '</i>'; }).join('') +
         '</span><em>' + f3(g.v) + '</em></div>';
     }).join('');
-    var date = enCours ? 'En cours · modifié à ' + heure(c.maj_le) : new Date(c.termine_le).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + heure(c.termine_le);
+    var date = enCours ? 'À valider · modifié à ' + heure(c.maj_le) : new Date(c.termine_le).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + heure(c.termine_le);
     var sel = selection, aMoi = estAMoi(c); selection = null;
     var f = ouvrirFeuille(
       '<h2>' + esc(c.client || 'Sans client') + (c.reference ? ' · Réf. ' + esc(c.reference) : '') + '</h2>' +
@@ -2410,7 +2441,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=81" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=81" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=82" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=82" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2448,12 +2479,16 @@
     var jour = tous.filter(function (c) { return c.statut === 'termine' && jourCle(c.termine_le) === auj && compte(c); });
     var cours = tous.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length && coursVivant(c); });
     z.innerHTML = '<div class="carte eq-liste">' + gens.map(function (g) {
-      var n = camionsDe(g.uid).filter(function (c) { return c.statut === 'termine'; }).length;
-      return '<button type="button" class="eq-p" data-p="' + esc(g.uid) + '"><span class="av' + (g.moi ? '' : ' b') + '">' + initiale(g.prenom) + '</span><span class="eq-n"><b>' + esc(g.prenom) + '</b>' + (g.moi ? '<small>toi</small>' : '') + '</span><span class="eq-c">' + n + ' camion' + (n > 1 ? 's' : '') + '</span><i>›</i></button>';
+      var sesC = camionsDe(g.uid), n = sesC.filter(function (c) { return c.statut === 'termine'; }).length, na = sesC.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; }).length;
+      var cpt = (n ? '<b class="eq-ok">' + n + ' validé' + (n > 1 ? 's' : '') + '</b>' : '') + (na ? '<b class="eq-av">' + na + ' à valider</b>' : '') || '—';
+      return '<button type="button" class="eq-p" data-p="' + esc(g.uid) + '"><span class="av' + (g.moi ? '' : ' b') + '">' + initiale(g.prenom) + '</span><span class="eq-n"><b>' + esc(g.prenom) + '</b>' + (g.moi ? '<small>toi</small>' : '') + '</span><span class="eq-c">' + cpt + '</span><i>›</i></button>';
     }).join('') + '</div><p class="astuce">Touche un prénom pour voir son profil.</p>' +
-      '<div class="carte eq-jour"><h2>Aujourd\'hui · équipe</h2><div class="eq-k"><div><small>Camions</small><b>' + jour.length + '</b></div><div><small>Volume</small><b>' + f2(jour.reduce(function (a, c) { return a + c.total_m3; }, 0)) + '<em> m³</em></b></div><div><small>En cours</small><b>' + cours.length + '</b></div></div></div>' +
+      '<div class="carte eq-jour"><h2>Aujourd\'hui · équipe</h2><div class="eq-k eq-tap"><button type="button" data-liste="val"><small>Validés ›</small><b class="sb-ok">' + jour.length + '</b></button><button type="button" data-liste="vol"><small>Volume ›</small><b>' + f2(somV(jour)) + '<em> m³</em></b></button><button type="button" data-liste="av"><small>À valider ›</small><b class="sb-av">' + cours.length + '</b></button></div><p class="petit-txt eq-astuce">Touche une case pour voir la liste.</p></div>' +
       '<p class="petit-txt eq-sync">' + etatSyncTxt() + '</p>';
-    z.onclick = function (e) { var b = e.target.closest('[data-p]'); if (b) { profilUid = b.dataset.p; aller('profil'); } };
+    z.onclick = function (e) {
+      var li = e.target.closest('[data-liste]'); if (li) { listeJour(li.dataset.liste); return; }
+      var b = e.target.closest('[data-p]'); if (b) { profilUid = b.dataset.p; aller('profil'); }
+    };
   }
   var profilUid = null;
   function rendreProfil() {
@@ -2464,8 +2499,8 @@
     var fin = liste.filter(function (c) { return c.statut === 'termine'; }).sort(function (a, b) { return b.termine_le < a.termine_le ? -1 : 1; });
     var mois = fin.filter(function (c) { return new Date(c.termine_le) >= debM; });
     var cours = liste.filter(function (c) { return c.statut === 'en_cours' && c.lignes.length; });
-    var h = '<div class="kpi"><div><small>Ce mois</small><b>' + mois.length + '</b><em>camions</em></div><div><small>Volume ce mois</small><b>' + f2(mois.reduce(function (a, c) { return a + c.total_m3; }, 0)) + '</b><em>m³</em></div></div>';
-    if (cours.length) h += '<div class="jour"><div class="jour-tete"><h2>En cours</h2><span>' + cours.length + '</span></div><div class="carte">' + cours.map(function (c) { return ligneCam(c, true); }).join('') + '</div></div>';
+    var h = '<div class="kpi"><div><small>Ce mois</small><b>' + mois.length + '</b><em>validé' + (mois.length > 1 ? 's' : '') + '</em></div><div><small>Volume ce mois</small><b>' + f2(somV(mois)) + '</b><em>m³</em></div></div>';
+    if (cours.length) h += '<div class="jour"><div class="jour-tete"><h2>À valider</h2><span>' + cours.length + '</span></div><div class="carte">' + cours.map(function (c) { return ligneCam(c, true); }).join('') + '</div></div>';
     var jours = {}, ordre = [];
     fin.slice(0, 40).forEach(function (c) { var k = jourCle(c.termine_le); if (!jours[k]) { jours[k] = []; ordre.push(k); } jours[k].push(c); });
     ordre.forEach(function (k) {
