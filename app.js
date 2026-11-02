@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '79';
+  var VERSION_APP = '81';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1075,7 +1075,7 @@
     v.ROWS.forEach(function (k) { maxLen = Math.max(maxLen, v.rows[k].len); });
     var N = v.N, ETG = []; for (var e0 = N; e0 >= 1; e0--) ETG.push(e0);
     var edit = !opts.lecture, selCote = edit && selection && v.cote.some(function (k) { return k.id === selection; });
-    var place = edit && (selection || selEtr) ? 36 : 0; // place gardée pour le bouton « + » en bout d'étage
+    var place = edit ? 36 : 0; // place toujours gardée pour le bouton « + » en bout d'étage : les colis ne changent jamais de taille quand on en touche un
     planGeo = { maxLen: maxLen, place: place };
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
     var glisse = edit && !apercu;
@@ -1459,8 +1459,9 @@
     if (!gl || e.pointerId !== gl.pid) return;
     var dx = e.clientX - gl.x0;
     if (!gl.actif) {
-      if (Math.abs(dx) < 8) return;
-      if (Math.abs(e.clientY - gl.y0) > Math.abs(dx)) { gl = null; return; }
+      var dyA = Math.abs(e.clientY - gl.y0);
+      if (dyA >= 14 && dyA > Math.abs(dx) * 1.2) { gl = null; return; } // geste vertical : ce n'est pas un glissement
+      if (Math.abs(dx) < 6 || Math.abs(dx) < dyA) return;
       gl.actif = true; gl.ch.classList.add('glisse'); try { gl.ch.setPointerCapture(gl.pid); } catch (er) {}
       if (!$('[data-gap]', gl.trk)) { // 1er glissement sur cet étage : on fait apparaître les vides
         var der = null;
@@ -1469,13 +1470,13 @@
       }
     }
     e.preventDefault();
-    var d = Math.round(dx / gl.lu / 50) * 50;
-    var r = nouveauxVides(gl, d); if (r.d === gl.d) return;
-    gl.d = r.d; gl.gg = r.gg;
+    // le colis suit le doigt en continu ; il se cale au 50 cm le plus proche quand on lâche
+    var dRaw = dx / gl.lu, r = nouveauxVides(gl, dRaw), rs = nouveauxVides(gl, Math.round(dRaw / 50) * 50);
+    gl.d = rs.d; gl.gg = rs.gg;
     var trk = gl.trk;
-    gl.cs.forEach(function (x, j) { var el = $('[data-gap="' + cssEsc(x.id) + '"]', trk); if (el) { el.setAttribute('style', styleVide(r.gg[j])); el.textContent = txtVide(r.gg[j]); } });
-    var fe = $('[data-fin]', trk), reste = Math.max(0, gl.finSup - r.fin);
-    if (fe) { fe.setAttribute('style', styleVide(reste)); fe.textContent = txtVide(reste); }
+    gl.cs.forEach(function (x, j) { var el = $('[data-gap="' + cssEsc(x.id) + '"]', trk); if (el) { el.setAttribute('style', styleVide(r.gg[j])); el.textContent = txtVide(rs.gg[j]); } });
+    var fe = $('[data-fin]', trk);
+    if (fe) { fe.setAttribute('style', styleVide(Math.max(0, gl.finSup - r.fin))); fe.textContent = txtVide(Math.max(0, gl.finSup - rs.fin)); }
     raccourcirVides(trk);
   }, { passive: false });
   // Vers l'arrière : le colis avance jusqu'au suivant, sans le pousser.
@@ -1692,7 +1693,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=79'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=79';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=81'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=81';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2409,7 +2410,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=79" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=79" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=81" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=81" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
