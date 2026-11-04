@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '86';
+  var VERSION_APP = '91';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -100,6 +100,7 @@
   }
   function besoinSplit(p) { return p.double && p.lignes.length && (!p.double.r || p.double.sig !== sigLignes(p.lignes) || p.double.algo !== 2); }
   function splitDouble(p) {
+    marquerPetits(p);
     var res = P.partager(p.lignes, p.double.lg, Object.assign({}, db.reglages), p.double.graine || 0);
     p.double.r = res.map(function (x, i) {
       return { id: p.id + '~' + i, parentId: p.id, rem: i, lgMax: p.double.lg[i], lignes: x.lignes, plan: x.plan, ordre: null, decal: null,
@@ -121,6 +122,7 @@
   }
   // Cherche le meilleur plan (jusqu'à ~2 s) ; il devient le « plan de départ »
   function calculerPlan(c) {
+    marquerPetits(c);
     if (c.double) { if (besoinSplit(c)) splitDouble(c); return; }
     if (!c.lignes.length) { majPlan(c); return; }
     var cf = cfgC(c); delete cf.relax;
@@ -425,7 +427,7 @@
       h += '<div class="lig' + (l.id === editId ? ' edite' : '') + '" data-id="' + esc(l.id) + '">' +
         '<span class="n">' + (i + 1) + '</span>' +
         '<button class="txt" type="button" data-act="edit"><div class="sec">' + fm(l.ep) + ' × ' + fm(l.la) + '</div>' +
-        '<div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m</div></button>' +
+        '<div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m' + (estPetitPaquet(l) ? ' <em class="tag-petit">Petit paquet ↑</em>' : '') + '</div></button>' +
         compteurHtml(n) + '<span class="vol">' + f3(P.volTotalLigne(l)) + '</span></div>';
     }
     el.innerHTML = h;
@@ -951,11 +953,14 @@
       }
       l.nb = k2; return k2 > 0;
     });
+    Object.keys(nouveauPlan).forEach(function (id) { // colis empilés : on suit le colis du dessous, et s'il est enlevé le petit passe de côté
+      var vv = nouveauPlan[id]; if (typeof vv === 'string' && vv.indexOf('P:') === 0) nouveauPlan[id] = ren[vv.slice(2)] ? 'P:' + ren[vv.slice(2)] : 'X';
+    });
     (c.ordre || []).forEach(function (id) { if (ren[id]) nouvelOrdre.push(ren[id]); });
     c.plan = nouveauPlan; c.ordre = nouvelOrdre; c.decal = c.decal ? nouveauDec : null; c.planManuel = true; selection = null;
     toucher(c);
   }
-  function supprimerCote(c) { supprimerColis(c, function (id, k) { return k === 'X'; }); }
+  function supprimerCote(c) { var X = {}; Object.keys(c.plan || {}).forEach(function (id) { if (c.plan[id] === 'X') X[id] = 1; }); supprimerColis(c, function (id, k) { return k === 'X' || (typeof k === 'string' && k.indexOf('P:') === 0 && X[k.slice(2)]); }); }
   function photoCamion(c) { return JSON.stringify({ l: c.lignes, p: c.plan, o: c.ordre, d: c.decal || null, m: c.planManuel }); }
   function remettrePhoto(c, ph) { var o = JSON.parse(ph); c.lignes = o.l; c.plan = o.p; c.ordre = o.o; c.decal = o.d; c.planManuel = o.m; selection = null; toucher(c); }
 
@@ -1034,6 +1039,16 @@
   var NOMS = { G: 'Côté conducteur', D: 'Côté passager' };
   // ---------- Plan : barres modernes, sens de chargement réel ----------
   function libColis(k) { return fm(k.lo) + ' m · ' + fm(k.ep) + '×' + fm(k.la); }
+  // Petit paquet : il manque 15 % ou plus de pièces par rapport à la liste des sections (62 au lieu de 63 = complet).
+  // Section hors liste : on ne devine pas, plan classique.
+  function estPetitPaquet(l) {
+    var sc = P.trouverSection(reg().sections, l.ep, l.la);
+    return !!(sc && sc.pi > 0 && l.pi > 0 && l.pi <= sc.pi * 0.85 + 1e-9);
+  }
+  function marquerPetits(c) {
+    (c.lignes || []).forEach(function (l) { var p = estPetitPaquet(l); if (!!l.petit !== p) l.petit = p; });
+    if (c.double && c.double.r) c.double.r.forEach(function (x) { (x.lignes || []).forEach(function (l) { var p = estPetitPaquet(l); if (!!l.petit !== p) l.petit = p; }); });
+  }
 
   function statutPlan(v, r) {
     var totCm = 0;
@@ -1058,7 +1073,7 @@
     return { cls: 'o', etq: '✓ Équilibré' };
   }
 
-  function vplan(c, plan) { return P.verifier(c.lignes, plan || c.plan || {}, cfgC(c), c.ordre, c.decal); }
+  function vplan(c, plan) { marquerPetits(c); return P.verifier(c.lignes, plan || c.plan || {}, cfgC(c), c.ordre, c.decal); }
   // Dernier étage : vide (cm) devant chaque colis. Réglé à la main en glissant ; sinon centré comme avant.
   function gapsRow(c, v, k) {
     var cs = v.rows[k].colis, d = c.decal || {};
@@ -1115,8 +1130,12 @@
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
     var glisse = edit && !apercu;
     function chip(k, centre, libre, gl) {
-      return '<button type="button" title="' + esc(libColis(k)) + '" data-bois="' + (Math.abs(hashBois(k.id)) % 6) + '" class="chip' + (centre ? ' centre' : '') + (gl && glisse ? ' gl' : '') + (selection === k.id && edit ? ' sel' : '') + (apercu && apercu.bouges.indexOf(k.id) >= 0 ? ' bouge' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (centre ? ', au centre' : '')) + '">' +
-        '<b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small></button>';
+      var pl = v.piles && v.piles[k.id], pt = !!k.petit && !pl;
+      var inner = pl
+        ? '<span class="dbl-h' + (pl.cm / k.cm < 0.85 ? ' ext' : '') + '" style="width:' + Math.max(34, Math.min(100, Math.round(pl.cm / k.cm * 100))) + '%"><b>' + fm(pl.lo) + ' m</b><small>' + fm(pl.ep) + '×' + fm(pl.la) + ' · ' + fm(pl.pi) + ' p</small>' + (pl.petit ? '<i class="pt">PETIT</i>' : '') + '</span>' +
+          '<span class="dbl-b"><b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + ' · ' + fm(k.pi) + ' p</small></span>'
+        : '<b>' + fm(k.lo) + ' m</b><small>' + fm(k.ep) + '×' + fm(k.la) + '</small>' + (pt ? '<i class="pt">PETIT</i>' : '');
+      return '<button type="button" title="' + esc(libColis(k) + (pl ? ' + ' + libColis(pl) : '')) + '" data-bois="' + (Math.abs(hashBois(k.id)) % 6) + '" class="chip' + (centre ? ' centre' : '') + (pl ? ' dbl' : '') + (pt ? ' petit' : '') + (gl && glisse ? ' gl' : '') + (selection === k.id && edit ? ' sel' : '') + (apercu && apercu.bouges.indexOf(k.id) >= 0 ? ' bouge' : '') + '" data-c="' + esc(k.id) + '" style="' + (libre ? 'width:' + Math.max(48, Math.round(k.cm / maxLen * 300)) + 'px' : w(k.cm)) + '"' + (edit ? '' : ' disabled') + ' aria-label="' + esc(libColis(k) + (pl ? ' + ' + libColis(pl) : '') + (centre ? ', au centre' : '')) + '">' + inner + '</button>';
     }
     function htmlVide(cm, attr) { return '<i class="vide" ' + attr + ' style="' + styleVide(cm) + '">' + txtVide(cm) + '</i>'; }
     var h = '<div class="sum ' + st.cls + '"><span class="sum-g"><span class="tot">' + f2(v.total) + '<small>' + (c.parentId ? ' m³ · remorque ' + (c.rem + 1) : '/ ' + fm(r.cible) + ' m³') + '</small></span><span class="etq">' + esc(st.etq) + '</span></span>' +
@@ -1132,7 +1151,8 @@
       h += '<section class="cote"><div class="cote-t"><span class="hl ' + (s === 'G' ? 'bleu' : 'rose') + '">' + NOMS[s] + '</span><small>' + f2(s === 'G' ? v.volG : v.volD) + ' m³</small></div><div class="rangs">';
       ETG.forEach(function (f) {
         var ro = v.rows[s + f], lgAff = ro.m;
-        h += '<div class="rang' + (ro.alerte ? ' ko' : '') + '"><div class="tag">É' + f + '<b>@LG@</b>@LIB@</div><div class="trk"><i class="lim" style="left:calc(2px + (100% - ' + (4 + place) + 'px) * ' + (r.e1Max * 100 / maxLen).toFixed(4) + ')"></i>';
+        var aPile = v.piles && (ro.colis.some(function (k9) { return v.piles[k9.id]; }) || (f === N && v.rows['C' + N].colis.some(function (k9) { return v.piles[k9.id]; })));
+        h += '<div class="rang' + (ro.alerte ? ' ko' : '') + (aPile ? ' dbl-r' : '') + '"><div class="tag">É' + f + '<b>@LG@</b>@LIB@</div><div class="trk"><i class="lim" style="left:calc(2px + (100% - ' + (4 + place) + 'px) * ' + (r.e1Max * 100 / maxLen).toFixed(4) + ')"></i>';
         if (f === N) {
           var c3 = v.rows['C' + N], maxPaire = Math.max(v.rows['G' + N].len, v.rows['D' + N].len);
           var E = maxPaire + c3.ext, sup = Math.min(v.rows['G' + (N - 1)].len, v.rows['D' + (N - 1)].len);
@@ -1172,13 +1192,16 @@
       var sel = selection && P.colisDe(c.lignes).filter(function (k) { return k.id === selection; })[0];
       var auMil = sel && (c.plan || {})[sel.id] === 'C' + N, dejaMil = v.rows['C' + N].colis.length > 0;
       if (apercu) h += '<div class="barre-sel bs1"><span class="bs-t" style="white-space:normal">' + (apercu.alerte ? '<b class="orange">⚠ ' + esc(apercu.alerte) + '</b><br>Dernier étage réorganisé.' : (apercu.bouges.length ? 'Dernier étage réorganisé : colis <b class="vert">BOUGÉ</b>.' : 'Colis au milieu.')) + '</span><button type="button" class="btn petit btn-valider" data-apok="1">Valider</button><button type="button" class="btn sec petit" data-apno="1">Annuler</button></div>';
-      else if (sel && !selCote) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b></span>' +
+      else if (sel && !selCote && empilerDe === sel.id) h += '<div class="barre-sel bs1"><span class="bs-t" style="white-space:normal"><b>' + esc(libColis(sel)) + '</b> · touche le colis à fusionner avec</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
+      else if (sel && !selCote) h += '<div class="barre-sel bs1 bs-large"><span class="bs-t"><b>' + (v.piles[sel.id] ? 'Colis double' : esc(libColis(sel))) + '</b>' + (v.piles[sel.id] ? '<br>' + esc(libColis(sel)) + ' (' + fm(sel.pi) + ' p) + ' + esc(libColis(v.piles[sel.id])) + ' (' + fm(v.piles[sel.id].pi) + ' p)' : '') + '</span>' +
         (auMil ? '<button type="button" class="btn sec petit" data-decote="1">Sortir</button>'
                : '<button type="button" class="btn petit btn-mil" data-milieu="1">' + (dejaMil ? '+ Milieu' : 'Milieu') + '</button><button type="button" class="btn sec petit" data-decote="1">De côté</button>') +
         (c.parentId ? '<button type="button" class="btn sec petit bs-rem" data-verem="1">' + (c.rem ? '← Rem. 1' : '→ Rem. 2') + '</button>' : '') +
+        (c.parentId ? '' : (v.piles[sel.id] ? '<button type="button" class="btn sec petit" data-inverser="1">🔄 Inverser</button><button type="button" class="btn sec petit" data-separer="1">Séparer</button>' : '<button type="button" class="btn sec petit" data-empiler="1">🔗 Fusionner</button>')) +
         '<button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button>' +
         '<button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
-      else if (sel) h += '<div class="barre-sel bs1"><span class="bs-t"><b>' + esc(libColis(sel)) + '</b> · touche + pour le poser</span><button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
+      else if (sel && empilerDe === sel.id) h += '<div class="barre-sel bs1"><span class="bs-t" style="white-space:normal"><b>' + esc(libColis(sel)) + '</b> · touche le colis à fusionner avec</span><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
+      else if (sel) h += '<div class="barre-sel bs1 bs-large"><span class="bs-t"><b>' + (v.piles[sel.id] ? 'Colis double de côté' : esc(libColis(sel))) + '</b>' + (v.piles[sel.id] ? '<br>' + esc(libColis(sel)) + ' + ' + esc(libColis(v.piles[sel.id])) : '') + ' · touche + pour le poser</span>' + (c.parentId ? '' : (v.piles[sel.id] ? '<button type="button" class="btn sec petit" data-inverser="1">🔄 Inverser</button><button type="button" class="btn sec petit" data-separer="1">Séparer</button>' : '<button type="button" class="btn sec petit" data-empiler="1">🔗 Fusionner</button>')) + '<button type="button" class="btn sec petit bs-sup" data-suppr="1">Supprimer</button><button type="button" class="x" data-annuler="1" aria-label="Annuler">×</button></div>';
       else h += '<div class="aide-l">' + (legMil || '<span>' + (N === 4 ? '4 étages (surtout du 18×100). ' : '') + 'Touche un colis pour le déplacer. ' + (c.parentId ? 'Glisse-le pour le décaler.' : 'Glisse ceux du dernier étage.') + '</span>') + '<span class="leg-libre"><i></i>Place libre : jusqu\'au bout de l\'étage du dessous (É1 : jusqu\'au bout de la remorque)</span>' +
         ((c.planManuel || c.planVariante) ? '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>' : '') + '</div>';
       if (sel && (c.planManuel || c.planVariante)) h += '<button type="button" class="btn-lien recalc" data-recalc="1">Plan de départ</button>';
@@ -1318,6 +1341,76 @@
   var minuterieAjust = null;
   window.addEventListener('resize', function () { clearTimeout(minuterieAjust); minuterieAjust = setTimeout(ajusterPlan, 120); });
 
+  var empilerDe = null; // colis choisi pour être empilé : on attend le colis sur lequel le poser
+  // Empile deux colis : le plus long reste au sol (il garde sa place), le plus court se pose dessus. Les deux comptent dans le volume.
+  function empilerColis(c, a, b) {
+    var v = vplan(c), p = c.plan || {}, K = P.colisDe(c.lignes), ka = K.filter(function (k) { return k.id === a; })[0], kb = K.filter(function (k) { return k.id === b; })[0];
+    var okRang = function (id) { return !!v.rows[p[id]] || p[id] === 'X'; };
+    if (!ka || !kb || !okRang(a) || !okRang(b)) { toast('Choisis deux colis du camion ou de côté.'); return false; }
+    if (v.piles[a] || v.piles[b]) { toast('Ce colis porte déjà un autre colis.'); return false; }
+    var bas = ka.cm > kb.cm ? ka : kb, haut = bas === ka ? kb : ka, avant = alertesCourtes(c, v);
+    var np = Object.assign({}, p); np[haut.id] = 'P:' + bas.id;
+    np = rangerEmpile(c, np, bas.id, haut.id); // le colis double va au dernier étage, le reste se réarrange autour
+    c.plan = np; c.ordre = null; c.decal = null; fixerOrdre(c);
+    c.planManuel = true; selection = null; empilerDe = null; toucher(c);
+    var vf = vplan(c), etg = vf.rows[c.plan[bas]] ? (c.plan[bas] === 'C' + vf.N ? vf.N : +c.plan[bas].slice(1)) : 0;
+    alerterApres(c, avant, 'Colis empilés' + (etg ? ' (étage ' + etg + ')' : ' (de côté)') + ' : ' + libColis(haut) + ' sur ' + libColis(bas));
+    return true;
+  }
+  // Après une fusion : le colis double (bas) va au dernier étage ; si vraiment impossible, au 2e étage ; les autres colis se réarrangent autour pour que le plan reste bon.
+  function rangerEmpile(c, plan, bas, haut) {
+    var v0 = vplan(c, plan), N = v0.N;
+    function note(p) { return P.noteVerif(vplan(c, p)); }
+    function copie(p) { return Object.assign({}, p); }
+    var ids = Object.keys(plan).filter(function (x) { return x !== bas && x !== haut && plan[x] && String(plan[x]).charAt(0) !== 'P' && plan[x] !== 'X' && v0.rows[plan[x]]; });
+    var rows = v0.ROWS.filter(function (k) { return k.charAt(0) !== 'C'; });
+    function reparer(start) { // meilleurs échanges / déplacements des autres colis (le colis double ne bouge plus)
+      var best = start;
+      for (var passe = 0; passe < 4 && best.n >= 1000; passe++) {
+        var base = best.p, essai = null;
+        ids.forEach(function (x) {
+          rows.forEach(function (k) { if (base[x] === k) return; var p = copie(base); p[x] = k; var n = note(p); if (!essai || n < essai.n) essai = { p: p, n: n }; });
+          ids.forEach(function (y) { if (y <= x || base[x] === base[y]) return; var p = copie(base); p[x] = base[y]; p[y] = base[x]; var n = note(p); if (!essai || n < essai.n) essai = { p: p, n: n }; });
+        });
+        if (essai && essai.n < best.n - 1e-9) best = essai; else break;
+      }
+      return best;
+    }
+    function viser(groupe) { // place le colis double dans un des rangs du groupe
+      var cand = null;
+      if (groupe.indexOf(plan[bas]) >= 0) cand = { p: plan, n: note(plan) };
+      else {
+        if (plan[bas] !== 'X') ids.filter(function (x) { return groupe.indexOf(plan[x]) >= 0; }).forEach(function (x) { var p = copie(plan); p[bas] = plan[x]; p[x] = plan[bas]; var n = note(p); if (!cand || n < cand.n) cand = { p: p, n: n }; });
+        groupe.forEach(function (k) { if (k.charAt(0) === 'C' && v0.rows[k].colis.length) return; var p = copie(plan); p[bas] = k; var n = note(p); if (!cand || n < cand.n) cand = { p: p, n: n }; });
+      }
+      return cand ? reparer(cand) : null;
+    }
+    var haut3 = viser(['G' + N, 'D' + N, 'C' + N]);
+    if (haut3 && haut3.n < 1000) return haut3.p;
+    var deux = viser(['G2', 'D2']); // vraiment pas possible en haut : 2e étage
+    var choix = haut3;
+    if (deux && (!choix || deux.n < choix.n - 1e-9)) choix = deux;
+    return choix ? choix.p : plan;
+  }
+  // 🔄 : le colis du haut passe en bas et inversement (au choix de l'utilisateur, même si ce n'est pas logique)
+  function inverserColis(c, bas) {
+    var v = vplan(c), haut = v.piles[bas]; if (!haut) return;
+    var avant = alertesCourtes(c, v), np = Object.assign({}, c.plan), rang = np[bas];
+    np[haut.id] = rang; np[bas] = 'P:' + haut.id;
+    if (!c.ordre) fixerOrdre(c);
+    var i = c.ordre.indexOf(bas), j = c.ordre.indexOf(haut.id);
+    if (i >= 0 && j >= 0) { c.ordre = c.ordre.slice(); c.ordre[i] = haut.id; c.ordre[j] = bas; }
+    if (c.decal) { c.decal = Object.assign({}, c.decal); delete c.decal[bas]; delete c.decal[haut.id]; }
+    c.plan = np; c.planManuel = true; selection = haut.id; empilerDe = null; toucher(c);
+    alerterApres(c, avant, 'Inversé : ' + libColis(haut) + ' est maintenant en bas');
+  }
+  function separerColis(c, bas) {
+    var v = vplan(c), haut = v.piles[bas]; if (!haut) return;
+    if (!c.ordre) fixerOrdre(c);
+    c.plan = Object.assign({}, c.plan); c.plan[haut.id] = 'X'; c.ordre = c.ordre.filter(function (x) { return x !== haut.id; }); c.ordre.push(haut.id);
+    c.planManuel = true; selection = haut.id; empilerDe = null; toucher(c);
+    toast('Séparés : le petit est de côté, touche + pour le poser');
+  }
   function echanger(c, a, b) {
     var plan = Object.assign({}, c.plan || {}), ra = plan[a], rb = plan[b];
     if (!ra || !rb) { selection = null; return toast('Échange impossible.'); }
@@ -1405,7 +1498,7 @@
     var c = courant();
     if (!estAMoi(c)) return; // camion d'un collègue : lecture seule
     if (glisseFini) { glisseFini = false; return; }
-    if (e.target.closest('[data-annuler]')) { selection = null; rendrePlanVue(); return; }
+    if (e.target.closest('[data-annuler]')) { selection = null; empilerDe = null; rendrePlanVue(); return; }
     var base = courantBase(), dbl = base.double;
     if (dbl) {
       var tr = e.target.closest('[data-rem]'); if (tr) { changerRem(+tr.dataset.rem); return; }
@@ -1421,7 +1514,7 @@
     if (e.target.closest('[data-suppr]') && selection && !apercu) {
       var idS = selection, kS = P.colisDe(c.lignes).filter(function (k) { return k.id === idS; })[0], ph = photoCamion(c);
       if (!c.ordre) fixerOrdre(c);
-      supprimerColis(c, function (x) { return x === idS; });
+      supprimerColis(c, function (x, kx) { return x === idS || kx === 'P:' + idS; }); // un colis double part avec son petit
       rendrePlanVue();
       toast('Colis supprimé' + (kS ? ' : ' + libColis(kS) : ''), function () { remettrePhoto(c, ph); rendrePlanVue(); }, 'Annuler');
       return;
@@ -1447,8 +1540,13 @@
     }
     var po = e.target.closest('[data-poser]');
     if (po && selection) { placer(c, selection, po.dataset.poser); rendrePlanVue(); return; }
+    if (e.target.closest('[data-empiler]') && selection && !dbl) { empilerDe = selection; rendrePlanVue(); return; }
+    if (e.target.closest('[data-inverser]') && selection && !dbl) { inverserColis(c, selection); rendrePlanVue(); return; }
+    if (e.target.closest('[data-separer]') && selection && !dbl) { separerColis(c, selection); rendrePlanVue(); return; }
     var ch = e.target.closest('.chip'); if (!ch) return;
     var id = ch.dataset.c, plan = c.plan || {};
+    if (selection !== empilerDe) empilerDe = null;
+    if (empilerDe && selection === empilerDe && id !== empilerDe && !dbl) { empilerColis(c, empilerDe, id); empilerDe = null; selection = null; rendrePlanVue(); return; }
     if (!selection) selection = id;
     else if (selection === id) selection = null;
     else if (plan[id] === 'X') selection = id;                                  // on choisit un autre colis de côté
@@ -1729,7 +1827,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=86'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=86';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=91'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=91';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -1879,6 +1977,7 @@
     }
     // ---- plans ----
     function bois(xx, yy, w, h, k, centre) {
+      var mini = h < 74; // demi-colis d'un colis double : une seule ligne
       x.save(); rond(xx, yy, w, h, 14); x.clip();
       var g = x.createLinearGradient(0, yy, 0, yy + h); g.addColorStop(0, '#F0DCAE'); g.addColorStop(1, '#DDBD85'); x.fillStyle = g; x.fillRect(xx, yy, w, h);
       x.strokeStyle = 'rgba(160,122,69,.22)'; x.lineWidth = 2;
@@ -1890,11 +1989,20 @@
       x.restore();
       if (centre) { x.strokeStyle = VERT; x.lineWidth = 5; rond(xx + 2, yy + 2, w - 4, h - 4, 13); x.stroke(); x.font = F(800, 20); var tm = T('mil', 'MILIEU'), bw = x.measureText(tm).width + 18; x.fillStyle = VERT; rond(xx + w - bw - 10, yy + 8, bw, 30, 8); x.fill(); x.fillStyle = '#E6F0DA'; x.fillText(tm, xx + w - bw - 1, yy + 30); }
       x.save(); rond(xx, yy, w, h, 14); x.clip();
+      if (mini) { x.fillStyle = '#3D2B12'; x.font = F(700, 26); x.fillText(fm(k.lo) + ' m · ' + fm(k.ep) + '×' + fm(k.la) + ' · ' + fm(k.pi) + ' p', xx + 14, yy + h / 2 + 9); }
+      else {
       x.fillStyle = '#3D2B12'; x.font = F(700, 34); x.fillText(fm(k.lo) + ' m', xx + 16, yy + h / 2 - 2);
-      x.fillStyle = '#6E5434'; x.font = F(500, 24); x.fillText(fm(k.ep) + '×' + fm(k.la), xx + 16, yy + h / 2 + 30);
+      x.fillStyle = '#6E5434'; x.font = F(500, 24); x.fillText(fm(k.ep) + '×' + fm(k.la), xx + 16, yy + h / 2 + 30); }
       x.restore();
     }
     function roue(cx0, cy0) { x.fillStyle = '#3D4541'; x.beginPath(); x.arc(cx0, cy0, 27, 0, 6.29); x.fill(); x.fillStyle = '#C3CBC6'; x.beginPath(); x.arc(cx0, cy0, 15, 0, 6.29); x.fill(); x.fillStyle = '#3D4541'; x.beginPath(); x.arc(cx0, cy0, 6, 0, 6.29); x.fill(); }
+    function dessinerColis(xx, ry, w, k3, centre, lu, v9) { // un colis, ou un colis double (court dessus, long dessous)
+      var pk = v9 && v9.piles && v9.piles[k3.id];
+      if (!pk) { bois(xx, ry + 6, w, rowH - 12, k3, centre); return; }
+      var hh = Math.round((rowH - 16) * 0.46);
+      bois(xx, ry + 6, Math.max(20, Math.min(w, pk.cm * lu - 6)), hh, pk, false);
+      bois(xx, ry + 10 + hh, w, rowH - 16 - hh, k3, centre);
+    }
     if (avecPlan) plans.forEach(function (p, ip) {
       var v = p.v, r = p.r, rc = p.c, N = v.N, mx = Math.round(r.e1Max * 100), maxLen = mx;
       v.ROWS.forEach(function (k2) { maxLen = Math.max(maxLen, v.rows[k2].ext || v.rows[k2].len); });
@@ -1915,8 +2023,8 @@
           if (libre >= 30) { x.fillStyle = SOMBRE ? '#9CCB8A' : '#2F6B3A'; var tl = fm(Math.round(libre) / 100) + ' m ' + T('lib', 'libre'), pl = 25; x.font = F(700, pl); while (pl > 15 && x.measureText(tl).width > tx - pad - 40) { pl--; x.font = F(700, pl); } x.fillText(tl, pad + 30, ry + 108); }
           var xx = tx + 6, gg = gapsRow(rc, v, s + f);
           var ggc = gapsRow(rc, v, 'C' + N);
-          if (f === N) c3.colis.forEach(function (k3, i5) { xx += (ggc[i5] || 0) * lu; var w = k3.cm * lu - 6; bois(xx, ry + 6, Math.max(w, 20), rowH - 12, k3, true); xx += w + 6; });
-          ro.colis.forEach(function (k3, i3) { xx += (gg[i3] || 0) * lu; var w = k3.cm * lu - 6; bois(xx, ry + 6, Math.max(w, 20), rowH - 12, k3, false); xx += w + 6; });
+          if (f === N) c3.colis.forEach(function (k3, i5) { xx += (ggc[i5] || 0) * lu; var w = k3.cm * lu - 6; dessinerColis(xx, ry, Math.max(w, 20), k3, true, lu, p.v); xx += w + 6; });
+          ro.colis.forEach(function (k3, i3) { xx += (gg[i3] || 0) * lu; var w = k3.cm * lu - 6; dessinerColis(xx, ry, Math.max(w, 20), k3, false, lu, p.v); xx += w + 6; });
           if (libre >= 30) { var lw2 = libre * lu - 10; if (lw2 > 16) { x.save(); x.setLineDash([12, 9]); x.strokeStyle = 'rgba(94,110,100,.6)'; x.lineWidth = 3; x.fillStyle = 'rgba(59,90,52,.06)'; rond(xx + 2, ry + 12, lw2, rowH - 24, 12); x.fill(); x.stroke(); x.restore(); } }
           ry += rowH + 12;
         }
@@ -2018,7 +2126,7 @@
       var v = vplan(rc), r = cfgC(rc), N = v.N, mx = Math.round(r.e1Max * 100), maxLen = mx, colis = [], libres = [], etages = { G: [], D: [] };
       v.ROWS.forEach(function (k2) { maxLen = Math.max(maxLen, v.rows[k2].ext || v.rows[k2].len); });
       var c3 = v.rows['C' + N], ggc = gapsRow(rc, v, 'C' + N);
-      function ajout(k3, x0, s, e) { colis.push({ x0: x0 / 100, x1: (x0 + k3.cm) / 100, s: s, e: e, id: String(k3.id), lot: fmt(k3.lo) + ' m', sec: fmt(k3.ep) + '×' + fmt(k3.la) }); }
+      function ajout(k3, x0, s, e) { colis.push({ x0: x0 / 100, x1: (x0 + k3.cm) / 100, s: s, e: e, id: String(k3.id), lot: fmt(k3.lo) + ' m' + (v.piles && v.piles[k3.id] ? ' + ' + fmt(v.piles[k3.id].lo) + ' m' : ''), sec: fmt(k3.ep) + '×' + fmt(k3.la) + (v.piles && v.piles[k3.id] ? ' + ' + fmt(v.piles[k3.id].ep) + '×' + fmt(v.piles[k3.id].la) : '') }); }
       ['G', 'D'].forEach(function (s) {
         for (var f = 1; f <= N; f++) {
           var ro = v.rows[s + f], occ = ro.ext + (f === N ? c3.ext : 0), xx = 0, gg = gapsRow(rc, v, s + f);
@@ -2473,7 +2581,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=86" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=86" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=91" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=91" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

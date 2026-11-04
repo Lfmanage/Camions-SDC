@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=86') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=86') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=86') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=86') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=86') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=86') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=91') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=91') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=91') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=91') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=91') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=91') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1388,3 +1388,29 @@ html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100
 .tag { font-size: 9px; letter-spacing: -.02em; }
 .tag b { font-size: 12px; }
 .tag-libre { font-size: 8.5px; }
+
+/* v87 : petit paquet + colis double (long dessous, court dessus) */
+.tag-petit { font-style: normal; font-size: 11px; font-weight: 700; color: #B85E0E; background: #FCE8CD; border-radius: 10px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; }
+#planZone .chip .pt { position: absolute; top: -5px; left: 4px; z-index: 3; font: 700 7.5px/1 Barlow, system-ui, sans-serif; letter-spacing: .04em; font-style: normal; color: #fff; background: #D67A1E; padding: 2px 4px; border-radius: 6px; pointer-events: none; }
+#planZone .chip.petit { overflow: visible; box-shadow: inset 0 0 0 2px #D67A1E; }
+#planZone .chip.dbl { padding: 0 !important; overflow: visible; justify-content: flex-start; align-items: stretch; gap: 2px; background: none !important; box-shadow: none; }
+#planZone .chip.dbl.sel { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
+#planZone .chip.dbl > span { display: flex; align-items: center; gap: 5px; flex: 1 1 0; min-height: 0; padding: 0 6px; border-radius: 5px; white-space: nowrap; position: relative; box-shadow: inset 0 0 0 1px #B8964F; }
+#planZone .chip.dbl > .dbl-h { background: #E3C98F; box-shadow: inset 0 0 0 1px #B8964F, inset 3px 0 0 #D67A1E; }
+#planZone .chip.dbl > .dbl-b { background: #EFD9A4; }
+#planZone .chip.dbl > span { padding: 0 4px 0 6px; gap: 4px; line-height: 1; }
+#planZone .chip.dbl > span b { font-size: 10px; letter-spacing: -.02em; }
+#planZone .chip.dbl > span small { font-size: 8.5px; text-overflow: ellipsis; overflow: hidden; }
+#planZone .chip.dbl.centre { padding-top: 11px !important; box-shadow: inset 0 0 0 2px #3B5A34 !important; }
+#planZone .chip.dbl.centre > .dbl-b { background: repeating-linear-gradient(135deg, rgba(59, 90, 52, .28) 0 6px, transparent 6px 12px), #EFD9A4; }
+#planZone .chip.dbl .pt { left: auto; right: 2px; top: -5px; }
+/* v87 : barre du colis choisi sur 2 lignes (texte en haut, boutons dessous) */
+.barre-sel.bs1.bs-large { flex-wrap: wrap; padding: 7px 6px 7px 12px; }
+.barre-sel.bs1.bs-large .bs-t { flex: 1 1 100%; white-space: normal; overflow: visible; line-height: 1.25; }
+.barre-sel.bs1.bs-large .x { margin-left: auto; }
+/* v89 : colis double au MILIEU : bande MILIEU lisible, fond uni */
+#planZone .chip.dbl.centre { background: #F0DCAE !important; }
+#planZone .chip.dbl.centre .pt { top: 6px; }
+#planZone .chip.dbl .dbl-h.ext .pt { left: 100%; right: auto; top: 50%; transform: translateY(-50%); margin-left: 4px; }
+#planZone .chip.dbl.centre .dbl-h.ext .pt { top: 50%; }
+.tray-chips .chip.dbl { height: 46px; }

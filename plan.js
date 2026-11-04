@@ -105,7 +105,7 @@
           ep: num(l.ep), la: num(l.la), pi: num(l.pi), lo: num(l.lo),
           cm: Math.round(lgPlan(l) * 100), vol: volLigne(l), aire: num(l.ep) * num(l.la)
         });
-        var o = out[out.length - 1]; o.k = classeEp(o); o.fine = o.k > 0;
+        var o = out[out.length - 1]; o.k = classeEp(o); o.fine = o.k > 0; o.petit = !!l.petit;
       }
     });
     return out;
@@ -342,6 +342,10 @@
     if (rapide) iters = Math.round(iters / 3);
     var biais = null;
     if (varier) { biais = colis.map(function () { var t = []; for (var q = 0; q < NR; q++) t.push(r() * varier); return t; }); }
+    if (colis.some(function (c) { return c.petit; })) { // petit paquet : de préférence au dernier étage (poids doux, les règles de longueur passent avant)
+      if (!biais) biais = colis.map(function () { return zeros(NR); });
+      colis.forEach(function (c, i) { if (c.petit) for (var q2 = 0; q2 < NR; q2++) if (etageDe(q2, L) !== L.N - 1) biais[i][q2] += 300; });
+    }
     var essais = [depart(colis, cfg, varier ? r : null, L, INT)];
     for (var e = 0; e < (rapide ? 1 : 5); e++) essais.push(depart(colis, cfg, r, L, INT));
     var best = null;
@@ -428,12 +432,20 @@
     var L = dispoDe(lignes, cfg), N = L.N, RW = L.ROWS, CK = 'C' + N, TOP = 'G' + N, TOPD = 'D' + N;
     var colis = colisDe(lignes);
     var rows = {}; RW.forEach(function (k) { rows[k] = { colis: [], len: 0, vol: 0 }; });
-    var nonPlaces = [], cote = [];
+    var nonPlaces = [], cote = [], empiles = [];
     colis.forEach(function (c) {
       var k = plan && plan[c.id];
+      if (typeof k === 'string' && k.indexOf('P:') === 0) { empiles.push([c, k.slice(2)]); return; } // posé sur un autre colis
       if (k && rows[k]) { rows[k].colis.push(c); rows[k].len += c.cm; rows[k].vol += c.vol; }
       else if (k === 'X') cote.push(c);
       else nonPlaces.push(c);
+    });
+    var piles = {}, cmEmpiles = 0, empilesCote = []; // piles[idDuLong] = colis court posé dessus (sa longueur ne compte pas, son volume oui)
+    empiles.forEach(function (e) {
+      var cc = e[0], kl = plan[e[1]];
+      if (kl && rows[kl]) { piles[e[1]] = cc; rows[kl].vol += cc.vol; cmEmpiles += cc.cm; }
+      else if (kl === 'X') { piles[e[1]] = cc; empilesCote.push(cc); } // le petit voyage avec son colis de côté
+      else nonPlaces.push(cc);
     });
     if (ordre && ordre.length) {
       var pos = {}; ordre.forEach(function (id, i) { pos[id] = i; });
@@ -517,12 +529,12 @@
     if (d3 < -tol && ecart >= -tol) avis.push('Étage ' + N + ' : la droite est plus chargée que la gauche de ' + f2(-d3) + ' m³.');
 
     // Conseils quand c'est impossible
-    var totCm = colis.reduce(function (a, c) { return a + c.cm; }, 0);
+    var totCm = colis.reduce(function (a, c) { return a + c.cm; }, 0) - cmEmpiles;
     if (colis.length && totCm < 2 * mn) erreurs.push('Pas assez de colis pour faire ' + f2(cfg.e1Min) + ' m à l\'étage 1 des deux côtés : il manque ' + f2((2 * mn - totCm) / 100) + ' m de longueur.');
     if (totCm > 2 * N * mx) erreurs.push('Trop de colis : ' + f2(totCm / 100) + ' m bout à bout, le camion en prend au plus ' + f2(2 * N * cfg.e1Max) + ' m.');
     if (colis.length === 1) erreurs.push('Un seul colis : impossible de remplir l\'étage 1 des deux côtés.');
 
-    var total = volG + volD + nonPlaces.concat(cote).reduce(function (a, c) { return a + c.vol; }, 0);
+    var total = volG + volD + nonPlaces.concat(cote, empilesCote).reduce(function (a, c) { return a + c.vol; }, 0);
     var et = etat(total, cfg);
     if (et.code === 'peu') avis.push('Volume : ' + f2(total) + ' m³, il manque ' + f2(et.manque) + ' m³ pour atteindre ' + f2(cfg.m3Min) + ' m³.');
     if (et.code === 'trop') avis.push('Volume : ' + f2(total) + ' m³, limite dépassée de ' + f2(et.depasse) + ' m³.');
@@ -531,7 +543,7 @@
     function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
     erreurs = uniq(erreurs); avis = uniq(avis);
     return {
-      N: N, ROWS: RW, ecrase: ecrase, rows: rows, nonPlaces: nonPlaces, cote: cote, erreurs: erreurs, avis: avis,
+      N: N, ROWS: RW, piles: piles, ecrase: ecrase, rows: rows, nonPlaces: nonPlaces, cote: cote, erreurs: erreurs, avis: avis,
       volG: volG, volD: volD, ecart: ecart, manque: manque, total: total, etat: et, e3: E3 / 100, sup3: sup3 / 100,
       ok: erreurs.length === 0, parfait: erreurs.length === 0 && avis.length === 0
     };
