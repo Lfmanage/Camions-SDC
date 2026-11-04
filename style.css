@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=91') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=91') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=91') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=91') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=91') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=91') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=92') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=92') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=92') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=92') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=92') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=92') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1414,3 +1414,26 @@ html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100
 #planZone .chip.dbl .dbl-h.ext .pt { left: 100%; right: auto; top: 50%; transform: translateY(-50%); margin-left: 4px; }
 #planZone .chip.dbl.centre .dbl-h.ext .pt { top: 50%; }
 .tray-chips .chip.dbl { height: 46px; }
+
+/* v92 : colis fusionnés en orange */
+#planZone .chip.dbl > .dbl-h { background: #F2B26A; box-shadow: inset 0 0 0 1px #C9772A, inset 3px 0 0 #C25E0B; }
+#planZone .chip.dbl > .dbl-b { background: #F8CD92; box-shadow: inset 0 0 0 1px #C9772A; }
+#planZone .chip.dbl.centre { background: #F8CD92 !important; }
+#planZone .chip.dbl.centre > .dbl-b { background: repeating-linear-gradient(135deg, rgba(59, 90, 52, .28) 0 6px, transparent 6px 12px), #F8CD92; }
+
+/* v92 : téléphone couché (paysage) */
+@media (orientation: landscape) and (max-height: 520px) {
+  body:has(#v-plan.active) #barre { display: none !important; }
+  #planZone { display: grid; grid-template-columns: 1fr 1fr; align-items: start; column-gap: 12px; overflow-y: auto; }
+  #planZone > :not(.cote) { grid-column: 1 / -1; }
+  #planZone { --rh: 44px; }
+  #v-plan.vue { padding-bottom: 12px !important; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .feuille.feuille-3d { max-width: none; top: 0; height: 100%; border-radius: 0; padding-top: 8px; padding-bottom: 8px; display: grid; grid-template-columns: 240px 1fr; grid-template-rows: auto auto 1fr; column-gap: 14px; row-gap: 8px; align-content: start; }
+  .feuille-3d .v3-tete { grid-column: 1; grid-row: 1; } .feuille-3d .v3-carte { grid-column: 1; grid-row: 2; align-self: start; }
+  .feuille-3d .v3-zone { grid-column: 2; grid-row: 1 / 4; max-width: none; }
+  .v3-scene canvas { width: min(100%, calc((100vh - 70px) / 0.86)); margin: 0 auto; }
+  .v3-seg { margin-top: 6px; } .v3-seg button { padding: 6px 4px; }
+  .v3-m3 { font-size: 28px; } .v3-carte { padding: 8px 12px; }
+}

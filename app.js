@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '91';
+  var VERSION_APP = '92';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1162,7 +1162,7 @@
           var aMain = ro.colis.some(function (k) { return c.decal && c.decal[k.id] != null; }); // vides seulement si l'utilisateur en a fait
           ro.colis.forEach(function (k, i) { if (aMain) h += htmlVide(gg[i], 'data-gap="' + esc(k.id) + '"'); fin += gg[i] + k.cm; h += chip(k, false, false, true); });
           if (ro.colis.length && aMain) h += htmlVide(Math.max(0, v.rows[s + (f - 1)].ext - fin), 'data-fin="' + s + f + '"');
-          lgAff = E / 100;
+          lgAff = (ro.ext + c3.ext) / 100; // longueur de CE côté (colis du milieu inclus)
         } else { // chaque étage se règle à la main en glissant
           var ggD = gapsRow(c, v, s + f), finD = 0, aMainD = ro.colis.some(function (k) { return c.decal && c.decal[k.id] != null; });
           ro.colis.forEach(function (k, i) { if (aMainD) h += htmlVide(ggD[i], 'data-gap="' + esc(k.id) + '"'); finD += ggD[i] + k.cm; h += chip(k, false, false, true); });
@@ -1324,8 +1324,10 @@
     }
     var n = $$('.rang:not(.rang-ch)', z).length || 6;
     z.style.setProperty('--rh', RH_MAX + 'px');
-    var trop = z.scrollHeight - z.clientHeight;
-    if (trop > 0) z.style.setProperty('--rh', Math.max(RH_MIN, RH_MAX - Math.ceil(trop / n)) + 'px');
+    var paysage = window.matchMedia && window.matchMedia('(orientation: landscape) and (max-height: 520px)').matches;
+    var trop = paysage ? 0 : z.scrollHeight - z.clientHeight;
+    if (paysage) { /* paysage : étages de taille normale, la page défile */ }
+    else if (trop > 0) z.style.setProperty('--rh', Math.max(RH_MIN, RH_MAX - Math.ceil(trop / n)) + 'px');
     else if (z.lastElementChild) { // grand écran : les étages s'agrandissent pour remplir la place
       var libre = z.clientHeight - (z.lastElementChild.getBoundingClientRect().bottom - z.getBoundingClientRect().top + z.scrollTop);
       if (libre > n) z.style.setProperty('--rh', Math.min(RH_GRAND, RH_MAX + Math.floor(libre / n)) + 'px');
@@ -1827,7 +1829,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=91'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=91';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=92'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=92';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -1976,10 +1978,10 @@
       y += hTab;
     }
     // ---- plans ----
-    function bois(xx, yy, w, h, k, centre) {
+    function bois(xx, yy, w, h, k, centre, orange) {
       var mini = h < 74; // demi-colis d'un colis double : une seule ligne
       x.save(); rond(xx, yy, w, h, 14); x.clip();
-      var g = x.createLinearGradient(0, yy, 0, yy + h); g.addColorStop(0, '#F0DCAE'); g.addColorStop(1, '#DDBD85'); x.fillStyle = g; x.fillRect(xx, yy, w, h);
+      var g = x.createLinearGradient(0, yy, 0, yy + h); g.addColorStop(0, orange ? '#F6C27E' : '#F0DCAE'); g.addColorStop(1, orange ? '#E39A45' : '#DDBD85'); x.fillStyle = g; x.fillRect(xx, yy, w, h);
       x.strokeStyle = 'rgba(160,122,69,.22)'; x.lineWidth = 2;
       var sd = Math.abs(hashBois(k.id)) % 97;
       for (var i = 0; i < 4; i++) { var ly = yy + h * (0.18 + i * 0.22) + (sd % 7); x.beginPath(); x.moveTo(xx, ly); x.bezierCurveTo(xx + w * 0.3, ly - 6, xx + w * 0.6, ly + 7, xx + w, ly - 2); x.stroke(); }
@@ -2000,8 +2002,8 @@
       var pk = v9 && v9.piles && v9.piles[k3.id];
       if (!pk) { bois(xx, ry + 6, w, rowH - 12, k3, centre); return; }
       var hh = Math.round((rowH - 16) * 0.46);
-      bois(xx, ry + 6, Math.max(20, Math.min(w, pk.cm * lu - 6)), hh, pk, false);
-      bois(xx, ry + 10 + hh, w, rowH - 16 - hh, k3, centre);
+      bois(xx, ry + 6, Math.max(20, Math.min(w, pk.cm * lu - 6)), hh, pk, false, true);
+      bois(xx, ry + 10 + hh, w, rowH - 16 - hh, k3, centre, true);
     }
     if (avecPlan) plans.forEach(function (p, ip) {
       var v = p.v, r = p.r, rc = p.c, N = v.N, mx = Math.round(r.e1Max * 100), maxLen = mx;
@@ -2126,7 +2128,12 @@
       var v = vplan(rc), r = cfgC(rc), N = v.N, mx = Math.round(r.e1Max * 100), maxLen = mx, colis = [], libres = [], etages = { G: [], D: [] };
       v.ROWS.forEach(function (k2) { maxLen = Math.max(maxLen, v.rows[k2].ext || v.rows[k2].len); });
       var c3 = v.rows['C' + N], ggc = gapsRow(rc, v, 'C' + N);
-      function ajout(k3, x0, s, e) { colis.push({ x0: x0 / 100, x1: (x0 + k3.cm) / 100, s: s, e: e, id: String(k3.id), lot: fmt(k3.lo) + ' m' + (v.piles && v.piles[k3.id] ? ' + ' + fmt(v.piles[k3.id].lo) + ' m' : ''), sec: fmt(k3.ep) + '×' + fmt(k3.la) + (v.piles && v.piles[k3.id] ? ' + ' + fmt(v.piles[k3.id].ep) + '×' + fmt(v.piles[k3.id].la) : '') }); }
+      function ajout(k3, x0, s, e) {
+        var pl = v.piles && v.piles[k3.id];
+        if (!pl) { colis.push({ x0: x0 / 100, x1: (x0 + k3.cm) / 100, s: s, e: e, id: String(k3.id), lot: fmt(k3.lo) + ' m', sec: fmt(k3.ep) + '×' + fmt(k3.la) }); return; }
+        colis.push({ x0: x0 / 100, x1: (x0 + k3.cm) / 100, s: s, e: e, id: String(k3.id), lot: fmt(k3.lo) + ' m', sec: fmt(k3.ep) + '×' + fmt(k3.la), demi: 'b' });
+        colis.push({ x0: x0 / 100, x1: (x0 + pl.cm) / 100, s: s, e: e, id: String(k3.id) + '+', lot: fmt(pl.lo) + ' m', sec: fmt(pl.ep) + '×' + fmt(pl.la), demi: 'h' });
+      }
       ['G', 'D'].forEach(function (s) {
         for (var f = 1; f <= N; f++) {
           var ro = v.rows[s + f], occ = ro.ext + (f === N ? c3.ext : 0), xx = 0, gg = gapsRow(rc, v, s + f);
@@ -2581,7 +2588,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=91" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=91" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=92" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=92" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

@@ -10,6 +10,7 @@
     if (!M._pret) M.rems.forEach(function (r) { // placement réel : côté, étage → position dans l'espace
       r.colis.forEach(function (b) {
         b.z0 = PLAT + b.e * H; b.z1 = b.z0 + H - 0.03; // chaque colis repose sur ceux du dessous
+        if (b.demi) { var mz = (b.z0 + b.z1) / 2; if (b.demi === 'b') b.z1 = mz - 0.005; else b.z0 = mz + 0.005; } // colis fusionné : 2 moitiés empilées
         if (b.s === 'G') { b.y0 = 0.03; b.y1 = 0.03 + LARG; } else if (b.s === 'D') { b.y0 = YD; b.y1 = YD + LARG; } else { var mid = (0.03 + YD + LARG) / 2; b.y0 = mid - LARG / 2; b.y1 = mid + LARG / 2; b.mil = true; } // milieu : même sens que les autres, posé à cheval entre gauche et droite
         b.x0 += 0.04; b.x1 -= 0.04;
       });
@@ -44,7 +45,7 @@
     function rr(a, b, w, h, r) { r = Math.max(0, Math.min(r, w / 2, h / 2)); x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
     function texBois(w, h, b, clair, lab) {
       x.save(); rr(0, 0, w, h, clair ? 10 : 14); x.clip();
-      var g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, clair ? '#F6E6C0' : '#F0DCAE'); g.addColorStop(1, clair ? '#E9CF9C' : '#DDBD85'); x.fillStyle = g; x.fillRect(0, 0, w, h);
+      var g = x.createLinearGradient(0, 0, 0, h); if (b.demi) { g.addColorStop(0, clair ? '#FAD7A0' : '#F6C27E'); g.addColorStop(1, clair ? '#F0B86C' : '#E39A45'); } else { g.addColorStop(0, clair ? '#F6E6C0' : '#F0DCAE'); g.addColorStop(1, clair ? '#E9CF9C' : '#DDBD85'); } x.fillStyle = g; x.fillRect(0, 0, w, h);
       x.strokeStyle = 'rgba(160,122,69,.28)'; x.lineWidth = 1.2; var sd = hash(b.id) % 97;
       for (var i = 0; i < 4; i++) { var ly = h * (0.16 + i * 0.22) + (sd % 7); x.beginPath(); x.moveTo(0, ly); x.bezierCurveTo(w * 0.3, ly - 4, w * 0.6, ly + 5, w, ly - 1); x.stroke(); }
       x.beginPath(); x.ellipse(w * (0.3 + (sd % 40) / 100), h * 0.5, 14, 4.5, 0, 0, 6.3); x.stroke();
@@ -116,7 +117,7 @@
         obj.sort(function (a, b) { return a.e - b.e || b.d - a.d; }); // étage par étage (du bas vers le haut), puis du fond vers l'avant
         obj.forEach(function (q) {
           if (q.paroi) plaque({ x0: o - 0.15, x1: o, y0: 0, y1: yL, z0: 1.13, z1: PLAT + r.N * H + 0.25 });
-          else { var b = q.b; if (b.mil && nd([0, 0, 1]) < 0) { x.save(); repere([o + b.x0 - 0.1, b.y1 + 0.1, b.z0 + 0.001], [o + b.x1 + 0.1, b.y1 + 0.1, b.z0 + 0.001], [o + b.x0 - 0.1, b.y0 - 0.1, b.z0 + 0.001], 100, 100); var gs = x.createRadialGradient(50, 50, 10, 50, 50, 70); gs.addColorStop(0, 'rgba(60,40,15,.35)'); gs.addColorStop(1, 'rgba(60,40,15,0)'); x.fillStyle = gs; x.fillRect(0, 0, 100, 100); x.restore(); x.setTransform(1, 0, 0, 1, 0, 0); } var bb = { x0: b.x0 + o, x1: b.x1 + o, y0: b.y0, y1: b.y1, z0: b.z0, z1: b.z1, id: b.id, lot: b.lot, sec: b.sec, s: b.s, mil: b.mil }; colis(bb); }
+          else { var b = q.b; if (b.mil && nd([0, 0, 1]) < 0) { x.save(); repere([o + b.x0 - 0.1, b.y1 + 0.1, b.z0 + 0.001], [o + b.x1 + 0.1, b.y1 + 0.1, b.z0 + 0.001], [o + b.x0 - 0.1, b.y0 - 0.1, b.z0 + 0.001], 100, 100); var gs = x.createRadialGradient(50, 50, 10, 50, 50, 70); gs.addColorStop(0, 'rgba(60,40,15,.35)'); gs.addColorStop(1, 'rgba(60,40,15,0)'); x.fillStyle = gs; x.fillRect(0, 0, 100, 100); x.restore(); x.setTransform(1, 0, 0, 1, 0, 0); } var bb = { x0: b.x0 + o, x1: b.x1 + o, y0: b.y0, y1: b.y1, z0: b.z0, z1: b.z1, id: b.id, lot: b.lot, sec: b.sec, s: b.s, mil: b.mil, demi: b.demi }; colis(bb); }
         });
         // place libre en pointillés
         r.libres.forEach(function (l) {
