@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '93';
+  var VERSION_APP = '94';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -64,6 +64,7 @@
     var r = Object.assign({}, db.reglages);
     if (c && c.lgMax) { r.e1Max = c.lgMax; r.e1Min = Math.max(1, c.lgMax - (db.reglages.e1Max - db.reglages.e1Min)); }
     if (c && c.double && c.double.lg) { r.e1Max = c.double.lg[0] + c.double.lg[1]; r.e1Min = Math.max(1, r.e1Max - (db.reglages.e1Max - db.reglages.e1Min)); }
+    if (c && c.etages4 && !c.double && !c.parentId) r.etages = 4;
     if (c && c.parentId) { var pp = db.camions[c.parentId], rp = pp ? cfgC(pp) : r; r.m3Min = 0; r.m3Max = 1e6; r.cible = rp.cible; if (c.relax) r.relax = true; return r; }
     if (c && c.volMode === 'exact' && c.volExact > 0) { r.m3Min = c.volExact - TOL_EXACT; r.m3Max = c.volExact + TOL_EXACT; r.cible = c.volExact; }
     else r.cible = r.m3Max;
@@ -125,13 +126,17 @@
     marquerPetits(c);
     if (c.double) { if (besoinSplit(c)) splitDouble(c); return; }
     if (!c.lignes.length) { majPlan(c); return; }
+    preparerFusions(c);
     var cf = cfgC(c); delete cf.relax;
-    var res = P.meilleurTient(c.lignes, cf, undefined, !!c.parentId);
+    var pz = pseudoFusion(c);
+    var res = P.meilleurTient(pz ? pz.lignes : c.lignes, cf, undefined, !!c.parentId);
     if (c.parentId) c.relax = !!res.relax;
     c.tientEssaye = sigLignes(c.lignes);
-    c.plan = res.plan; c.decal = null; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
+    c.planP = pz ? res.plan : null;
+    var planReel = pz ? pz.remonter(res.plan) : res.plan;
+    c.plan = planReel; c.decal = null; c.planDepart = { plan: JSON.parse(JSON.stringify(planReel)), note: res.note };
     c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
-    appliquerFusions(c);
+    if (!pz) appliquerFusions(c);
   }
   function assurerPlan(c) { if (c.double) { if (besoinSplit(c)) { splitDouble(c); if (estAMoi(c)) toucher(c); } return; } if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); if (estAMoi(c)) toucher(c); } }
   function toucher(c) {
@@ -881,13 +886,15 @@
     if (!c.lignes.length || b.disabled) return;
     b.disabled = true; b.classList.add('calcul'); b.innerHTML = '<span class="spin"></span>Calcul…';
     setTimeout(function () {
-      if (!c.plansVus) c.plansVus = [P.signature(c.lignes, c.plan || {})];
-      var refV = c.planDepart ? vplan(c, c.planDepart.plan) : null;
-      var res = P.autre(c.lignes, cfgC(c), c.plansVus, c.graineAutre || 1, refV);
+      var pz = pseudoFusion(c), LG = pz ? pz.lignes : c.lignes, PL = pz ? (c.planP || {}) : (c.plan || {});
+      if (!c.plansVus) c.plansVus = [P.signature(LG, PL)];
+      var refV = (!pz && c.planDepart) ? vplan(c, c.planDepart.plan) : null;
+      var res = P.autre(LG, cfgC(c), c.plansVus, c.graineAutre || 1, refV);
       if (!res && c.plansVus.length > 1) { // on a fait le tour : on recommence la série
-        c.plansVus = [P.signature(c.lignes, c.plan || {})];
-        res = P.autre(c.lignes, cfgC(c), c.plansVus, (c.graineAutre || 1) + 50, refV);
+        c.plansVus = [P.signature(LG, PL)];
+        res = P.autre(LG, cfgC(c), c.plansVus, (c.graineAutre || 1) + 50, refV);
       }
+      if (res && pz) { c.planP = res.plan; res = Object.assign({}, res, { plan: pz.remonter(res.plan) }); }
       b.disabled = false; b.classList.remove('calcul'); b.innerHTML = 'Autre plan';
       if (!res) {
         var base = courantBase();
@@ -899,9 +906,10 @@
           return;
         }
         // camion normal : le meilleur plan où tout rentre (tous les colis, même ceux de côté)
-        var mt = P.meilleurTient(c.lignes, cfgC(c));
-        if (P.signature(c.lignes, mt.plan) === P.signature(c.lignes, c.plan || {})) { toast('C\'est le seul bon plan avec ces colis.'); return; }
-        res = { plan: mt.plan, note: mt.note, signature: P.signature(c.lignes, mt.plan), graine: (c.graineAutre || 1) + 1 };
+        var mt = P.meilleurTient(LG, cfgC(c)), mtPlan = pz ? pz.remonter(mt.plan) : mt.plan;
+        if (P.signature(LG, mt.plan) === P.signature(LG, PL)) { toast('C\'est le seul bon plan avec ces colis.'); return; }
+        if (pz) c.planP = mt.plan;
+        res = { plan: mtPlan, note: mt.note, signature: P.signature(LG, mt.plan), graine: (c.graineAutre || 1) + 1 };
       }
       c.plan = res.plan; c.ordre = null; c.decal = null; c.planManuel = false; c.planVariante = true; c.graineAutre = res.graine;
       var mieux = c.planDepart && res.note < c.planDepart.note - 0.01;
@@ -1034,6 +1042,51 @@
   // ---------- Fusion de colis AVANT le plan ----------
   // c.fusions = [{ bas: idLigne, haut: idLigne }] : un colis de chaque ligne ; « bas » au sol, « haut » posé dessus.
   function copieFusion(c) { return (c.fusions || []).filter(function (f) { return c.lignes.some(function (l) { return l.id === f.bas; }) && c.lignes.some(function (l) { return l.id === f.haut; }); }); }
+
+  // Fusion automatique : à partir de 60 % de colis fusionnés (ou petits paquets, fusionnés par paires) → plan sur 4 étages
+  function preparerFusions(c) {
+    c.fusions = copieFusion(c).filter(function (f) { return !f.auto; });
+    c.etages4 = false;
+    var lignes = c.lignes || [], tot = lignes.reduce(function (a, l) { return a + Math.max(1, Math.round(+l.nb || 1)); }, 0);
+    if (!tot || c.double || c.parentId) return;
+    var used = {}; c.fusions.forEach(function (f) { used[f.bas] = (used[f.bas] || 0) + 1; used[f.haut] = (used[f.haut] || 0) + 1; });
+    var libres = [];
+    lignes.forEach(function (l) { if (!l.petit) return; var d = Math.max(1, Math.round(+l.nb || 1)) - (used[l.id] || 0); for (var k = 0; k < d; k++) libres.push({ id: l.id, cm: P.lgPlan(l) }); });
+    var deja = c.fusions.length * 2;
+    if (!c.noAuto && libres.length >= 2 && (deja + libres.length) / tot >= 0.6 - 1e-9) {
+      libres.sort(function (a, b) { return b.cm - a.cm; });
+      for (var i = 0; i + 1 < libres.length; i += 2) c.fusions.push({ bas: libres[i].id, haut: libres[i + 1].id, auto: true });
+    }
+    c.etages4 = c.fusions.length > 0 && (c.fusions.length * 2) / tot >= 0.6 - 1e-9;
+  }
+  // Lignes « virtuelles » pour le calcul : chaque paire fusionnée devient un seul colis (longueur du long, volume des deux)
+  function pseudoFusion(c) {
+    if (!c.etages4 || !c.fusions || !c.fusions.length) return null;
+    var used = {}, fus = [], idx = {};
+    c.fusions.forEach(function (f, i) {
+      var kb = used[f.bas] || 0; used[f.bas] = kb + 1; var kh = used[f.haut] || 0; used[f.haut] = kh + 1;
+      fus.push({ i: i, bas: f.bas + '#' + kb, haut: f.haut + '#' + kh, lb: f.bas, lh: f.haut });
+    });
+    var lg = [];
+    c.lignes.forEach(function (l) { var reste = Math.max(1, Math.round(+l.nb || 1)) - (used[l.id] || 0); if (reste > 0) lg.push(Object.assign({}, l, { nb: reste })); });
+    var lig = function (id) { return c.lignes.filter(function (l) { return l.id === id; })[0]; };
+    fus.forEach(function (f) {
+      var b = lig(f.lb), h = lig(f.lh); if (!b || !h) return;
+      lg.push(Object.assign({}, b, { id: '§F' + f.i, nb: 1, fus: true, petit: false, volPlus: P.volLigne(h) }));
+    });
+    return {
+      lignes: lg,
+      remonter: function (pp) {
+        var out = {};
+        Object.keys(pp).forEach(function (k) {
+          var m = /^(.*)#(\d+)$/.exec(k); if (!m) return;
+          if (m[1].indexOf('§F') === 0) { var f = fus[+m[1].slice(2)]; if (f) { out[f.bas] = pp[k]; out[f.haut] = 'P:' + f.bas; } }
+          else out[m[1] + '#' + ((used[m[1]] || 0) + (+m[2]))] = pp[k];
+        });
+        return out;
+      }
+    };
+  }
   function appliquerFusions(c) {
     c.fusions = copieFusion(c);
     if (!c.fusions.length || !c.plan) return;
@@ -1060,7 +1113,7 @@
     var h = '';
     c.fusions.forEach(function (f, i) {
       var b = ligne(f.bas), t = ligne(f.haut); if (!b || !t) return;
-      h += '<div class="lig lig-fu"><span class="n">🔗</span><div class="txt"><div class="sec">' + fm(t.ep) + ' × ' + fm(t.la) + ' <small>sur</small> ' + fm(b.ep) + ' × ' + fm(b.la) + '</div><div class="det">' + fm(t.pi) + ' p (' + fm(t.lo) + ' m) + ' + fm(b.pi) + ' p (' + fm(b.lo) + ' m) <em class="tag-petit tag-fu">Fusionné</em></div></div>' +
+      h += '<div class="lig lig-fu"><span class="n">🔗</span><div class="txt"><div class="sec">' + fm(t.ep) + ' × ' + fm(t.la) + ' <small>sur</small> ' + fm(b.ep) + ' × ' + fm(b.la) + '</div><div class="det">' + fm(t.pi) + ' p (' + fm(t.lo) + ' m) + ' + fm(b.pi) + ' p (' + fm(b.lo) + ' m) <em class="tag-petit tag-fu">' + (f.auto ? 'Fusion auto' : 'Fusionné') + '</em></div></div>' +
         '<span class="fu-btns"><button type="button" class="btn sec petit" data-fu-inv="' + i + '">🔄</button><button type="button" class="btn sec petit" data-fu-sep="' + i + '">Séparer</button></span></div>';
     });
     c.lignes.forEach(function (l, i) {
@@ -1079,7 +1132,7 @@
     var inv = e.target.closest('[data-fu-inv]'), sep = e.target.closest('[data-fu-sep]');
     if (inv || sep) {
       var k = +(inv || sep).dataset[inv ? 'fuInv' : 'fuSep'], f = c.fusions[k]; if (!f) return;
-      if (inv) { var t = f.bas; f.bas = f.haut; f.haut = t; } else c.fusions.splice(k, 1);
+      if (inv) { var t = f.bas; f.bas = f.haut; f.haut = t; f.auto = false; } else { if (f.auto) { c.noAuto = true; c.fusions = c.fusions.filter(function (x) { return !x.auto; }); toast('Fusion automatique arrêtée pour ce camion.'); } else c.fusions.splice(k, 1); }
       majPlan(c); toucher(c); rendreFusion(); return;
     }
     if (e.target.closest('#btnFuPlan')) {
@@ -1900,7 +1953,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=93'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=93';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=94'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=94';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2659,7 +2712,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=93" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=93" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=94" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=94" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }

@@ -105,7 +105,7 @@
           ep: num(l.ep), la: num(l.la), pi: num(l.pi), lo: num(l.lo),
           cm: Math.round(lgPlan(l) * 100), vol: volLigne(l), aire: num(l.ep) * num(l.la)
         });
-        var o = out[out.length - 1]; o.k = classeEp(o); o.fine = o.k > 0; o.petit = !!l.petit;
+        var o = out[out.length - 1]; o.k = classeEp(o); o.fine = o.k > 0; o.petit = !!l.petit; if (l.fus) { o.fus = true; o.petit = false; } if (l.volPlus) o.vol += l.volPlus;
       }
     });
     return out;
@@ -197,7 +197,7 @@
   // interdit[i][r] : le colis i ne peut pas aller dans la rangée r (gros colis au 4e étage)
   function interdits(colis, L) {
     return colis.map(function (c) {
-      var t = []; for (var r = 0; r < L.NR; r++) t.push(L.N === 4 && etageDe(r, L) === 3 && !estPetit(c));
+      var t = []; for (var r = 0; r < L.NR; r++) t.push(L.N === 4 && etageDe(r, L) === 3 && !estPetit(c) && !c.fus);
       return t;
     });
   }
@@ -493,8 +493,8 @@
     else if (rows[CK].colis.length && E3 > sup3 && cfg.relax) avis.push('Étage ' + N + ' plus long que l\'étage ' + (N - 1) + ' avec le colis du centre : seule solution pour tout charger.');
     else if (rows[CK].colis.length && E3 > sup3) { rows[CK].alerte = rows[TOP].alerte = rows[TOPD].alerte = true; erreurs.push('Étage ' + N + ' : ' + f2(E3 / 100) + ' m avec le colis du centre, plus long que l\'étage ' + (N - 1) + ' (' + f2(sup3 / 100) + ' m).'); }
     if (N === 4) {
-      var gros = [TOP, TOPD, CK].reduce(function (a, k) { return a + rows[k].colis.filter(function (c) { return !estPetit(c); }).length; }, 0);
-      if (gros) { [TOP, TOPD, CK].forEach(function (k) { if (rows[k].colis.some(function (c) { return !estPetit(c); })) rows[k].alerte = true; }); erreurs.push('Étage 4 : seuls les 18×100 peuvent monter au 4e étage (' + gros + ' colis à descendre).'); }
+      var gros = [TOP, TOPD, CK].reduce(function (a, k) { return a + rows[k].colis.filter(function (c) { return !estPetit(c) && !c.fus && !piles[c.id]; }).length; }, 0);
+      if (gros) { [TOP, TOPD, CK].forEach(function (k) { if (rows[k].colis.some(function (c) { return !estPetit(c) && !c.fus && !piles[c.id]; })) rows[k].alerte = true; }); erreurs.push('Étage 4 : seuls les 18×100 peuvent monter au 4e étage (' + gros + ' colis à descendre).'); }
     }
     // colis plus épais posés au-dessus de plus fins
     var hR = RW.map(function (k) { var t = zeros(NK); rows[k].colis.forEach(function (c) { t[c.k]++; }); return t; });
