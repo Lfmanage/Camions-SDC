@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '83';
+  var VERSION_APP = '84';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1194,7 +1194,7 @@
     var base = courantBase(), dbl = base.double;
     $('#v-plan h1').textContent = dbl ? 'Remorque ' + ((dbl.actif || 0) + 1) : 'Plan';
     $('#btnTerminer').textContent = dbl && !(dbl.actif || 0) ? '2ème plan →' : 'Terminer';
-    $('#btnLongueur').hidden = !!dbl; if (!dbl) $('#btnLongueur').innerHTML = '<small>Longueur</small><b>' + fm(cfgC(base).e1Max) + ' m</b>';
+    $('#btnLongueur').hidden = !!dbl; if (!dbl) $('#btnLongueur').innerHTML = '<small>Longueur remorque</small><b>' + fm(cfgC(base).e1Max) + ' m</b>';
     if (dbl && besoinSplit(base)) {
       $('#planZone').innerHTML = '<div class="calcul-plan"><span class="spin"></span>Calcul des 2 remorques…</div>';
       setTimeout(function () { splitDouble(base); toucher(base); selection = null; selRem = null; if (vueActive === 'plan') rendrePlanVue(); }, 40);
@@ -1729,7 +1729,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=83'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=83';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=84'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=84';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2473,7 +2473,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=83" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=83" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=84" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=84" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
