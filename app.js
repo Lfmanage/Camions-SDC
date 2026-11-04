@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '85';
+  var VERSION_APP = '86';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1110,7 +1110,7 @@
     v.ROWS.forEach(function (k) { maxLen = Math.max(maxLen, v.rows[k].len); });
     var N = v.N, ETG = []; for (var e0 = N; e0 >= 1; e0--) ETG.push(e0);
     var edit = !opts.lecture, selCote = edit && selection && v.cote.some(function (k) { return k.id === selection; });
-    var place = edit ? 36 : 0; // place toujours gardée pour le bouton « + » en bout d'étage : les colis ne changent jamais de taille quand on en touche un
+    var place = edit ? 14 : 0; // place toujours gardée pour le bouton « + » en bout d'étage : les colis ne changent jamais de taille quand on en touche un
     planGeo = { maxLen: maxLen, place: place };
     function w(cm) { return 'width:calc((100% - ' + (4 + place) + 'px) * ' + (cm / maxLen).toFixed(4) + ' - 2px)'; }
     var glisse = edit && !apercu;
@@ -1729,7 +1729,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=85'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=85';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=86'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=86';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -1905,7 +1905,7 @@
         x.fillStyle = CARTE; rond(W - pad - wv - 30, y + 6, wv + 30, 50, 25); x.fill();
         x.textAlign = 'right'; x.fillStyle = INK; x.fillText(tv, W - pad - 15, y + 42); x.textAlign = 'left';
         y += 60; carte(y, hCote - 60);
-        var tx = pad + 170, tw = W - pad - 30 - tx, ry = y + 26, lu = tw / maxLen;
+        var tx = pad + 164, tw = W - pad - 30 - tx, ry = y + 26, lu = tw / maxLen;
         for (var f = N; f >= 1; f--) {
           var ro = v.rows[s + f], c3 = v.rows['C' + N], occ = ro.ext + (f === N ? c3.ext : 0);
           var libre = (f > 1 ? Math.min(mx, v.rows[s + (f - 1)].ext) : mx) - occ;
@@ -1921,7 +1921,7 @@
           ry += rowH + 12;
         }
         // remorque : paroi + plancher + roues
-        x.fillStyle = SOMBRE ? '#8A958F' : '#5C6661'; x.fillRect(tx - 14, y + 20, 10, ry - y - 20 + 4); x.fillRect(tx - 14, ry, tw + 14, 18);
+        x.fillStyle = SOMBRE ? '#8A958F' : '#5C6661'; x.fillRect(tx - 14, y + 20, 10, ry - y - 20 + 4); x.fillRect(tx - 14, ry, Math.round(mx * lu) + 14, 18);
         x.fillRect(tx + tw * 0.14, ry + 18, 34, 12);
         var deux = rc.parentId && rc.rem === 1, wy = ry + 44;
         [0, 1, 2].slice(0, deux ? 2 : 3).forEach(function (i4) { roue(tx + tw * 0.76 - i4 * 62, wy); });
@@ -2473,7 +2473,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=85" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=85" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=86" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=86" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
