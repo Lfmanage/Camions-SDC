@@ -1,9 +1,9 @@
-@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=92') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=92') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=92') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=92') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=92') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=92') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-regular.woff?v=93') format('woff'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-medium.woff?v=93') format('woff'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-semibold.woff?v=93') format('woff'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('barlow-bold.woff?v=93') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-semibold.woff?v=93') format('woff'); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('barlowcondensed-bold.woff?v=93') format('woff'); font-weight: 700 900; font-style: normal; font-display: swap; }
 /* Camions SDC — v20 : style sobre et net (clair + sombre), pensé pour iPhone et Android */
 :root {
   --accent: #28533F;
@@ -1437,3 +1437,15 @@ html.mode-fiche, html.mode-fiche body { height: auto !important; min-height: 100
   .v3-seg { margin-top: 6px; } .v3-seg button { padding: 6px 4px; }
   .v3-m3 { font-size: 28px; } .v3-carte { padding: 8px 12px; }
 }
+
+/* v93 : fusion de colis avant le plan */
+#v-camion .pied #btnFusion { margin-bottom: 8px; }
+.fu-aide { margin: 0; padding: 0 4px; font-size: 14px; color: var(--muted, #5E6E64); }
+#fuListe .lig[data-fu] { cursor: pointer; }
+#fuListe .lig-sel { background: #FFF1DC; box-shadow: inset 0 0 0 2px #E07B12; border-radius: 10px; }
+#fuListe .lig-fu { background: #F8CD92; box-shadow: inset 0 0 0 2px #C9772A; border-radius: 10px; }
+#fuListe .lig-fu small { font-weight: 500; }
+.tag-fu { background: #C25E0B !important; color: #fff !important; }
+.fu-btns { display: flex; gap: 6px; flex: none; }
+#v-fusion .pied { margin-top: auto; }
+#fuListe .lig-sel, #fuListe .lig-fu { padding-left: 8px; padding-right: 8px; }

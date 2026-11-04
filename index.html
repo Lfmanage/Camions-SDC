@@ -10,12 +10,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=92">
-<link rel="icon" href="favicon-32.png?v=92" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=92">
-<link rel="preload" href="barlow-regular.woff?v=92" as="font" type="font/woff" crossorigin>
-<link rel="preload" href="barlowcondensed-bold.woff?v=92" as="font" type="font/woff" crossorigin>
-<link rel="stylesheet" href="style.css?v=92">
+<link rel="manifest" href="manifest.webmanifest?v=93">
+<link rel="icon" href="favicon-32.png?v=93" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=93">
+<link rel="preload" href="barlow-regular.woff?v=93" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="barlowcondensed-bold.woff?v=93" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="style.css?v=93">
 </head>
 <body>
 <div id="fondForet" aria-hidden="true"><i class="ff-img on"></i><i class="ff-img"></i><i class="ff-teinte"></i><i class="ff-voile"></i><div id="decorZone"></div></div>
@@ -24,7 +24,7 @@
 
   <!-- ============ ACCUEIL ============ -->
   <section class="vue active" id="v-accueil">
-    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=92" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=92" alt=""></span></header>
+    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=93" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=93" alt=""></span></header>
     <button class="hero-go" id="btnCommencer" type="button">
       <span class="hg-txt"><small>Nouveau camion</small><b>Charger un camion</b></span>
       <span class="hg-fl" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -117,7 +117,7 @@
     </form>
 
     <div class="carte liste" id="liste"></div>
-    <div class="pied"><button class="btn gros" id="btnPlan" type="button">Voir le plan de chargement</button></div>
+    <div class="pied"><button class="btn gros sec" id="btnFusion" type="button">🔗 Fusionner des colis</button><button class="btn gros" id="btnPlan" type="button">Voir le plan de chargement</button></div>
   </section>
 
   <!-- ============ ÉTAPE 3 : PLAN ============ -->
@@ -130,6 +130,13 @@
   </section>
 
   <!-- ============ AJOUTER UN COLIS (depuis le plan) ============ -->
+  <section class="vue" id="v-fusion">
+    <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Fusionner</h1><span></span></header>
+    <p class="fu-aide" id="fuAide"></p>
+    <div class="carte liste" id="fuListe"></div>
+    <div class="pied"><button class="btn gros" id="btnFuPlan" type="button">Voir le plan de chargement</button></div>
+  </section>
+
   <section class="vue" id="v-ajout">
     <header class="top"><button class="retour" data-retour type="button" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Retour</button><h1>Ajouter un colis</h1><button class="lien fermer-x" data-retour type="button" aria-label="Fermer">✕</button></header>
     <div id="ajoutZone"></div>
@@ -189,11 +196,11 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=92"></script>
-<script src="ambiance.js?v=92"></script>
-<script src="sync.js?v=92"></script>
-<script src="qr.js?v=92"></script>
-<script src="vue3d.js?v=92"></script>
-<script src="app.js?v=92"></script>
+<script src="plan.js?v=93"></script>
+<script src="ambiance.js?v=93"></script>
+<script src="sync.js?v=93"></script>
+<script src="qr.js?v=93"></script>
+<script src="vue3d.js?v=93"></script>
+<script src="app.js?v=93"></script>
 </body>
 </html>

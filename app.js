@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '92';
+  var VERSION_APP = '93';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -131,6 +131,7 @@
     c.tientEssaye = sigLignes(c.lignes);
     c.plan = res.plan; c.decal = null; c.planDepart = { plan: JSON.parse(JSON.stringify(res.plan)), note: res.note };
     c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
+    appliquerFusions(c);
   }
   function assurerPlan(c) { if (c.double) { if (besoinSplit(c)) { splitDouble(c); if (estAMoi(c)) toucher(c); } return; } if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); if (estAMoi(c)) toucher(c); } }
   function toucher(c) {
@@ -326,7 +327,7 @@
   }
   // ---------- Navigation ----------
   var vueActive = 'accueil';
-  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', ajout: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', stats: 'stats', equipe: 'equipe', profil: 'equipe', fonds: 'reglages', ambiance: 'reglages' };
+  var ONGLET = { accueil: 'accueil', client: 'accueil', camion: 'accueil', plan: 'accueil', ajout: 'accueil', fusion: 'accueil', calcul: 'calcul', historique: 'historique', reglages: 'reglages', stats: 'stats', equipe: 'equipe', profil: 'equipe', fonds: 'reglages', ambiance: 'reglages' };
   function montrer(v) {
     vueActive = v; document.body.dataset.vue = v;
     if (v !== 'plan' && v !== 'ajout') edition = null;
@@ -338,6 +339,7 @@
     if (v === 'calcul') { prepCalc(); rendreCalc(); }
     if (v === 'client') rendreClient();
     if (v === 'camion') rendreCamion();
+    if (v === 'fusion') rendreFusion();
     if (v === 'plan') { rendrePlanVue(); requestAnimationFrame(ajusterPlan); }
     if (v === 'historique') rendreHisto();
     if (v === 'stats') rendreStats();
@@ -1026,6 +1028,75 @@
       '<div class="grille-btns"><button class="btn sec" data-r="0" type="button">Corriger</button><button class="btn" data-r="1" type="button">Valider quand même</button></div></div>');
     $$('[data-r]', f).forEach(function (b) { b.onclick = function () { var ok = b.dataset.r === '1'; $('#feuilleFond').onclick = null; if (ok) { if (history.state && history.state.f) apresRetour = function () { enregistrerCamion(c); }; else setTimeout(function () { enregistrerCamion(c); }, 60); } fermerFeuille(); }; });
     $('#feuilleFond').onclick = function () { $('#feuilleFond').onclick = null; fermerFeuille(); };
+  });
+
+
+  // ---------- Fusion de colis AVANT le plan ----------
+  // c.fusions = [{ bas: idLigne, haut: idLigne }] : un colis de chaque ligne ; « bas » au sol, « haut » posé dessus.
+  function copieFusion(c) { return (c.fusions || []).filter(function (f) { return c.lignes.some(function (l) { return l.id === f.bas; }) && c.lignes.some(function (l) { return l.id === f.haut; }); }); }
+  function appliquerFusions(c) {
+    c.fusions = copieFusion(c);
+    if (!c.fusions.length || !c.plan) return;
+    var used = {}, ids = P.colisDe(c.lignes).map(function (k) { return k.id; });
+    c.fusions.forEach(function (f) {
+      var kb = used[f.bas] || 0; used[f.bas] = kb + 1;
+      var kh = used[f.haut] || 0; used[f.haut] = kh + 1;
+      var b = f.bas + '#' + kb, h = f.haut + '#' + kh;
+      if (ids.indexOf(b) < 0 || ids.indexOf(h) < 0) return;
+      var np = Object.assign({}, c.plan); np[h] = 'P:' + b;
+      c.plan = rangerEmpile(c, np, b, h);
+    });
+    c.ordre = null; c.decal = null; fixerOrdre(c);
+    c.planDepart = { plan: JSON.parse(JSON.stringify(c.plan)), note: P.noteVerif(vplan(c)) };
+  }
+  var fuSel = [];
+  function rendreFusion() {
+    var c = courant(); if (!c) return;
+    c.fusions = copieFusion(c);
+    var used = {}; c.fusions.forEach(function (f) { used[f.bas] = (used[f.bas] || 0) + 1; used[f.haut] = (used[f.haut] || 0) + 1; });
+    var ligne = function (id) { return c.lignes.filter(function (l) { return l.id === id; })[0]; };
+    var dispo = function (l) { return (Math.max(1, Math.round(+l.nb || 1))) - (used[l.id] || 0); };
+    fuSel = fuSel.filter(function (id) { var l = ligne(id); return l && dispo(l) > 0; });
+    var h = '';
+    c.fusions.forEach(function (f, i) {
+      var b = ligne(f.bas), t = ligne(f.haut); if (!b || !t) return;
+      h += '<div class="lig lig-fu"><span class="n">🔗</span><div class="txt"><div class="sec">' + fm(t.ep) + ' × ' + fm(t.la) + ' <small>sur</small> ' + fm(b.ep) + ' × ' + fm(b.la) + '</div><div class="det">' + fm(t.pi) + ' p (' + fm(t.lo) + ' m) + ' + fm(b.pi) + ' p (' + fm(b.lo) + ' m) <em class="tag-petit tag-fu">Fusionné</em></div></div>' +
+        '<span class="fu-btns"><button type="button" class="btn sec petit" data-fu-inv="' + i + '">🔄</button><button type="button" class="btn sec petit" data-fu-sep="' + i + '">Séparer</button></span></div>';
+    });
+    c.lignes.forEach(function (l, i) {
+      var d = dispo(l); if (d <= 0) return;
+      h += '<div class="lig' + (fuSel.indexOf(l.id) >= 0 ? ' lig-sel' : '') + '" data-fu="' + esc(l.id) + '"><span class="n">' + (i + 1) + '</span><div class="txt"><div class="sec">' + fm(l.ep) + ' × ' + fm(l.la) + '</div><div class="det">' + fm(l.pi) + ' p · ' + fm(l.lo) + ' m' + (d > 1 ? ' · ×' + d : '') + (l.petit ? ' <em class="tag-petit">Petit paquet ↑</em>' : '') + '</div></div><span class="vol">' + fm(P.volLigne(l)) + '</span></div>';
+    });
+    $('#fuListe').innerHTML = h;
+    $('#fuAide').textContent = fuSel.length === 0 ? 'Touche le 1er colis à fusionner.' : fuSel.length === 1 ? 'Touche le 2e colis : il sera fusionné avec le 1er.' : '2 colis choisis.';
+    $('#btnFuPlan').textContent = fuSel.length === 2 ? '🔗 Fusionner ces 2 colis' : 'Voir le plan de chargement';
+  }
+  document.addEventListener('click', function (e) {
+    if (vueActive !== 'fusion') return;
+    var c = courant(); if (!c) return;
+    var li = e.target.closest('[data-fu]');
+    if (li) { var id = li.dataset.fu, i = fuSel.indexOf(id); if (i >= 0) fuSel.splice(i, 1); else { if (fuSel.length >= 2) fuSel.shift(); fuSel.push(id); } rendreFusion(); return; }
+    var inv = e.target.closest('[data-fu-inv]'), sep = e.target.closest('[data-fu-sep]');
+    if (inv || sep) {
+      var k = +(inv || sep).dataset[inv ? 'fuInv' : 'fuSep'], f = c.fusions[k]; if (!f) return;
+      if (inv) { var t = f.bas; f.bas = f.haut; f.haut = t; } else c.fusions.splice(k, 1);
+      majPlan(c); toucher(c); rendreFusion(); return;
+    }
+    if (e.target.closest('#btnFuPlan')) {
+      if (fuSel.length === 2) {
+        var A = c.lignes.filter(function (l) { return l.id === fuSel[0]; })[0], B = c.lignes.filter(function (l) { return l.id === fuSel[1]; })[0];
+        var bas = (A && B && P.lgPlan(B) > P.lgPlan(A)) ? B : A, haut = bas === A ? B : A;
+        c.fusions = (c.fusions || []).concat([{ bas: bas.id, haut: haut.id }]); fuSel = [];
+        majPlan(c); toucher(c); rendreFusion(); return;
+      }
+      aller('plan');
+    }
+  });
+  $('#btnFusion').addEventListener('click', function () {
+    var c = courant();
+    if (!c.lignes.length) { toast('Ajoute d\'abord des colis.'); return; }
+    if (c.double) { toast('Fusion non disponible en double remorque.'); return; }
+    fuSel = []; aller('fusion');
   });
 
   $('#btnPlan').addEventListener('click', function () {
@@ -1829,7 +1900,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=92'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=92';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=93'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=93';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2588,7 +2659,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=92" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=92" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=93" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=93" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
