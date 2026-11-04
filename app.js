@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '84';
+  var VERSION_APP = '85';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -1098,9 +1098,9 @@
   // Dessin de la remorque sous le plan : châssis acier, garde-boue et roues (3 essieux à l'arrière ; 2ème remorque : 2 devant + 2 derrière)
   var ROUE = '<svg class="roue" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11.5" fill="var(--pn)"/><circle cx="12" cy="12" r="6.5" fill="var(--ja)"/><circle cx="12" cy="12" r="2.4" fill="var(--pn)"/></svg>';
   function roues(n, cl) { var t = ''; for (var i = 0; i < n; i++) t += ROUE; return '<span class="ch-roues ' + cl + '">' + t + '</span>'; }
-  function remorqueHtml(c) {
+  function remorqueHtml(c, fin) {
     var deux = c.parentId && c.rem === 1;
-    return '<div class="rang rang-ch" aria-hidden="true"><span></span><div class="chassis"><i class="ch-sol"></i>' +
+    return '<div class="rang rang-ch" aria-hidden="true"><span></span><div class="chassis"' + (fin ? ' style="width:' + fin + '"' : '') + '><i class="ch-sol"></i>' +
       (deux ? roues(2, 'avant') : '<i class="ch-cr"></i>') + roues(deux ? 2 : 3, 'ar') + '</div></div>';
   }
   function hashBois(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; }
@@ -1164,7 +1164,7 @@
         h = h.replace('@LG@', fm(Math.round(lgAff * 100) / 100) + ' m');
         h += '</div></div>';
       });
-      h += remorqueHtml(c) + '<div class="sens"><span></span><span class="hl gris">Arrière</span></div></div></section>';
+      h += remorqueHtml(c, 'calc((100% - ' + (4 + place) + 'px) * ' + (r.e1Max * 100 / maxLen).toFixed(4) + ' - 2px)') + '<div class="sens"><span></span><span class="hl gris">Arrière</span></div></div></section>';
     });
     var legMil = v.rows['C' + N].colis.length ? '<span class="leg-mil"><span>MILIEU</span> = colis à cheval sur les 2 côtés</span>' : '';
     if (!edit && legMil) h += '<p class="aide-l">' + legMil + '</p>';
@@ -1729,7 +1729,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=84'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=84';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=85'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=85';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2473,7 +2473,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=84" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=84" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=85" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=85" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
