@@ -141,6 +141,11 @@
         var d2 = hooks.lire(); d2.sync.limitesSales = false; st.regLe = le; garder(); hooks.ecrire(d2); return false;
       }).catch(function (e) { if (/ecrire_limites|function|404|PGRST/i.test(e.message || '')) { var d3 = hooks.lire(); d3.sync.limitesSales = false; hooks.ecrire(d3); return false; } throw e; });
     }
+    if (!st.admin && d.sync && d.sync.sectionsSales) { // un membre a changé la liste des sections : elle part à toute l'équipe
+      return rpc('ecrire_sections', { p: { sections: d.reglages.sections, ajouts: d.reglages.ajouts || [] } }).then(function (le) {
+        var d2 = hooks.lire(); d2.sync.sectionsSales = false; st.regLe = le; garder(); hooks.ecrire(d2); return false;
+      }).catch(function (e) { if (/ecrire_sections|function|404|PGRST/i.test(e.message || '')) { var d3 = hooks.lire(); d3.sync.sectionsSales = false; hooks.ecrire(d3); return false; } throw e; });
+    }
     if (st.admin && d.sync && d.sync.reglagesSales) {
       return rpc('ecrire_reglages', { p: partage(d.reglages) }).then(function (le) {
         var d2 = hooks.lire(); d2.sync.reglagesSales = false; st.regLe = le; garder(); hooks.ecrire(d2); return false;

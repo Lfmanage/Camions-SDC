@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '82';
+  var VERSION_APP = '83';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -908,6 +908,37 @@
     }, 30);
   });
 
+  // Longueur du camion changée depuis le plan : nouveau plan avec cette longueur (ce camion seulement)
+  $('#btnLongueur').addEventListener('click', function () {
+    var c = courant(); if (!estAMoi(c) || c.double) return;
+    var lg0 = cfgC(c).e1Max;
+    var f = ouvrirFeuille('<div class="dialogue"><h2>Longueur du camion</h2>' +
+      '<label class="lg-champ"><input id="lgPlan" inputmode="decimal" autocomplete="off" value="' + fm(lg0) + '"><i>m</i></label>' +
+      '<div class="lg-rapides" id="lgPlanRap" style="grid-template-columns:repeat(5,1fr);margin:10px 0"><button type="button" data-l="12">12</button><button type="button" data-l="12,5">12,5</button><button type="button" data-l="13">13</button><button type="button" data-l="13,5">13,5</button><button type="button" data-l="13,6">13,6</button></div>' +
+      '<p class="sous">Écris la longueur que tu veux (entre 4 et 20 m). Ce camion seulement.' + (c.planManuel ? ' Tes déplacements à la main seront remplacés.' : '') + '</p>' +
+      '<button type="button" class="btn gros" id="lgPlanOk" style="width:100%">Recalculer les plans</button>' +
+      '<button type="button" class="btn sec" id="lgPlanNon" style="width:100%;margin-top:8px">Annuler</button></div>');
+    var inp = $('#lgPlan', f);
+    $$('#lgPlanRap button', f).forEach(function (b) { b.onclick = function () { inp.value = b.dataset.l; }; });
+    $('#lgPlanNon', f).onclick = function () { fermerFeuille(); };
+    function valider() {
+      var lg = P.num(inp.value);
+      if (!(isFinite(lg) && lg >= 4 && lg <= 20)) { inp.classList.add('erreur'); toast('Longueur entre 4 et 20 m.'); return; }
+      fermerFeuille();
+      setTimeout(function () {
+        c.lgMax = lg === reg().e1Max ? null : lg;
+        if (Math.abs(lg - lg0) < 1e-9) return;
+        selection = null;
+        $('#planZone').innerHTML = '<div class="calcul-plan"><span class="spin"></span>Calcul du plan en ' + fm(lg) + ' m…</div>';
+        setTimeout(function () { calculerPlan(c); toucher(c); if (vueActive === 'plan') { rendrePlanVue(); window.scrollTo({ top: 0, behavior: 'smooth' }); } toast('Plan refait pour ' + fm(lg) + ' m'); }, 40);
+      }, 80);
+    }
+    $('#lgPlanOk', f).onclick = valider;
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); valider(); } });
+    inp.addEventListener('input', function () { inp.classList.remove('erreur'); });
+    setTimeout(function () { inp.focus(); inp.select(); }, 150);
+  });
+
   // Enlève des colis du camion (ceux de côté, ou un colis choisi), sans toucher au reste du plan
   function supprimerColis(c, enlever) {
     var plan = c.plan || {}, nouveauPlan = {}, nouvelOrdre = [], ren = {}, dec = c.decal || {}, nouveauDec = {};
@@ -1163,6 +1194,7 @@
     var base = courantBase(), dbl = base.double;
     $('#v-plan h1').textContent = dbl ? 'Remorque ' + ((dbl.actif || 0) + 1) : 'Plan';
     $('#btnTerminer').textContent = dbl && !(dbl.actif || 0) ? '2ème plan →' : 'Terminer';
+    $('#btnLongueur').hidden = !!dbl; if (!dbl) $('#btnLongueur').innerHTML = '<small>Longueur</small><b>' + fm(cfgC(base).e1Max) + ' m</b>';
     if (dbl && besoinSplit(base)) {
       $('#planZone').innerHTML = '<div class="calcul-plan"><span class="spin"></span>Calcul des 2 remorques…</div>';
       setTimeout(function () { splitDouble(base); toucher(base); selection = null; selRem = null; if (vueActive === 'plan') rendrePlanVue(); }, 40);
@@ -1697,7 +1729,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=82'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=82';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=83'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=83';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2441,7 +2473,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=82" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=82" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=83" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=83" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
@@ -2578,7 +2610,7 @@
       '</div>' +
 
       '<button class="carte reg-ouvrir" id="ouvrirClients" type="button"><span><b>Clients</b><small>' + tousClients().length + ' clients · fusionner les doublons</small></span><i>›</i></button>' +
-      '<button class="carte reg-ouvrir" id="ouvrirSections" type="button"><span><b>Sections et quantités</b><small>' + r.sections.length + ' sections · ' + (verrou ? 'communes à l\'équipe' : 'quantité remplie toute seule') + '</small></span><i>›</i></button>' +
+      '<button class="carte reg-ouvrir" id="ouvrirSections" type="button"><span><b>Sections et quantités</b><small>' + r.sections.length + ' sections · ' + (enEquipe() ? 'communes à l\'équipe' : 'quantité remplie toute seule') + '</small></span><i>›</i></button>' +
 
       '<div class="carte reg ligne-app"><span>Apparence</span><div class="seg" id="segTheme">' +
       [['auto', 'Auto'], ['clair', 'Clair'], ['sombre', 'Sombre']].map(function (t) { return '<button type="button" data-t="' + t[0] + '" class="' + (r.theme === t[0] ? 'actif' : '') + '">' + t[1] + '</button>'; }).join('') +
@@ -2812,15 +2844,17 @@
 
   // ---------- Sections et quantités ----------
   function txtLg(lg) { return (lg || []).map(fm).join(' · '); }
-  function sectionsVerrou() { return enEquipe() && !Sync.moi().admin; }
+  function sectionsVerrou() { return false; }
+  function sectionsSales() { if (enEquipe() && !Sync.moi().admin) db.sync.sectionsSales = true; else db.sync.reglagesSales = true; }
   function ouvrirSections() {
     var f = ouvrirFeuille(
       '<div class="sec-tete"><h2>Sections et quantités</h2><button class="lien" data-s="fermer" type="button">Fermer</button></div>' +
       '<div id="secEdit" hidden></div>' +
       '<input id="secCherche" class="sec-cherche" type="search" inputmode="decimal" placeholder="Chercher (ex. 75x225)" autocomplete="off">' +
       '<div id="secListe"></div>' +
-      (sectionsVerrou() ? '<p class="verrou">Liste commune à toute l\'équipe.</p>' : '<button class="btn" data-s="ajout" type="button">+ Ajouter une section</button>' +
-      '<button class="lien sec-reset" data-s="reset" type="button">Remettre la liste d\'origine</button>'));
+      (enEquipe() ? '<p class="petit-txt">Ce que tu changes s\'applique à toute l\'équipe.</p>' : '') +
+      '<button class="btn" data-s="ajout" type="button">+ Ajouter une section</button>' +
+      '<button class="lien sec-reset" data-s="reset" type="button">Remettre la liste d\'origine</button>');
     $('#feuilleFond').onclick = null;
     $('#secCherche').addEventListener('input', rendreSections);
     f.onclick = function (e) {
@@ -2831,7 +2865,7 @@
       if (a === 'edit') { if (sectionsVerrou()) { toast('Liste commune à l\'équipe : non modifiable ici.'); return; } editerSection(+b.dataset.i); }
       if (a === 'reset') {
         if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Touche encore pour confirmer'; return; }
-        reg().sections = copieSections(); db.sync.reglagesSales = true; sauver();
+        reg().sections = copieSections(); sectionsSales(); sauver();
         delete b.dataset.ok; b.textContent = 'Remettre la liste d\'origine'; rendreSections(); toast('Liste d\'origine remise');
       }
     };
@@ -2870,9 +2904,9 @@
     if (i < 0) setTimeout(function () { var e = $('#seEp'); if (e) e.focus(); }, 60);
     $('#seAnnuler').onclick = function () { z.hidden = true; z.innerHTML = ''; };
     if ($('#seSuppr')) $('#seSuppr').onclick = function () {
-      var old = liste.splice(i, 1)[0]; db.sync.reglagesSales = true; sauver();
+      var old = liste.splice(i, 1)[0]; sectionsSales(); sauver();
       z.hidden = true; z.innerHTML = ''; rendreSections();
-      toast('Section supprimée', function () { liste.splice(i, 0, old); db.sync.reglagesSales = true; sauver(); rendreSections(); });
+      toast('Section supprimée', function () { liste.splice(i, 0, old); sectionsSales(); sauver(); rendreSections(); });
     };
     $('#seOk').onclick = function () {
       var ep = P.num($('#seEp').value), la = P.num($('#seLa').value), pi = P.num($('#sePi').value);
@@ -2884,7 +2918,7 @@
       if (dbl >= 0) { toast('Cette section existe déjà.'); return; }
       var o = { ep: ep, la: la, pi: pi }; if (lg.length) o.lg = lg;
       if (i >= 0) liste[i] = o; else liste.push(o);
-      db.sync.reglagesSales = true; sauver();
+      sectionsSales(); sauver();
       z.hidden = true; z.innerHTML = ''; rendreSections();
       toast(fm(ep) + ' × ' + fm(la) + ' = ' + pi + ' pièces');
     };
