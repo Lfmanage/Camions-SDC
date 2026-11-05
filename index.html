@@ -10,12 +10,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Camions SDC">
-<link rel="manifest" href="manifest.webmanifest?v=94">
-<link rel="icon" href="favicon-32.png?v=94" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=94">
-<link rel="preload" href="barlow-regular.woff?v=94" as="font" type="font/woff" crossorigin>
-<link rel="preload" href="barlowcondensed-bold.woff?v=94" as="font" type="font/woff" crossorigin>
-<link rel="stylesheet" href="style.css?v=94">
+<link rel="manifest" href="manifest.webmanifest?v=95">
+<link rel="icon" href="favicon-32.png?v=95" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=95">
+<link rel="preload" href="barlow-regular.woff?v=95" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="barlowcondensed-bold.woff?v=95" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="style.css?v=95">
 </head>
 <body>
 <div id="fondForet" aria-hidden="true"><i class="ff-img on"></i><i class="ff-img"></i><i class="ff-teinte"></i><i class="ff-voile"></i><div id="decorZone"></div></div>
@@ -24,7 +24,7 @@
 
   <!-- ============ ACCUEIL ============ -->
   <section class="vue active" id="v-accueil">
-    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=94" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=94" alt=""></span></header>
+    <header class="acc-tete"><div><p class="acc-date" id="accDate"></p><h1 class="acc-titre">Bonjour</h1><p class="acc-sous" id="accSous"></p></div><span class="logo"><img class="l-clair" src="logo-clair.png?v=95" alt="SDC – Les Scieries du Centre"><img class="l-sombre" src="logo-sombre.png?v=95" alt=""></span></header>
     <button class="hero-go" id="btnCommencer" type="button">
       <span class="hg-txt"><small>Nouveau camion</small><b>Charger un camion</b></span>
       <span class="hg-fl" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -126,7 +126,8 @@
     <div class="etapes"><span class="on"><i></i>Client</span><span class="on"><i></i>Colis</span><span class="on"><i></i>Plan</span></div>
     <div id="planZone"></div>
     <div class="pied pied-ro" id="piedRo" hidden><button class="btn gros" id="btnRecupPlan" type="button">Récupérer (copie à mon nom)</button></div>
-    <div class="pied trois quatre cinq" id="piedPlan"><button class="btn gros sec plus-colis" id="btnAjoutColis" type="button" aria-label="Ajouter un colis" title="Ajouter un colis">+</button><button class="btn gros sec vider" id="btnVider" type="button">Tout<br>enlever</button><button class="btn gros sec lg-btn" id="btnLongueur" type="button"><small>Longueur remorque</small><b>13 m</b></button><button class="btn gros sec" id="btnAutre" type="button">Autre plan</button><button class="btn gros noir" id="btnTerminer" type="button">Terminer</button></div>
+    <div class="pied pied-fus" id="piedFus"><button class="btn gros sec" id="btnAutre" type="button">Autre plan</button><button class="btn gros sec" id="btnFus" type="button">🔗 Plan fusionné</button><button class="btn gros sec" id="btnNormal" type="button" hidden>Plan normal</button></div>
+    <div class="pied trois quatre" id="piedPlan"><button class="btn gros sec plus-colis" id="btnAjoutColis" type="button" aria-label="Ajouter un colis" title="Ajouter un colis">+</button><button class="btn gros sec vider" id="btnVider" type="button">Tout<br>enlever</button><button class="btn gros sec lg-btn" id="btnLongueur" type="button"><small>Longueur remorque</small><b>13 m</b></button><button class="btn gros noir" id="btnTerminer" type="button">Terminer</button></div>
   </section>
 
   <!-- ============ AJOUTER UN COLIS (depuis le plan) ============ -->
@@ -196,11 +197,11 @@
 <div class="feuille" id="feuille" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="plan.js?v=94"></script>
-<script src="ambiance.js?v=94"></script>
-<script src="sync.js?v=94"></script>
-<script src="qr.js?v=94"></script>
-<script src="vue3d.js?v=94"></script>
-<script src="app.js?v=94"></script>
+<script src="plan.js?v=95"></script>
+<script src="ambiance.js?v=95"></script>
+<script src="sync.js?v=95"></script>
+<script src="qr.js?v=95"></script>
+<script src="vue3d.js?v=95"></script>
+<script src="app.js?v=95"></script>
 </body>
 </html>
