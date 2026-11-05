@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '98';
+  var VERSION_APP = '99';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -445,7 +445,7 @@
       h += '<div class="lig' + (l.id === editId ? ' edite' : '') + '" data-id="' + esc(l.id) + '">' +
         '<span class="n">' + (i + 1) + '</span>' +
         '<button class="txt" type="button" data-act="edit"><div class="sec">' + fm(l.ep) + ' × ' + fm(l.la) + '</div>' +
-        '<div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m' + ' <span class="pastille-petit ' + (estPetitPaquet(l) ? 'on' : 'off') + '" data-act="petit" role="button">' + (estPetitPaquet(l) ? 'Petit ✓' : 'Petit ?') + '</span></div></button>' +
+        '<div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m' + ' <span class="pastille-petit ' + (estPetitPaquet(l) ? 'on' : 'off') + '" data-act="petit" role="button">' + (estPetitPaquet(l) ? 'Petit ✓' : 'Petit ?') + '</span><span class="pastille-petit pastille-fu ' + (l.fu === true ? 'on' : 'off') + '" data-act="fu" role="button">🔗</span></div></button>' +
         compteurHtml(n) + '<span class="vol">' + f3(P.volTotalLigne(l)) + '</span></div>';
     }
     el.innerHTML = h;
@@ -521,8 +521,11 @@
   var fPetit = false;
   function majBtnPetit() { var b = $('#btnPetit'); if (!b) return; b.classList.toggle('on', fPetit); b.textContent = fPetit ? 'Petit ✓' : 'Petit'; b.setAttribute('aria-pressed', fPetit ? 'true' : 'false'); }
   $('#btnPetit').addEventListener('click', function () { fPetit = !fPetit; majBtnPetit(); });
+  var fFu = false;
+  function majBtnFu() { var b = $('#btnFu'); if (!b) return; b.classList.toggle('on', fFu); b.setAttribute('aria-pressed', fFu ? 'true' : 'false'); }
+  $('#btnFu').addEventListener('click', function () { fFu = !fFu; majBtnFu(); });
   function viderForm() {
-    fPetit = false; majBtnPetit();
+    fPetit = false; majBtnPetit(); fFu = false; majBtnFu();
     champs.forEach(function (s) { $(s).value = ''; $(s).classList.remove('erreur'); });
     nb = 1; editId = null; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs(null);
   }
@@ -539,9 +542,10 @@
     if (bad) { toast('Remplis épaisseur, largeur, pièces et longueur.'); return; }
     var l = { ep: vals[0], la: vals[1], pi: vals[2], lo: vals[3], nb: nb };
     if (fPetit) l.pm = true;
+    if (fFu) l.fu = true;
     if (editId) {
       var ex = c.lignes.filter(function (x) { return x.id === editId; })[0];
-      if (ex) { if (!fPetit && ex.pm === true) delete ex.pm; Object.assign(ex, l); }
+      if (ex) { if (!fPetit && ex.pm === true) delete ex.pm; if (!fFu && ex.fu === true) delete ex.fu; Object.assign(ex, l); }
       toast('Ligne modifiée');
     } else {
       l.id = petitId();
@@ -601,11 +605,12 @@
     var idx = c.lignes.findIndex(function (x) { return x.id === id; });
     if (idx < 0) return;
     var l = c.lignes[idx];
+    if (b.dataset.act === 'fu') { if (l.fu === true) delete l.fu; else l.fu = true; majPlan(c); toucher(c); rendreCamion(); return; }
     if (b.dataset.act === 'petit') { l.pm = !estPetitPaquet(l); majPlan(c); toucher(c); rendreCamion(); return; }
     if (b.dataset.act === 'edit') {
       editId = id;
       $('#fEp').value = fm(l.ep); $('#fLa').value = fm(l.la); $('#fPi').value = fm(l.pi); $('#fLo').value = fLong(l.lo);
-      nb = l.nb || 1; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs(); fPetit = l.pm === true;
+      nb = l.nb || 1; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs(); fPetit = l.pm === true; fFu = l.fu === true; majBtnFu();
       rendreCamion();
     } else changerNb(c, id, b.dataset.act === 'plus' ? 1 : (b.dataset.act === 'moins' ? -1 : -99), function () { rendreCamion(); });
   });
@@ -1098,6 +1103,11 @@
     var lignes = c.lignes || [], tot = lignes.reduce(function (a, l) { return a + Math.max(1, Math.round(+l.nb || 1)); }, 0);
     if (!tot || c.double || c.parentId) return;
     var used = {}; c.fusions.forEach(function (f) { used[f.bas] = (used[f.bas] || 0) + 1; used[f.haut] = (used[f.haut] || 0) + 1; });
+    if (!c.noAuto) { // colis marqués 🔗 : fusionnés entre eux, longueurs les plus proches (8 avec 8, sinon 7,5…)
+      var marq = [];
+      lignes.forEach(function (l) { if (l.fu !== true) return; var d = Math.max(1, Math.round(+l.nb || 1)) - (used[l.id] || 0); for (var k = 0; k < d; k++) marq.push({ id: l.id, cm: P.lgPlan(l), sec: l.ep + 'x' + l.la }); });
+      pairer(marq, 0, []).forEach(function (p) { c.fusions.push({ bas: p[0].id, haut: p[1].id, auto: true }); used[p[0].id] = (used[p[0].id] || 0) + 1; used[p[1].id] = (used[p[1].id] || 0) + 1; });
+    }
     var libres = [];
     lignes.forEach(function (l) { if (!l.petit) return; var d = Math.max(1, Math.round(+l.nb || 1)) - (used[l.id] || 0); for (var k = 0; k < d; k++) libres.push({ id: l.id, cm: P.lgPlan(l), sec: l.ep + 'x' + l.la }); });
     var hotes = [];
@@ -2055,7 +2065,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=98'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=98';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=99'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=99';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2814,7 +2824,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=98" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=98" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=99" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=99" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
