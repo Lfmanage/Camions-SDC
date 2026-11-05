@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '96';
+  var VERSION_APP = '98';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -118,7 +118,7 @@
   }
   // Les colis ont changé : le plan sera recalculé (le meilleur possible) à l'ouverture du plan
   function majPlan(c) {
-    c.plan = null; c.planDepart = null; c.planCalcule = false; c.ordre = null; c.decal = null; c.pairStrat = null; c.planP = null;
+    c.plan = null; c.planDepart = null; c.planCalcule = false; c.ordre = null; c.decal = null; c.pairStrat = null; c.planP = null; c.planDepartP = null;
     c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
   }
   // Cherche le meilleur plan (jusqu'à ~2 s) ; il devient le « plan de départ »
@@ -143,10 +143,11 @@
     var res = P.meilleurTient(pz ? pz.lignes : c.lignes, cf, undefined, !!c.parentId);
     if (c.parentId) c.relax = !!res.relax;
     c.tientEssaye = sigLignes(c.lignes);
-    c.planP = pz ? res.plan : null;
+    c.planP = pz ? res.plan : null; c.planDepartP = pz ? JSON.parse(JSON.stringify(res.plan)) : null;
     var planReel = pz ? pz.remonter(res.plan) : res.plan;
     c.plan = planReel; c.decal = null; c.planDepart = { plan: JSON.parse(JSON.stringify(planReel)), note: res.note };
     c.planCalcule = true; c.ordre = null; c.planManuel = false; c.planVariante = false; c.plansVus = null; c.graineAutre = 1;
+    fusionnerPetits(c);
   }
   function assurerPlan(c) { if (c.double) { if (besoinSplit(c)) { splitDouble(c); if (estAMoi(c)) toucher(c); } return; } if (c.lignes.length && (!c.plan || !Object.keys(c.plan).length)) { calculerPlan(c); if (estAMoi(c)) toucher(c); } }
   function toucher(c) {
@@ -444,7 +445,7 @@
       h += '<div class="lig' + (l.id === editId ? ' edite' : '') + '" data-id="' + esc(l.id) + '">' +
         '<span class="n">' + (i + 1) + '</span>' +
         '<button class="txt" type="button" data-act="edit"><div class="sec">' + fm(l.ep) + ' × ' + fm(l.la) + '</div>' +
-        '<div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m' + (estPetitPaquet(l) ? ' <em class="tag-petit">Petit paquet ↑</em>' : '') + '</div></button>' +
+        '<div class="det">' + fm(l.pi) + ' p · ' + fLong(l.lo) + ' m' + ' <span class="pastille-petit ' + (estPetitPaquet(l) ? 'on' : 'off') + '" data-act="petit" role="button">' + (estPetitPaquet(l) ? 'Petit ✓' : 'Petit ?') + '</span></div></button>' +
         compteurHtml(n) + '<span class="vol">' + f3(P.volTotalLigne(l)) + '</span></div>';
     }
     el.innerHTML = h;
@@ -513,11 +514,15 @@
     rendreApercu();
     $('#nbVal').textContent = nb;
     $('#btnAjouter').textContent = editId ? 'Enregistrer' : 'Ajouter';
-    $('#btnAnnulerEdit').hidden = !editId;
+    $('#btnAnnulerEdit').hidden = !editId; majBtnPetit();
     $('#formLigne').classList.toggle('edition', !!editId);
   }
 
+  var fPetit = false;
+  function majBtnPetit() { var b = $('#btnPetit'); if (!b) return; b.classList.toggle('on', fPetit); b.textContent = fPetit ? 'Petit ✓' : 'Petit'; b.setAttribute('aria-pressed', fPetit ? 'true' : 'false'); }
+  $('#btnPetit').addEventListener('click', function () { fPetit = !fPetit; majBtnPetit(); });
   function viderForm() {
+    fPetit = false; majBtnPetit();
     champs.forEach(function (s) { $(s).value = ''; $(s).classList.remove('erreur'); });
     nb = 1; editId = null; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs(null);
   }
@@ -533,9 +538,10 @@
     });
     if (bad) { toast('Remplis épaisseur, largeur, pièces et longueur.'); return; }
     var l = { ep: vals[0], la: vals[1], pi: vals[2], lo: vals[3], nb: nb };
+    if (fPetit) l.pm = true;
     if (editId) {
       var ex = c.lignes.filter(function (x) { return x.id === editId; })[0];
-      if (ex) Object.assign(ex, l);
+      if (ex) { if (!fPetit && ex.pm === true) delete ex.pm; Object.assign(ex, l); }
       toast('Ligne modifiée');
     } else {
       l.id = petitId();
@@ -595,10 +601,11 @@
     var idx = c.lignes.findIndex(function (x) { return x.id === id; });
     if (idx < 0) return;
     var l = c.lignes[idx];
+    if (b.dataset.act === 'petit') { l.pm = !estPetitPaquet(l); majPlan(c); toucher(c); rendreCamion(); return; }
     if (b.dataset.act === 'edit') {
       editId = id;
       $('#fEp').value = fm(l.ep); $('#fLa').value = fm(l.la); $('#fPi').value = fm(l.pi); $('#fLo').value = fLong(l.lo);
-      nb = l.nb || 1; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs();
+      nb = l.nb || 1; piAuto = false; $('#fPi').classList.remove('auto'); majLongueurs(); fPetit = l.pm === true;
       rendreCamion();
     } else changerNb(c, id, b.dataset.act === 'plus' ? 1 : (b.dataset.act === 'moins' ? -1 : -99), function () { rendreCamion(); });
   });
@@ -898,7 +905,7 @@
     setTimeout(function () {
       var pz = pseudoFusion(c), LG = pz ? pz.lignes : c.lignes, PL = pz ? (c.planP || {}) : (c.plan || {});
       if (!c.plansVus) c.plansVus = [P.signature(LG, PL)];
-      var refV = (!pz && c.planDepart) ? vplan(c, c.planDepart.plan) : null;
+      var refV = pz ? P.verifier(LG, c.planDepartP || c.planP || {}, cfgC(c)) : (c.planDepart ? vplan(c, c.planDepart.plan) : null); // le plan de départ (valide) sert de référence : jamais un plan qui déborde
       var res = P.autre(LG, cfgC(c), c.plansVus, c.graineAutre || 1, refV);
       if (!res && c.plansVus.length > 1) { // on a fait le tour : on recommence la série
         c.plansVus = [P.signature(LG, PL)];
@@ -1155,6 +1162,30 @@
       }
     };
   }
+
+  // Petit paquet qui n'est pas au dernier étage (ou de côté) : on le fusionne avec un colis du dernier étage si le plan y gagne
+  function fusionnerPetits(c) {
+    if (c.noAuto || c.double || c.parentId || !c.plan) return;
+    if ((c.fusions || []).some(function (f) { return f.auto; })) return;
+    var v = vplan(c), N = v.N, plan = c.plan, K = P.colisDe(c.lignes), haut = {};
+    ['G' + N, 'D' + N, 'C' + N].forEach(function (k) { v.rows[k].colis.forEach(function (x) { haut[x.id] = 1; }); });
+    var pris = {}; Object.keys(plan).forEach(function (k) { if (String(plan[k]).charAt(0) === 'P') { pris[k] = 1; pris[String(plan[k]).slice(2)] = 1; } });
+    var hors = K.filter(function (k) { return k.petit && !haut[k.id] && !pris[k.id]; }).sort(function (a, b) { return b.cm - a.cm; });
+    var hotes = K.filter(function (k) { return !k.petit && haut[k.id] && !pris[k.id]; }), ajout = [];
+    hors.forEach(function (p) {
+      var j = -1; hotes.forEach(function (h, q) { if (h.cm >= p.cm - 1 && (j < 0 || h.cm < hotes[j].cm)) j = q; });
+      if (j >= 0) { ajout.push({ bas: hotes[j].ligneId, haut: p.ligneId, auto: true }); hotes.splice(j, 1); }
+    });
+    if (!ajout.length) return;
+    var avant = (c.fusions || []).slice(), cotes = function (pl) { return Object.keys(pl).filter(function (k) { return pl[k] === 'X'; }).length; };
+    var n1 = P.noteVerif(vplan(c, plan)) + cotes(plan) * 1000;
+    c.fusions = avant.concat(ajout);
+    var pz = pseudoFusion(c), res = pz && P.meilleurTient(pz.lignes, cfgC(c));
+    var plan2 = res ? pz.remonter(res.plan) : null, n2 = plan2 ? P.noteVerif(P.verifier(c.lignes, plan2, cfgC(c))) + cotes(plan2) * 1000 : 1e9;
+    if (!(n2 < n1 - 1e-9)) { c.fusions = avant; return; } // la fusion n'améliore pas le plan : on la laisse
+    c.planP = res.plan; c.planDepartP = JSON.parse(JSON.stringify(res.plan));
+    c.plan = plan2; c.decal = null; c.ordre = null; c.planDepart = { plan: JSON.parse(JSON.stringify(plan2)), note: res.note };
+  }
   function appliquerFusions(c) {
     c.fusions = copieFusion(c);
     if (!c.fusions.length || !c.plan) return;
@@ -1234,6 +1265,8 @@
   // Petit paquet : il manque 15 % ou plus de pièces par rapport à la liste des sections (62 au lieu de 63 = complet).
   // Section hors liste : on ne devine pas, plan classique.
   function estPetitPaquet(l) {
+    if (l.pm === true) return true;   // bouton « Petit » activé à la main
+    if (l.pm === false) return false; // bouton désactivé à la main
     var sc = P.trouverSection(reg().sections, l.ep, l.la);
     return !!(sc && sc.pi > 0 && l.pi > 0 && l.pi <= sc.pi * 0.85 + 1e-9);
   }
@@ -2022,7 +2055,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=96'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=96';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=98'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=98';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2781,7 +2814,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=96" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=96" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=98" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=98" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
