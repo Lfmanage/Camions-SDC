@@ -342,9 +342,9 @@
     if (rapide) iters = Math.round(iters / 3);
     var biais = null;
     if (varier) { biais = colis.map(function () { var t = []; for (var q = 0; q < NR; q++) t.push(r() * varier); return t; }); }
-    if (colis.some(function (c) { return c.petit; })) { // petit paquet : de préférence au dernier étage (poids doux, les règles de longueur passent avant)
+    if (colis.some(function (c) { return c.petit || c.fus; })) { // petit paquet : de préférence au dernier étage (poids doux, les règles de longueur passent avant)
       if (!biais) biais = colis.map(function () { return zeros(NR); });
-      colis.forEach(function (c, i) { if (c.petit) for (var q2 = 0; q2 < NR; q2++) if (etageDe(q2, L) !== L.N - 1) biais[i][q2] += 300; });
+      colis.forEach(function (c, i) { if (c.petit || c.fus) for (var q2 = 0; q2 < NR; q2++) if (etageDe(q2, L) !== L.N - 1) biais[i][q2] += 300; });
     }
     var essais = [depart(colis, cfg, varier ? r : null, L, INT)];
     for (var e = 0; e < (rapide ? 1 : 5); e++) essais.push(depart(colis, cfg, r, L, INT));

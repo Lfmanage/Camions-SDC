@@ -5,7 +5,7 @@
   document.addEventListener('touchmove', function (x) { if (x.touches && x.touches.length > 1) x.preventDefault(); }, { passive: false });
   var dtap = 0; document.addEventListener('touchend', function (x) { var n = Date.now(); if (n - dtap < 350 && !/INPUT|TEXTAREA|SELECT/.test((x.target.tagName || '')) && !(x.target.closest && x.target.closest('button,a,label,[data-t]'))) x.preventDefault(); dtap = n; }, { passive: false });
   var P = window.Plan;
-  var VERSION_APP = '95';
+  var VERSION_APP = '96';
   var CLE = 'csdc.donnees';
   var REG_DEF = { m3Min: 39, m3Max: 41, e1Min: 12, e1Max: 13, ecartMax: 1, longueurs: [3, 4, 5.5], theme: 'auto', couleurs: {} };
   var $ = function (s, el) { return (el || document).querySelector(s); };
@@ -130,9 +130,11 @@
     var cf = cfgC(c); delete cf.relax;
     if ((c.fusions || []).some(function (f) { return f.auto; }) && c.pairStrat == null) { // on essaie les 3 façons de fusionner, on garde la meilleure
       var meilleur = null;
-      [0, 1, 2].forEach(function (st) {
+      [3, 0, 1, 2].forEach(function (st) {
         preparerFusions(c, st); var p2 = pseudoFusion(c); if (!p2) return;
-        var r2 = P.meilleurTient(p2.lignes, Object.assign({}, cfgC(c), c.etages4 ? { etages: 4 } : {}), 650), n2 = P.noteVerif(r2.verif) + (r2.cote || 0) * 1000;
+        var r2 = P.meilleurTient(p2.lignes, Object.assign({}, cfgC(c), c.etages4 ? { etages: 4 } : {}), 650), n2 = P.noteVerif(r2.verif) + (r2.cote || 0) * 1000, bas = 0, NN = r2.verif.N;
+        Object.keys(r2.plan).forEach(function (k) { if (k.indexOf('§F') === 0 && r2.plan[k] !== 'G' + NN && r2.plan[k] !== 'D' + NN && r2.plan[k] !== 'C' + NN) bas++; });
+        n2 += bas * 40; // on préfère les colis fusionnés au dernier étage
         if (!meilleur || n2 < meilleur.n - 1e-9) meilleur = { st: st, n: n2 };
       });
       c.pairStrat = meilleur ? meilleur.st : 0; preparerFusions(c, c.pairStrat); cf = cfgC(c); delete cf.relax;
@@ -904,7 +906,7 @@
       }
       if (!res && pz && (c.fusions || []).some(function (f) { return f.auto; })) { // plus de variante : on change la façon de fusionner
         b.disabled = false; b.classList.remove('calcul'); b.innerHTML = 'Autre plan';
-        c.pairStrat = ((c.pairStrat || 0) + 1) % 3; calculerPlan(c); selection = null; toucher(c); rendrePlanVue(); window.scrollTo({ top: 0, behavior: 'smooth' });
+        c.pairStrat = ((c.pairStrat || 0) + 1) % 4; calculerPlan(c); selection = null; toucher(c); rendrePlanVue(); window.scrollTo({ top: 0, behavior: 'smooth' });
         toast('Autre façon de fusionner les petits paquets'); return;
       }
       if (res && pz) { c.planP = res.plan; res = Object.assign({}, res, { plan: pz.remonter(res.plan) }); }
@@ -1091,16 +1093,28 @@
     var used = {}; c.fusions.forEach(function (f) { used[f.bas] = (used[f.bas] || 0) + 1; used[f.haut] = (used[f.haut] || 0) + 1; });
     var libres = [];
     lignes.forEach(function (l) { if (!l.petit) return; var d = Math.max(1, Math.round(+l.nb || 1)) - (used[l.id] || 0); for (var k = 0; k < d; k++) libres.push({ id: l.id, cm: P.lgPlan(l), sec: l.ep + 'x' + l.la }); });
+    var hotes = [];
+    lignes.forEach(function (l) { if (l.petit) return; var d = Math.max(1, Math.round(+l.nb || 1)) - (used[l.id] || 0); for (var k = 0; k < d; k++) hotes.push({ id: l.id, cm: P.lgPlan(l), sec: l.ep + 'x' + l.la }); });
     var deja = c.fusions.length * 2;
-    if (!c.noAuto && libres.length >= 2 && (c.forceAuto || (deja + libres.length) / tot >= 0.6 - 1e-9)) {
-      pairer(libres, strat || 0).forEach(function (p) { c.fusions.push({ bas: p[0].id, haut: p[1].id, auto: true }); });
+    if (!c.noAuto && libres.length >= 1 && (c.forceAuto || (deja + libres.length) / tot >= 0.6 - 1e-9)) {
+      pairer(libres, strat || 0, hotes).forEach(function (p) { c.fusions.push({ bas: p[0].id, haut: p[1].id, auto: true }); });
     }
     c.etages4 = c.fusions.length > 0 && (c.fusions.length * 2) / tot >= 0.6 - 1e-9;
   }
-  // 3 façons de former les paires (le calcul garde la meilleure) :
-  // 0 = longueurs voisines (on perd le moins de place) · 1 = un long avec un court (étages de même longueur) · 2 = même section d'abord
-  function pairer(libres, strat) {
+  // 4 façons de former les paires (le calcul garde la meilleure) :
+  // 3 = chaque petit sur un grand colis (pour le dernier étage) · 0 = longueurs voisines (on perd le moins de place) · 1 = un long avec un court (étages de même longueur) · 2 = même section d'abord
+  function pairer(libres, strat, hotes) {
     var L = libres.slice().sort(function (a, b) { return b.cm - a.cm; }), out = [], i;
+    if (strat === 3) { // chaque petit se pose sur un grand colis (le plus proche en longueur, au moins aussi long) ; les petits sans hôte se fusionnent entre eux
+      var H = (hotes || []).slice().sort(function (a, b) { return a.cm - b.cm; }), seuls = [];
+      L.forEach(function (p) {
+        var j = -1; for (var q = 0; q < H.length; q++) if (H[q].cm >= p.cm - 1) { j = q; break; }
+        if (j >= 0) { out.push([H[j], p]); H.splice(j, 1); } else seuls.push(p);
+      });
+      for (i = 0; i + 1 < seuls.length; i += 2) out.push([seuls[i], seuls[i + 1]]);
+      return out;
+    }
+    if (L.length < 2) return out;
     if (strat === 1) { var a = 0, z = L.length - 1; while (a < z) { out.push([L[a], L[z]]); a++; z--; } return out; }
     if (strat === 2) {
       var g = {}; L.forEach(function (x) { (g[x.sec] = g[x.sec] || []).push(x); });
@@ -2008,7 +2022,7 @@
 
 
   // ---------- Fiche partagée : même rendu que l'appli (fond d'écran, remorque, bois, place libre) ----------
-  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=95'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=95';
+  var LOGO = new Image(); LOGO.src = 'logo-clair.png?v=96'; var LOGO_S = new Image(); LOGO_S.src = 'logo-sombre.png?v=96';
   function imagePlan(c, langue) { return ficheJolie(c, 'plan', null, langue); }
   function remDeN(p, i) { var a = p.double.actif; p.double.actif = i; var s = remDe(p); p.double.actif = a; return s; }
   var POIDS_TXT = '25 000 kg';
@@ -2767,7 +2781,7 @@
   var verrouEquipe = false;
   function proposerRejoindre() {
     verrouEquipe = !Sync.rejoint();
-    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=95" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=95" alt=""></span></div>' + formRejoindre(true));
+    ouvrirFeuille('<div style="text-align:center;margin:4px 0 2px"><span class="logo rj-logo-w"><img class="rj-logo l-clair" src="logo-clair.png?v=96" alt="SDC"><img class="rj-logo l-sombre" src="logo-sombre.png?v=96" alt=""></span></div>' + formRejoindre(true));
     $('#feuilleFond').onclick = null;
     lierRejoindre(function () { fermerFeuille(); });
   }
